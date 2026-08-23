@@ -11,7 +11,9 @@ Type=simple
 # the file is optional — the service starts even if it's missing, but
 # `iphonebridge doctor` will then warn that the MAC isn't configured.
 EnvironmentFile=-%h/.config/iphonebridge/local.env
-ExecStart=%h/code/iphonebridge/.venv/bin/iphonebridge run
+# @INSTALL_DIR@ is substituted for your clone path at install time —
+# see README install step 5. A plain `cp` of this file will not work.
+ExecStart=@INSTALL_DIR@/.venv/bin/iphonebridge run
 Restart=on-failure
 RestartSec=5
 # Wait up to 10s for clean shutdown
