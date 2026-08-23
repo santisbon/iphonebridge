@@ -113,8 +113,10 @@ class HfpManager:
     # ---- lifecycle ------------------------------------------------------
 
     def start(self) -> None:
-        mgr = dbus.Interface(system_bus.get_object(OFONO, "/"), _MGR_IFACE)
         try:
+            # get_object() activates the name, so an absent oFono raises here
+            # rather than at GetModems() — both must sit inside the guard.
+            mgr = dbus.Interface(system_bus.get_object(OFONO, "/"), _MGR_IFACE)
             modems = mgr.GetModems()
         except dbus.exceptions.DBusException as e:
             log.warning(
