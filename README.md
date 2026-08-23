@@ -245,6 +245,46 @@ Incoming calls then pop up with **Answer / Decline** buttons. Place calls with
 iphonebridge-ui
 ```
 
+### Adding it to your app launcher
+
+The repo ships both pieces already — `data/com.gabriel.iphonebridge.UI.desktop`
+and `data/icons/com.gabriel.iphonebridge.UI.svg`. For a user-level install,
+copy them into place and rewrite `Exec` to an absolute path:
+
+```bash
+APPS=~/.local/share/applications
+ICONS=~/.local/share/icons/hicolor/scalable/apps
+mkdir -p "$APPS" "$ICONS"
+
+install -m 644 data/icons/com.gabriel.iphonebridge.UI.svg "$ICONS/"
+sed "s|^Exec=iphonebridge-ui$|Exec=$HOME/.local/bin/iphonebridge-ui|" \
+  data/com.gabriel.iphonebridge.UI.desktop \
+  > "$APPS/com.gabriel.iphonebridge.UI.desktop"
+
+update-desktop-database "$APPS"
+gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
+kbuildsycoca6 --noincremental   # KDE only; GNOME picks it up on its own
+```
+
+The `Exec` rewrite is the part that matters. The shipped entry says
+`Exec=iphonebridge-ui`, which is correct for a distro package that puts the
+binary in `/usr/bin`, but a from-source install puts it in `~/.local/bin` —
+and that directory is usually absent from the systemd user environment, which
+is what Plasma launches menu entries through. Left as-is, the entry appears in
+the menu and silently fails to start.
+
+Don't rename the file. It has to match `APP_ID` in `src/iphonebridge/ui/app.py`
+or the taskbar won't associate the running window with this icon.
+
+Check it registered:
+
+```bash
+desktop-file-validate ~/.local/share/applications/com.gabriel.iphonebridge.UI.desktop
+gio launch ~/.local/share/applications/com.gabriel.iphonebridge.UI.desktop
+```
+
+To remove it, delete the two installed files and re-run `update-desktop-database`.
+
 ## 💻 CLI
 
 The `iphonebridge` command does everything the app does, plus setup and diagnostics:
@@ -381,6 +421,23 @@ lsusb | grep -i bluetooth        # Intel Corp. = supported; Realtek / dongles = 
 <summary><b>Calls don't connect, or there's no call audio</b></summary>
 
 HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HFP profile. Run `iphonebridge hfp-enable`, then `sudo systemctl restart ofono`, reconnect the iPhone, and restart the daemon. If `journalctl -u ofono` shows `RegisterProfile … UUID already registered`, the start order is wrong — restart oFono again after WirePlumber is up.
+</details>
+
+<details>
+<summary><b><code>Unable to acquire the address of the accessibility bus</code></b></summary>
+
+A GTK warning on every `iphonebridge-ui` launch, not a fault — the app works
+normally. It means `at-spi-dbus-bus.service` is masked on your system, so GTK
+can't reach the accessibility bus. Silence it either way:
+
+```bash
+GTK_A11Y=none iphonebridge-ui                       # skip a11y for this launch
+systemctl --user unmask at-spi-dbus-bus.service     # or turn a11y back on
+systemctl --user start at-spi-dbus-bus.service
+```
+
+The app deliberately doesn't set `GTK_A11Y=none` itself — that would silence
+the accessibility bus for everyone, including people who need it.
 </details>
 
 <details>
