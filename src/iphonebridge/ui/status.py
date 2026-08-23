@@ -44,7 +44,7 @@ class StatusPage(Gtk.Box):
             description="On the iPhone: Settings → Bluetooth → tap ⓘ next to "
                         "this computer, then enable each toggle:")
         for item, sub in (
-            ("Show Message Notifications", "SMS & iMessage (MAP)"),
+            ("Show Message Notifications", "SMS &amp; iMessage (MAP)"),
             ("Sync Contacts", "contact-name resolution (PBAP)"),
             ("Show System Notifications", "per-app notifications (ANCS)"),
         ):
