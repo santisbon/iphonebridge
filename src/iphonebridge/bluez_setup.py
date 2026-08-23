@@ -111,58 +111,82 @@ class _AncsAdvert(dbus.service.Object):
 
 
 _advert_instance: _AncsAdvert | None = None
+_advert_registered = False
+
+
+def advert_registered() -> bool:
+    """True only if BlueZ confirmed *our* advertisement."""
+    return _advert_registered
+
+
+def _on_advert_registered() -> None:
+    global _advert_registered
+    _advert_registered = True
+    log.info("BLE advert registered: %s", _AncsAdvert.PATH)
+
+
+def _on_advert_error(e: dbus.exceptions.DBusException) -> None:
+    global _advert_registered
+    name = e.get_dbus_name()
+    if name == "org.bluez.Error.AlreadyExists":
+        _advert_registered = True
+        log.info("BLE advert already registered")
+        return
+    _advert_registered = False
+    log.error("RegisterAdvertisement failed: %s: %s", name, e.get_dbus_message())
+    log.error("  → Without this advertisement iOS won't offer the "
+              "'Show System Notifications' toggle, so ANCS stays dark.")
+    log.error("  → MAP and PBAP are unaffected; messages and contacts "
+              "still work.")
 
 
 def register_advert() -> bool:
-    """Register the BLE advertisement on the system bus.
+    """Ask BlueZ to advertise ANCS solicitation. Returns whether the call was
+    dispatched, not whether it succeeded — the outcome arrives on a callback.
 
-    Idempotent — calling twice is harmless because BlueZ will reject the
-    second registration and we treat that as success.
+    Deliberately asynchronous. RegisterAdvertisement makes BlueZ call back
+    into our LEAdvertisement1 object to read its properties, so a blocking
+    call deadlocks: we sit inside the outbound call with no main loop to
+    service the inbound one, and both time out. That NoReply used to be
+    reported as probable success by checking ActiveInstances > 0 — but that
+    property is adapter-wide and counts every other application's
+    advertisements, so the check could never fail and masked a registration
+    that never happened.
     """
-    global _advert_instance
+    global _advert_instance, _advert_registered
     if _advert_instance is None:
         _advert_instance = _AncsAdvert(system_bus, _AncsAdvert.PATH)
+    _advert_registered = False
 
     ad_mgr = bluez(f"/org/bluez/{config.ADAPTER}",
                    "org.bluez.LEAdvertisingManager1")
     try:
-        # BlueZ's RegisterAdvertisement frequently NoReply-timeouts even
-        # though it actually registers. Pass a long timeout and treat
-        # NoReply as a probable success — we verify via ActiveInstances.
-        ad_mgr.RegisterAdvertisement(_AncsAdvert.PATH, {}, timeout=10.0)
-        log.info("BLE advert registered: %s", _AncsAdvert.PATH)
-        return True
+        ad_mgr.RegisterAdvertisement(
+            _AncsAdvert.PATH, {},
+            reply_handler=_on_advert_registered,
+            error_handler=_on_advert_error,
+        )
     except dbus.exceptions.DBusException as e:
-        name = e.get_dbus_name()
-        if name == "org.bluez.Error.AlreadyExists":
-            log.info("BLE advert already registered")
-            return True
-        if name == "org.freedesktop.DBus.Error.NoReply":
-            # Probable success — check ActiveInstances to confirm
-            try:
-                v = dbus.Interface(
-                    system_bus.get_object("org.bluez", f"/org/bluez/{config.ADAPTER}"),
-                    "org.freedesktop.DBus.Properties",
-                ).Get("org.bluez.LEAdvertisingManager1", "ActiveInstances")
-                if int(v) > 0:
-                    log.info("BLE advert registered despite NoReply "
-                             "(ActiveInstances=%d)", int(v))
-                    return True
-            except dbus.exceptions.DBusException:
-                pass
-        log.error("RegisterAdvertisement failed: %s: %s",
-                  name, e.get_dbus_message())
+        log.error("RegisterAdvertisement could not be dispatched: %s",
+                  e.get_dbus_name())
         return False
+    log.info("BLE advert registration dispatched; awaiting BlueZ")
+    return True
 
 
 def unregister_advert() -> None:
     """Best-effort unregister; safe to call on shutdown."""
+    global _advert_registered
+    if not _advert_registered:
+        return
     try:
         ad_mgr = bluez(f"/org/bluez/{config.ADAPTER}",
                        "org.bluez.LEAdvertisingManager1")
         ad_mgr.UnregisterAdvertisement(_AncsAdvert.PATH)
+        log.info("BLE advert unregistered")
     except dbus.exceptions.DBusException as e:
         log.debug("UnregisterAdvertisement: %s", e.get_dbus_name())
+    _advert_registered = False
 
 
 # ---- one-shot startup ---------------------------------------------------
@@ -183,5 +207,8 @@ def prepare(*, allow_sudo: bool = True) -> bool:
     else:
         log.info("CoD already matches A/V Hands-Free, leaving as-is")
 
-    ok &= register_advert()
+    # Dispatch only — the real outcome is logged from the callback, and it
+    # must not gate `ok`, which the daemon uses to decide whether MAP/PBAP
+    # are likely to work. ANCS is independent of those.
+    register_advert()
     return ok
