@@ -111,7 +111,9 @@ class Daemon:
             self._bus_name = claim_bus_name()
             self._dbus_service = MessagesService(
                 self._bus_name, self.sessions, hfp=self.hfp,
-                on_sent=self._record_sent)
+                on_sent=self._record_sent,
+                on_refresh_contacts=lambda: self._refresh_contacts(
+                    raise_on_error=True))
             log.info("DBus service ready: com.gabriel.iphonebridge")
         except Exception:
             log.exception("DBus service registration failed — continuing "
@@ -219,14 +221,24 @@ class Daemon:
                  self.contacts.count(),
                  [s.name for s in self.sinks])
 
-    def _refresh_contacts(self) -> None:
-        """Pull phonebook from iPhone + reload in-process cache. Idempotent."""
+    def _refresh_contacts(self, *, raise_on_error: bool = False) -> int:
+        """Pull phonebook from iPhone + reload in-process cache. Idempotent.
+
+        Returns the cached contact count. Failures are swallowed by default so
+        a periodic tick or a startup hiccup can't take the daemon down; the
+        DBus RefreshContacts hook passes raise_on_error so a caller that asked
+        for the pull hears about it failing.
+        """
         try:
             pulled = pull_phonebook(self.sessions)
             count = self.contacts.refresh()
             log.info("contacts refresh: pulled %d, cached %d", pulled, count)
+            return count
         except Exception:
             log.exception("contacts refresh failed — running with previous cache")
+            if raise_on_error:
+                raise
+            return self.contacts.count()
 
     def _periodic_refresh_contacts(self) -> bool:
         """GLib timeout callback. Return True to keep the timer running."""

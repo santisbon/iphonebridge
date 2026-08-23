@@ -94,6 +94,31 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
 def contacts_sync(verbose: bool = typer.Option(False, "-v", "--verbose")):
     """Force a fresh PBAP pull from the iPhone (rebuilds the contacts cache)."""
     _setup_logging(verbose)
+    import dbus
+
+    # Ask the running daemon first. The iPhone grants one OBEX session at a
+    # time, so opening our own here would tear down the daemon's MAP and PBAP
+    # sessions and leave it silently holding dead handles.
+    try:
+        # get_object() activates the name, so an absent daemon raises here
+        # rather than at the method call — both must sit inside the guard.
+        svc = dbus.Interface(
+            dbus.SessionBus().get_object("com.gabriel.iphonebridge",
+                                         "/com/gabriel/iphonebridge"),
+            "com.gabriel.iphonebridge.Messages1")
+        n = int(svc.RefreshContacts())
+        typer.echo(f"Refreshed via the running daemon — "
+                   f"{n} contacts cached in {config.CONTACTS_DB}")
+        return
+    except dbus.exceptions.DBusException as e:
+        if e.get_dbus_name() not in (
+                "org.freedesktop.DBus.Error.ServiceUnknown",
+                "org.freedesktop.DBus.Error.NameHasNoOwner"):
+            typer.echo(typer.style(f"daemon refused the refresh: {e}",
+                                   fg=typer.colors.RED))
+            raise typer.Exit(code=1)
+        # Daemon isn't running — safe to own the sessions ourselves.
+
     # Heavyweight — needs sessions
     from iphonebridge.contacts import pull_phonebook
     from iphonebridge.obex.sessions import SessionManager

@@ -77,6 +77,7 @@ class MessagesService(dbus.service.Object):
         sessions: SessionManager,
         hfp: HfpManager | None = None,
         on_sent=None,
+        on_refresh_contacts=None,
     ):
         super().__init__(bus_name, OBJECT_PATH)
         self.sessions = sessions
@@ -84,6 +85,9 @@ class MessagesService(dbus.service.Object):
         # on_sent(recipient, body, transfer_path) — daemon hook to record a
         # message we just sent (logs it to history + the event feed).
         self._on_sent = on_sent
+        # on_refresh_contacts() -> int — daemon hook to re-pull the phonebook
+        # on its own PBAP session and return the cached contact count.
+        self._on_refresh_contacts = on_refresh_contacts
 
     # ---- Messages1 ------------------------------------------------------
 
@@ -139,6 +143,33 @@ class MessagesService(dbus.service.Object):
     @dbus.service.method(IFACE, in_signature="", out_signature="b")
     def IsHealthy(self) -> bool:
         return self.sessions.map is not None
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="i")
+    def RefreshContacts(self) -> int:
+        """Re-pull the phonebook over the daemon's own PBAP session.
+
+        The iPhone grants one OBEX session at a time, so a second process
+        opening its own would tear this one down. Callers ask the daemon
+        instead of doing the pull themselves.
+        """
+        log.info("DBus RefreshContacts called")
+        if self._on_refresh_contacts is None:
+            raise dbus.exceptions.DBusException(
+                "daemon exposed no contacts-refresh hook",
+                name="com.gabriel.iphonebridge.Error.NotReady",
+            )
+        if self.sessions.pbap is None:
+            raise dbus.exceptions.DBusException(
+                "PBAP session not open — check the iPhone's Sync Contacts toggle",
+                name="com.gabriel.iphonebridge.Error.NotReady",
+            )
+        try:
+            return int(self._on_refresh_contacts())
+        except Exception as e:
+            log.exception("RefreshContacts failed")
+            raise dbus.exceptions.DBusException(
+                str(e), name="com.gabriel.iphonebridge.Error.RefreshFailed"
+            )
 
     # ---- Calls1 (HFP) ---------------------------------------------------
 

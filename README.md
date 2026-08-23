@@ -392,9 +392,10 @@ the iPhone isn't serving the phonebook yet. Restart the daemon and it re-pulls o
 startup. A healthy pull logs `parsed N contacts from M bytes` and takes several
 seconds for a large phonebook.
 
-Don't reach for `iphonebridge contacts-sync` here. It builds its own
-`SessionManager`, which restarts obexd and destroys the running daemon's MAP and
-PBAP sessions. Use it only with the daemon stopped.
+`iphonebridge contacts-sync` forces the same pull without a restart. With the
+daemon running it asks it over D-Bus, so the daemon's existing MAP and PBAP
+sessions are reused rather than torn down; with the daemon stopped it opens its
+own sessions and closes them again.
 </details>
 
 <details>
