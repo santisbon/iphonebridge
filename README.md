@@ -181,18 +181,14 @@ Then **forget + re-pair** the iPhone one more time (the wizard walks you through
 - **KDE Plasma** — System Settings → Bluetooth → the device → *Remove* (trash icon)
 - **CLI** — `bluetoothctl remove <MAC>`
 
-After the re-pair, two things need doing by hand:
+After the re-pair, re-enable the step 6 toggles on the iPhone, which the
+re-pair switched off.
 
-```bash
-systemctl --user restart iphonebridge
-```
-
-The daemon doesn't notice that the re-pair killed its MAP and PBAP sessions — it
-holds the dead handles, keeps reporting healthy, and never retries, because the
-retry loop only runs before it first reaches the ready state. Restarting is the
-only way back.
-
-Then re-enable the step 6 toggles on the iPhone, which the re-pair switched off.
+The re-pair also kills the daemon's MAP and PBAP sessions, but you don't have to
+do anything about that: a health check notices within 60s, drops to DEGRADED, and
+the reopen loop restores both sessions and the MNS listener on its next tick — so
+allow up to about two minutes. `systemctl --user restart iphonebridge` still gets
+you there immediately if you'd rather not wait.
 
 </details>
 
@@ -407,17 +403,20 @@ python -m pytest tests -q
 <details>
 <summary><b>Messages stopped arriving</b></summary>
 
-The iPhone times out OBEX sessions, and anything that drops the pairing kills
-them outright. The daemon does not detect either case: it keeps the dead session
-handles, `IsHealthy` still returns true (it only null-checks the handle rather
-than probing the link), and the 60s retry loop is inactive once it has reached
-the ready state. A live query fails with
-`org.freedesktop.DBus.Error.UnknownObject`. Restart it:
+The iPhone times out OBEX sessions, and anything that drops the pairing — a
+forget + re-pair, an obexd restart — kills them outright. The daemon recovers on
+its own: a 60s health check probes whether the session objects still exist, and
+on finding them gone it drops to DEGRADED and reopens on the next tick of the
+reopen loop. Worst case is about two minutes.
+
+Watch it happen with `journalctl --user -u iphonebridge -f`; the line to look for
+is `MAP/PBAP sessions vanished`. To skip the wait:
 ```bash
 systemctl --user restart iphonebridge
 ```
-Restart after every forget + re-pair, and re-enable the step 6 toggles, which a
-re-pair switches off.
+What the daemon can't do for you is re-enable the step 6 toggles, which a
+forget + re-pair switches off. Do that on the iPhone or it reopens straight back
+into `Forbidden`.
 </details>
 
 <details>

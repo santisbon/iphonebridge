@@ -48,6 +48,8 @@ CONTACTS_REFRESH_SEC = 24 * 60 * 60  # 24h
 # How often to retry MAP/PBAP session open when blocked by the iPhone
 # (toggles off, paired-but-not-connected, etc.)
 SESSION_RETRY_SEC = 60
+# How often to confirm the OBEX sessions still exist once we're ready.
+SESSION_HEALTH_SEC = 60
 
 
 class Daemon:
@@ -60,6 +62,7 @@ class Daemon:
         self.hfp: HfpManager | None = None
         self._contacts_refresh_id: int | None = None
         self._session_retry_id: int | None = None
+        self._session_health_id: int | None = None
         self._bus_name = None
         self._dbus_service: MessagesService | None = None
         self._post_sessions_done = False
@@ -146,12 +149,8 @@ class Daemon:
                 log.warning("       Enable: Show Message Notifications")
                 log.warning("       Enable: Sync Contacts")
                 log.warning("")
-            if first_attempt and self._session_retry_id is None:
-                self._session_retry_id = GLib.timeout_add_seconds(
-                    SESSION_RETRY_SEC, self._retry_sessions
-                )
-                log.warning("  → Daemon stays running. Will retry every %ds.",
-                            SESSION_RETRY_SEC)
+            if first_attempt:
+                self._arm_session_retry()
             return
         # Sessions opened — wire everything that depends on them.
         self._post_sessions_setup()
@@ -167,10 +166,52 @@ class Daemon:
             return True
 
         log.info("sessions opened on retry — promoting to ready state")
-        self._post_sessions_setup()
-        # Stop the retry timer
+        # Clear the id first: _post_sessions_setup arms the health check, and
+        # returning False below is what actually removes this timer.
         self._session_retry_id = None
+        self._post_sessions_setup()
         return False
+
+    def _arm_session_retry(self) -> None:
+        """Start the 60s reopen loop, unless it's already running."""
+        if self._session_retry_id is not None:
+            return
+        self._session_retry_id = GLib.timeout_add_seconds(
+            SESSION_RETRY_SEC, self._retry_sessions
+        )
+        log.warning("  → Daemon stays running. Will retry every %ds.",
+                    SESSION_RETRY_SEC)
+
+    def _check_session_health(self) -> bool:
+        """GLib timer callback. Notice sessions that died under us.
+
+        Without this the daemon holds dead handles indefinitely: the reopen
+        loop only runs before we first reach the ready state, so a forget +
+        re-pair used to leave the daemon reporting healthy while every query
+        failed with UnknownObject.
+        """
+        if self.sessions.alive():
+            return True
+        log.warning("MAP/PBAP sessions vanished (re-pair, obexd restart, or "
+                    "an iPhone-side timeout) — dropping to DEGRADED and "
+                    "reopening")
+        self._session_health_id = None
+        self._on_sessions_lost()
+        return False
+
+    def _on_sessions_lost(self) -> None:
+        """Tear down everything that depended on the dead sessions, then
+        re-arm the reopen loop. Mirror image of _post_sessions_setup."""
+        if self.listener is not None:
+            try:
+                self.listener.stop()
+            except Exception:
+                log.exception("MNS listener stop failed during recovery")
+            self.listener = None
+        self.sessions.close_all()
+        self._post_sessions_done = False
+        log.warning("=== iphonebridge running in DEGRADED mode ===")
+        self._arm_session_retry()
 
     def _setup_sinks(self) -> None:
         """Register the JSONL + libnotify sinks. Independent of the OBEX
@@ -217,6 +258,12 @@ class Daemon:
             )
             self.listener.start()
 
+        # Watch for the sessions dying under us from here on.
+        if self._session_health_id is None:
+            self._session_health_id = GLib.timeout_add_seconds(
+                SESSION_HEALTH_SEC, self._check_session_health
+            )
+
         log.info("=== iphonebridge ready (contacts=%d, sinks=%s) ===",
                  self.contacts.count(),
                  [s.name for s in self.sinks])
@@ -248,7 +295,8 @@ class Daemon:
 
     def stop(self) -> None:
         log.info("=== iphonebridge stopping ===")
-        for tid_attr in ("_contacts_refresh_id", "_session_retry_id"):
+        for tid_attr in ("_contacts_refresh_id", "_session_retry_id",
+                         "_session_health_id"):
             tid = getattr(self, tid_attr, None)
             if tid is not None:
                 try:

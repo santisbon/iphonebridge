@@ -142,7 +142,10 @@ class MessagesService(dbus.service.Object):
 
     @dbus.service.method(IFACE, in_signature="", out_signature="b")
     def IsHealthy(self) -> bool:
-        return self.sessions.map is not None
+        # Probe, don't null-check. A re-pair or an obexd restart removes the
+        # session objects while we go on holding their paths, and a handle
+        # that is merely non-None says nothing about the link.
+        return self.sessions.alive()
 
     @dbus.service.method(IFACE, in_signature="", out_signature="i")
     def RefreshContacts(self) -> int:

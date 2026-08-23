@@ -102,6 +102,23 @@ class SessionManager:
         self.map = None
         self.pbap = None
 
+    def alive(self) -> bool:
+        """Both sessions still exist on obexd's bus.
+
+        Anything that drops the pairing — a forget + re-pair, an obexd
+        restart, the iPhone timing the session out — removes the session
+        objects while we go on holding their paths. One property read each,
+        no traffic to the phone, so this is cheap enough to call per request.
+        """
+        for sess in (self.map, self.pbap):
+            if sess is None:
+                return False
+            try:
+                sess.properties.Get("org.bluez.obex.Session1", "Target")
+            except dbus.exceptions.DBusException:
+                return False
+        return True
+
     # Convenience accessors
     @property
     def map_path(self) -> str:
