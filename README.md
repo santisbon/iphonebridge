@@ -458,6 +458,34 @@ No match means the bond is still BR/EDR-only, and iOS won't offer the *Show Syst
 ```bash
 lsusb | grep -i bluetooth        # Intel Corp. = supported; Realtek / dongles = not
 ```
+
+**Check the advertisement registered at all.** The toggle also needs the
+ANCS-soliciting BLE advertisement the daemon registers at startup
+(`spike/RESULTS.md` §1). A failure is logged plainly:
+
+```bash
+journalctl --user -u iphonebridge | grep -i advert
+# good: BLE advert registered: /com/gabriel/iphonebridge/ancs_advert
+# bad:  RegisterAdvertisement failed: org.bluez.Error.Failed: ...
+```
+
+If it failed, first clear stale advertising slots — bluetoothd can hold
+instances from earlier sessions that are never released:
+
+```bash
+# ActiveInstances = in use, SupportedInstances = still free
+busctl --system get-property org.bluez /org/bluez/hci0 \
+  org.bluez.LEAdvertisingManager1 ActiveInstances SupportedInstances
+sudo systemctl restart bluetooth     # releases stale instances
+systemctl --user restart iphonebridge
+```
+
+> Known-unresolved: on one BlueZ 5.85 / Intel BE200 setup, registration
+> fails with `org.bluez.Error.Failed` even with every slot free and a bare
+> `Type: peripheral` advert carrying no payload, from a separate process on
+> its own object path. That points below iphonebridge, at BlueZ or the
+> controller. MAP and PBAP are unaffected, so messages and contacts keep
+> working; only ANCS is lost. Reports from other chipsets welcome.
 </details>
 
 <details>
