@@ -23,7 +23,10 @@ dependencies = [
   # NOTE: dbus-python and PyGObject are installed via apt
   # (python3-dbus, python3-gi) and intentionally NOT pulled from PyPI —
   # the PyPI versions are notoriously fragile to build. The venv that
-  # runs this package should be created with --system-site-packages.
+  # runs this package should be created by the system interpreter
+  # (/usr/bin/python3, not conda/pyenv) with --system-site-packages —
+  # that flag inherits the creating interpreter's packages, and only the
+  # system one can see apt's dist-packages.
 ]
 
 [project.optional-dependencies]

@@ -1,8 +1,9 @@
 """First-run wizard — enumerate paired devices, write local.env, prompt
 the user through the iPhone-side toggles.
 
-Doesn't drive the pairing itself — GNOME's BT panel (or `bluetoothctl`)
-does that more reliably. We just connect the dots after pairing.
+Doesn't drive the pairing itself — the desktop's BT panel (GNOME Settings,
+KDE System Settings) or `bluetoothctl` does that more reliably. We just
+connect the dots afterwards, reading whatever BlueZ ended up bonded to.
 """
 from __future__ import annotations
 
@@ -93,9 +94,12 @@ def run_wizard(*, restart_after: bool = True) -> int:
     if not devices:
         typer.echo(typer.style("No paired Bluetooth devices found.\n",
                                fg=typer.colors.YELLOW))
-        typer.echo("Pair your iPhone first. Two options:")
-        typer.echo("  • GNOME Settings → Bluetooth → tap your iPhone under Other Devices")
+        typer.echo("Pair your iPhone first. Three options:")
+        typer.echo("  • GNOME: Settings → Bluetooth → tap your iPhone under Other Devices")
+        typer.echo("  • KDE Plasma: System Settings → Bluetooth → Add New Device")
         typer.echo("  • CLI: bluetoothctl  →  scan on, pair <MAC>, trust <MAC>, exit")
+        typer.echo("\nKeep the iPhone on its Settings → Bluetooth screen while pairing;")
+        typer.echo("iOS is only discoverable while that screen is open.")
         typer.echo("\nThen run `iphonebridge pair-setup` again.")
         return 1
 

@@ -75,7 +75,9 @@ cd iphonebridge
 
 # A venv that inherits the system PyGObject + dbus-python.
 # (Never install those two from PyPI — the builds are notoriously fragile.)
-python3 -m venv --system-site-packages .venv
+# Spell out /usr/bin/python3: --system-site-packages inherits the *creating*
+# interpreter's packages, and only the system one can see apt's dist-packages.
+/usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 pip install -e .
 
@@ -87,7 +89,16 @@ ln -sf "$(pwd)/.venv/bin/iphonebridge-ui" ~/.local/bin/iphonebridge-ui
 
 ### 3 · Pair your iPhone
 
-Pair normally — GNOME **Settings → Bluetooth**, or `bluetoothctl`. Then run the wizard:
+Pair normally with your desktop's Bluetooth panel, or with `bluetoothctl`:
+
+- **GNOME** — Settings → Bluetooth → tap the iPhone under *Other Devices*
+- **KDE Plasma** — System Settings → Bluetooth → *Add New Device* (same button in the tray applet)
+- **CLI** — `bluetoothctl` → `scan on`, `pair <MAC>`, `trust <MAC>`, `quit`
+
+Keep the iPhone on its **Settings → Bluetooth** screen while you pair; iOS is only
+discoverable while that screen is open. Confirm the matching 6-digit code on both sides.
+
+Then run the wizard:
 
 ```bash
 iphonebridge pair-setup
@@ -95,16 +106,44 @@ iphonebridge pair-setup
 
 It finds your iPhone among paired devices, writes `~/.config/iphonebridge/local.env`, and prints the iPhone-side steps.
 
-### 4 · Install the daemon as a service
+### 4 · Let the daemon set the adapter class
+
+iOS only offers the message and contacts toggles to a device whose Bluetooth
+Class-of-Device is **A/V Hands-Free** (major 4, minor 8). Your adapter ships as
+*Computer*, and changing that needs root, so grant the daemon one narrowly
+scoped rule:
+
+```bash
+sudo bash systemd/install-cod-sudoers.sh
+```
+
+It unlocks exactly `btmgmt class 4 8` for your user and nothing else. The daemon
+re-applies the class on every start, which matters because it resets on reboot
+and on `systemctl restart bluetooth`.
+
+Don't want a sudoers rule? Run `sudo btmgmt class 4 8` by hand instead, and
+again after each reboot. Check the current value any time with
+`iphonebridge doctor`.
+
+### 5 · Install the daemon as a service
+
+The unit ships with an `@INSTALL_DIR@` placeholder, so substitute your clone
+path rather than copying it straight across:
 
 ```bash
 mkdir -p ~/.config/systemd/user
-cp systemd/iphonebridge.service ~/.config/systemd/user/
+sed "s|@INSTALL_DIR@|$(pwd)|g" systemd/iphonebridge.service \
+  > ~/.config/systemd/user/iphonebridge.service
 systemctl --user daemon-reload
 systemctl --user enable --now iphonebridge
 ```
 
-### 5 · iPhone-side toggles
+Check it came up with `systemctl --user status iphonebridge` and
+`journalctl --user -u iphonebridge -f`. Starting without the toggles from step 6
+is expected: the daemon logs `DEGRADED mode`, stays running, and retries every
+60s.
+
+### 6 · iPhone-side toggles
 
 On the iPhone: **Settings → Bluetooth → tap the ⓘ next to your computer →** enable
 
@@ -112,10 +151,17 @@ On the iPhone: **Settings → Bluetooth → tap the ⓘ next to your computer �
 - **Sync Contacts** — gates contacts (PBAP)
 - **Show System Notifications** — gates per-app notifications (ANCS)
 
-> These toggles only appear once the daemon has run at least once (it sets the adapter's Bluetooth class + advertises correctly). If you don't see them, re-run `iphonebridge pair-setup` and restart the daemon.
+> The toggles need both halves of the setup above: the A/V Hands-Free class from step 4, and the ANCS-soliciting BLE advertisement the daemon registers at startup. If they aren't there, confirm `iphonebridge doctor` reports the class as OK, then forget + re-pair — iOS reads the class at pairing time and caches it.
+
+Two behaviours that look like faults but aren't:
+
+- **The toggles disappear whenever the daemon is stopped.** They depend on that BLE advertisement, which goes away with the process. Start the daemon and they come back.
+- **A forget + re-pair resets all the toggles to off.** They stay visible, so it's easy to miss. Re-enable them after every re-pair, then give the daemon 60s to retry.
+
+Only two toggles appear until ANCS is working: *Show Message Notifications* and *Sync Contacts*. *Show System Notifications* shows up once the BLE bond from step 7 exists.
 
 <details>
-<summary><b>6 · (Optional) Enable per-app notifications — ANCS</b></summary>
+<summary><b>7 · (Optional) Enable per-app notifications — ANCS</b></summary>
 
 ANCS needs a true BLE bond, which only forms during a fresh pairing while the adapter is correctly configured. One-time setup:
 
@@ -129,10 +175,29 @@ iphonebridge ancs-enable
 
 Then **forget + re-pair** the iPhone one more time (the wizard walks you through it). After the fresh pair, iOS performs cross-transport key derivation and the BLE bond sticks — ANCS notifications start flowing automatically. You only do this once.
 
+*Forget* means dropping the bond on both ends. On the iPhone: **Settings → Bluetooth → ⓘ → Forget This Device**. On Linux, pick one:
+
+- **GNOME** — Settings → Bluetooth → the device → *Forget*
+- **KDE Plasma** — System Settings → Bluetooth → the device → *Remove* (trash icon)
+- **CLI** — `bluetoothctl remove <MAC>`
+
+After the re-pair, two things need doing by hand:
+
+```bash
+systemctl --user restart iphonebridge
+```
+
+The daemon doesn't notice that the re-pair killed its MAP and PBAP sessions — it
+holds the dead handles, keeps reporting healthy, and never retries, because the
+retry loop only runs before it first reaches the ready state. Restarting is the
+only way back.
+
+Then re-enable the step 6 toggles on the iPhone, which the re-pair switched off.
+
 </details>
 
 <details>
-<summary><b>7 · (Optional) Enable phone calls — HFP</b></summary>
+<summary><b>8 · (Optional) Enable phone calls — HFP</b></summary>
 
 To take and place calls on the laptop, iphonebridge uses **oFono** for HFP
 call control and PipeWire's oFono backend for the call audio.
@@ -149,19 +214,21 @@ iphonebridge hfp-enable
 `hfp-enable` writes `~/.config/wireplumber/wireplumber.conf.d/51-bluez-hfp-hf.conf`
 (routing HFP through oFono) and restarts WirePlumber. Follow its printed
 steps — restart oFono **after** WirePlumber so it can claim the HFP profile,
-reconnect the iPhone, restart the daemon — and incoming calls will pop up
-with **Answer / Decline** buttons. Place calls with `iphonebridge call`.
+and reconnect the iPhone.
 
-</details>
-
-<details>
-<summary><b>(Optional) Persist the Bluetooth class across reboots</b></summary>
+Then restart the bridge daemon, which is what actually enables calls:
 
 ```bash
-sudo bash systemd/install-cod-sudoers.sh
+systemctl --user restart iphonebridge
 ```
 
-Lets the daemon set the adapter's Class-of-Device on every start without a password prompt. Without it you'd occasionally need to re-run setup after a reboot.
+The daemon looks for oFono once, at startup. If it started before you installed
+oFono it logged `oFono not available — HFP calls disabled` and left call control
+dormant for the life of the process; nothing reconnects it later. After the
+restart the log should read `HFP manager started (oFono); modem=...`.
+
+Incoming calls then pop up with **Answer / Decline** buttons. Place calls with
+`iphonebridge call`.
 
 </details>
 
@@ -207,7 +274,7 @@ iphonebridge sms-list --source local
 iphonebridge sms-send "+15551234567" "on my way"
 iphonebridge sms-send Maddie "running late"
 
-# Calls — needs HFP set up (install step 7)
+# Calls — needs HFP set up (install step 8)
 iphonebridge call Maddie
 iphonebridge calls
 iphonebridge hangup
@@ -257,11 +324,17 @@ Design rationale and the empirical Bluetooth findings that shaped it are in [`sp
 <details>
 <summary><b>Messages stopped arriving</b></summary>
 
-The iPhone times out OBEX sessions. Restart the daemon:
+The iPhone times out OBEX sessions, and anything that drops the pairing kills
+them outright. The daemon does not detect either case: it keeps the dead session
+handles, `IsHealthy` still returns true (it only null-checks the handle rather
+than probing the link), and the 60s retry loop is inactive once it has reached
+the ready state. A live query fails with
+`org.freedesktop.DBus.Error.UnknownObject`. Restart it:
 ```bash
 systemctl --user restart iphonebridge
 ```
-If the iOS toggles vanished from Bluetooth settings, forget + re-pair the iPhone.
+Restart after every forget + re-pair, and re-enable the step 6 toggles, which a
+re-pair switches off.
 </details>
 
 <details>
@@ -271,9 +344,37 @@ An iPhone toggle is off. Check **Settings → Bluetooth → ⓘ → Show Message
 </details>
 
 <details>
+<summary><b>Contacts stay at 0 — <code>PBAP transfer wrote no file</code></b></summary>
+
+The first pull straight after you enable *Sync Contacts* often returns an empty
+file: the daemon issues `PullAll` within a second of the PBAP session opening and
+the iPhone isn't serving the phonebook yet. Restart the daemon and it re-pulls on
+startup. A healthy pull logs `parsed N contacts from M bytes` and takes several
+seconds for a large phonebook.
+
+Don't reach for `iphonebridge contacts-sync` here. It builds its own
+`SessionManager`, which restarts obexd and destroys the running daemon's MAP and
+PBAP sessions. Use it only with the daemon stopped.
+</details>
+
+<details>
 <summary><b>ANCS notifications never arrive</b></summary>
 
-ANCS needs a BLE bond, which needs a fresh pair done with the adapter correctly set up. Run `iphonebridge ancs-enable`, then forget + re-pair the iPhone. Also confirm your adapter is Intel — Realtek and USB dongles can't do it.
+ANCS needs a BLE bond, which needs a fresh pair done with the adapter correctly set up. Run `iphonebridge ancs-enable`, then forget + re-pair the iPhone, then restart the daemon.
+
+Check whether the bond actually formed — if ANCS worked, the iPhone's device object carries the ANCS GATT service UUID:
+
+```bash
+busctl --system tree org.bluez | grep dev_          # find your device path
+busctl --system get-property org.bluez <path> org.bluez.Device1 UUIDs \
+  | grep -i 7905f431-b5ce-4e99-a40f-4b1e122d00d0
+```
+
+No match means the bond is still BR/EDR-only, and iOS won't offer the *Show System Notifications* toggle at all. An Intel adapter is necessary but not sufficient; `spike/RESULTS.md` §5 has the BR/EDR-vs-BLE mutex this runs into. Confirm the chipset with:
+
+```bash
+lsusb | grep -i bluetooth        # Intel Corp. = supported; Realtek / dongles = not
+```
 </details>
 
 <details>
@@ -292,6 +393,23 @@ Install a clipboard tool: `sudo apt install wl-clipboard` (Wayland) or `xclip` (
 <summary><b><code>iphonebridge: command not found</code></b></summary>
 
 The CLI lives in the venv. Either `source .venv/bin/activate`, or create the `~/.local/bin` symlink from install step 2.
+</details>
+
+<details>
+<summary><b><code>ModuleNotFoundError: No module named 'dbus'</code></b></summary>
+
+The venv was created by a Python that isn't the system one. Run `head -3 .venv/pyvenv.cfg`; if `command =` names anything under `~/anaconda3`, `~/miniconda3`, or `~/.pyenv`, that's it. `--system-site-packages` inherits the site-packages of whichever interpreter created the venv, so a conda or pyenv venv never sees apt's `/usr/lib/python3/dist-packages` where `python3-dbus` and `python3-gi` live. Those apt builds are also compiled against the system interpreter specifically, so a version mismatch would break them regardless.
+
+Rebuild against the system Python:
+
+```bash
+rm -rf .venv
+/usr/bin/python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -e .
+.venv/bin/python -c "import dbus, gi; print('ok')"
+```
+
+The `~/.local/bin` symlinks point at paths inside `.venv`, so they keep working without relinking.
 </details>
 
 ## 🚧 Limitations
