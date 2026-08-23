@@ -359,6 +359,49 @@ systemctl --user {start,stop,restart} iphonebridge
 
 Design rationale and the empirical Bluetooth findings that shaped it are in [`spike/RESULTS.md`](spike/RESULTS.md).
 
+## 🛠️ Working on the code
+
+The install is editable: `.venv/.../__editable__.iphonebridge-*.pth` holds a
+single line pointing at `src/`, so Python imports straight out of the working
+tree. **Editing a `.py` file never needs `pip install -e .` again** — adding a
+whole new module doesn't either, since that path entry is searched live.
+
+What needs restarting depends on which process is holding the code:
+
+| Changed | Do this |
+|---|---|
+| Daemon — `daemon.py`, `dbus_service.py`, `contacts.py`, `bluez_setup.py`, `obex/`, `hfp/`, `ancs/`, `sinks/` | `systemctl --user restart iphonebridge` |
+| CLI — `cli.py`, `pair_setup.py` | Nothing; every `iphonebridge <cmd>` is a fresh process |
+| App — `ui/` | Close and reopen `iphonebridge-ui` |
+| `systemd/iphonebridge.service` | Re-run the install from step 5, then `systemctl --user daemon-reload`, then restart |
+| `systemd/sudoers-*` or either installer | `sudo bash systemd/install-cod-sudoers.sh` again |
+| `data/*.desktop` or the icon | Re-copy, then `update-desktop-database` and `kbuildsycoca6` |
+
+Only two changes actually need a reinstall:
+
+- **Adding or renaming a `[project.scripts]` / `[project.gui-scripts]` entry.**
+  The launchers in `.venv/bin` are generated at install time. A new *subcommand*
+  on the existing Typer app doesn't count; a new top-level command does.
+- **Adding a dependency.** Nothing installs it for you.
+
+If a change seems to have no effect, check that the daemon actually picked it up
+before assuming the code is wrong:
+
+```bash
+systemctl --user show iphonebridge -p ExecMainStartTimestamp
+```
+
+A restart is not only about code, either. It's also how the daemon recovers from
+a re-pair, and when it re-reads `local.env` and re-registers the BLE
+advertisement the iPhone toggles depend on.
+
+Run the tests with:
+
+```bash
+pip install -e '.[dev]'
+python -m pytest tests -q
+```
+
 ## 🩺 Troubleshooting
 
 <details>
