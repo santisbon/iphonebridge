@@ -13,7 +13,10 @@ class MainWindow(Adw.ApplicationWindow):
     def __init__(self, application, client) -> None:
         super().__init__(application=application, title="iphonebridge")
         self._client = client
-        self.set_default_size(940, 660)
+        # Tall enough to show the whole Setup tab without scrolling:
+        # 46 header bar + 46 Recheck strip + 634 page content, measured
+        # live, plus slack for theme/font variation.
+        self.set_default_size(940, 744)
 
         self._toasts = Adw.ToastOverlay()
         self._stack = Adw.ViewStack(vexpand=True, hexpand=True)
