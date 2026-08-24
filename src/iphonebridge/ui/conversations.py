@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from gi.repository import GLib, Gtk, Pango
 
-from iphonebridge.ui.util import event_ts, format_ts
+from iphonebridge.contacts import ContactsResolver
+from iphonebridge.ui.util import event_ts, format_ts, resolve_recipient
 
 _ELLIPSIZE_END = Pango.EllipsizeMode.END
 
@@ -26,14 +27,29 @@ class ConversationsPage(Gtk.Box):
         self._toast = toast
         self._threads: dict[str, dict] = {}
         self._current: str | None = None
+        self._contacts = ContactsResolver()
+        self._composing_new = False
+        self._select_next_sent = False
 
         # ---- left: thread list ----------------------------------------
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        # mail-message-new-symbolic is the stock compose glyph;
+        # chat-message-new-symbolic isn't shipped by adwaita-icon-theme.
+        new_btn = Gtk.Button(icon_name="mail-message-new-symbolic",
+                             tooltip_text="New conversation",
+                             css_classes=["flat"],
+                             margin_top=6, margin_bottom=6,
+                             margin_start=6, margin_end=6)
+        new_btn.connect("clicked", self._on_new_conversation)
+        left.append(new_btn)
+        left.append(Gtk.Separator())
         self._thread_list = Gtk.ListBox(css_classes=["navigation-sidebar"])
         self._thread_list.connect("row-selected", self._on_thread_selected)
         sidebar_scroll = Gtk.ScrolledWindow(
             hscrollbar_policy=Gtk.PolicyType.NEVER, width_request=240,
-            child=self._thread_list)
-        self.append(sidebar_scroll)
+            vexpand=True, child=self._thread_list)
+        left.append(sidebar_scroll)
+        self.append(left)
         self.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         # ---- right: message view + compose ----------------------------
@@ -48,7 +64,33 @@ class ConversationsPage(Gtk.Box):
         self._stack = Gtk.Stack()
         self._stack.add_named(self._placeholder, "empty")
         self._stack.add_named(self._msg_scroll, "messages")
+        self._stack.add_named(
+            Gtk.Label(label="New Message",
+                      css_classes=["dim-label", "title-2"], vexpand=True),
+            "new")
         right.append(self._stack)
+
+        # Recipient bar — only visible while composing a new conversation.
+        self._to_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
+                               spacing=6, margin_top=6,
+                               margin_start=6, margin_end=6, visible=False)
+        self._to_entry = Gtk.Entry(
+            placeholder_text="To: number, contact name, or 1 (800) MYAPPLE",
+            hexpand=True)
+        self._to_entry.connect("changed", self._on_to_changed)
+        self._to_bar.append(self._to_entry)
+        right.append(self._to_bar)
+
+        # Contact-name autocomplete under the recipient entry — same
+        # popover pattern as the Calls tab dialer.
+        self._to_suggestions = Gtk.Popover(
+            has_arrow=False, autohide=False,
+            position=Gtk.PositionType.BOTTOM)
+        self._to_suggestions.set_parent(self._to_entry)
+        self._to_sug_list = Gtk.ListBox(css_classes=["boxed-list"])
+        self._to_sug_list.connect("row-activated", self._on_to_suggestion)
+        self._to_suggestions.set_child(self._to_sug_list)
+        self._to_filling = False
 
         compose = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
                           margin_top=6, margin_bottom=6,
@@ -98,6 +140,66 @@ class ConversationsPage(Gtk.Box):
                 self._append_bubble(msg)
                 self._scroll_to_bottom()
 
+    # ---- new conversation ----------------------------------------------
+
+    def _on_new_conversation(self, _btn) -> None:
+        self._composing_new = True
+        self._current = None
+        self._thread_list.select_row(None)
+        self._stack.set_visible_child_name("new")
+        self._to_bar.set_visible(True)
+        self._entry.set_sensitive(True)
+        self._send_btn.set_sensitive(True)
+        self._to_entry.grab_focus()
+
+    def _leave_new_mode(self) -> None:
+        self._composing_new = False
+        self._to_suggestions.popdown()
+        self._to_bar.set_visible(False)
+        self._to_entry.set_text("")
+
+    def _on_to_changed(self, _entry) -> None:
+        if self._to_filling:
+            return
+        text = self._to_entry.get_text().strip()
+        if len(text) < 2 or any(ch.isdigit() for ch in text):
+            self._to_suggestions.popdown()
+            return
+        seen: set[str] = set()
+        names: list[tuple[str, str]] = []
+        for name, phone in self._contacts.find_by_name(text):
+            if name not in seen:
+                seen.add(name)
+                names.append((name, phone))
+            if len(names) >= 5:
+                break
+        if not names:
+            self._to_suggestions.popdown()
+            return
+        while (row := self._to_sug_list.get_row_at_index(0)) is not None:
+            self._to_sug_list.remove(row)
+        for name, phone in names:
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                          margin_top=6, margin_bottom=6,
+                          margin_start=10, margin_end=10)
+            box.append(Gtk.Label(label=name, halign=Gtk.Align.START))
+            box.append(Gtk.Label(label=f"+{phone}", halign=Gtk.Align.START,
+                                 css_classes=["dim-label", "caption"]))
+            row = Gtk.ListBoxRow(child=box)
+            row.contact_name = name
+            self._to_sug_list.append(row)
+        self._to_suggestions.popup()
+
+    def _on_to_suggestion(self, _list, row) -> None:
+        self._to_filling = True
+        try:
+            self._to_entry.set_text(row.contact_name)
+            self._to_entry.set_position(-1)
+        finally:
+            self._to_filling = False
+        self._to_suggestions.popdown()
+        self._entry.grab_focus()
+
     # ---- thread list ---------------------------------------------------
 
     def _rebuild_thread_list(self) -> None:
@@ -126,6 +228,8 @@ class ConversationsPage(Gtk.Box):
     def _on_thread_selected(self, _list, row) -> None:
         if row is None:
             return
+        if self._composing_new:
+            self._leave_new_mode()
         self._current = row.thread_key
         thread = self._threads.get(self._current)
         self._entry.set_sensitive(True)
@@ -170,16 +274,33 @@ class ConversationsPage(Gtk.Box):
 
     def _on_send(self, _widget) -> None:
         body = self._entry.get_text().strip()
-        if not body or self._current is None:
+        if not body:
             return
-        thread = self._threads[self._current]
+        if self._composing_new:
+            raw = self._to_entry.get_text().strip()
+            if not raw:
+                self._toast("Enter a recipient")
+                return
+            target = resolve_recipient(self._contacts, raw)
+            if target is None:
+                self._toast(f"No contact matches '{raw}'")
+                return
+        elif self._current is not None:
+            target = self._threads[self._current]["phone"]
+        else:
+            return
         self._entry.set_sensitive(False)
         self._send_btn.set_sensitive(False)
 
         def done(_transfer: str) -> None:
             # The outgoing bubble is added when the daemon's MessageSent
             # signal arrives (see _on_sent_event) — no optimistic append,
-            # so there's no chance of a duplicate.
+            # so there's no chance of a duplicate. For a brand-new
+            # conversation that signal also creates the thread, so mark it
+            # for selection when it lands.
+            if self._composing_new:
+                self._select_next_sent = True
+                self._leave_new_mode()
             self._entry.set_text("")
             self._entry.set_sensitive(True)
             self._send_btn.set_sensitive(True)
@@ -190,7 +311,7 @@ class ConversationsPage(Gtk.Box):
             self._send_btn.set_sensitive(True)
             self._toast(f"Send failed: {text}")
 
-        self._client.send_message(thread["phone"], body, done, failed)
+        self._client.send_message(target, body, done, failed)
 
     # ---- live ----------------------------------------------------------
 
@@ -199,3 +320,8 @@ class ConversationsPage(Gtk.Box):
 
     def _on_sent_event(self, _client, ev: dict) -> None:
         self._ingest(ev, outgoing=True)
+        if self._select_next_sent:
+            self._select_next_sent = False
+            key = _thread_key(ev)
+            self._current = key
+            self._rebuild_thread_list()

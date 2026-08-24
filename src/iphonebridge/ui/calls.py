@@ -1,14 +1,10 @@
 """Calls page — dial out, and answer / hang up active HFP calls."""
 from __future__ import annotations
 
-import re
-
 from gi.repository import Adw, Gtk
 
 from iphonebridge.contacts import ContactsResolver
-from iphonebridge.events import vanity_to_digits
-
-_PHONE_RE = re.compile(r"^\+?[\d\s()\-.]{7,}$")
+from iphonebridge.ui.util import resolve_recipient
 
 
 class CallsPage(Gtk.Box):
@@ -128,22 +124,7 @@ class CallsPage(Gtk.Box):
         self._client.dial(number, ok, err)
 
     def _resolve(self, raw: str) -> str | None:
-        """A phone number passes through; a name is looked up in contacts.
-
-        Vanity numbers like "1 (800) MYAPPLE" dial as keypad digits — but
-        only when the input already contains a digit, so a bare contact
-        name is never translated.
-        """
-        if _PHONE_RE.match(raw):
-            return raw
-        if any(ch.isdigit() for ch in raw):
-            translated = vanity_to_digits(raw)
-            if _PHONE_RE.match(translated):
-                return translated
-        matches = self._contacts.find_by_name(raw)
-        if not matches:
-            return None
-        return "+" + matches[0][1]
+        return resolve_recipient(self._contacts, raw)
 
     # ---- active calls --------------------------------------------------
 
