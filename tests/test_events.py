@@ -220,3 +220,15 @@ def test_vanity_resolve_rule():
     assert resolves_as_number("1 (800) MYAPPLE") == "1 (800) 6927753"
     assert resolves_as_number("Maddie") is None
     assert resolves_as_number("MYAPPLE") is None   # no digit -> not a number
+
+
+def test_dialable():
+    from iphonebridge.events import dialable
+    assert dialable("1 (800) 6927753") == "18006927753"
+    assert dialable("+1 555-123-4567") == "+15551234567"
+    assert dialable("*67 555 1234") == "*675551234"
+    assert dialable("+15551234567") == "+15551234567"
+    # + only survives at the front
+    assert dialable("555+123") == "555123"
+    # formatting-only input reduces to nothing dialable
+    assert dialable("() -") == ""

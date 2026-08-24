@@ -54,6 +54,17 @@ def vanity_to_digits(raw: str) -> str:
     return "".join(_KEYPAD.get(ch.upper(), ch) for ch in raw)
 
 
+def dialable(raw: str) -> str:
+    """Reduce a number to what oFono's Dial accepts: digits, * and #, with
+    at most a leading +. Formatting ("1 (800) 692-7753") is rejected by
+    oFono as InvalidFormat, so it must be stripped before dialing.
+    """
+    kept = "".join(ch for ch in raw if ch.isdigit() or ch in "*#+")
+    if kept.startswith("+"):
+        return "+" + kept[1:].replace("+", "")
+    return kept.replace("+", "")
+
+
 def normalize_phone(raw: str | None) -> str | None:
     """Reduce a phone string to digits only (E.164-ish minus the +).
 

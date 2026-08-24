@@ -39,6 +39,7 @@ import dbus.exceptions
 import dbus.service
 
 from iphonebridge.bus import session_bus
+from iphonebridge.events import dialable
 from iphonebridge.hfp.ofono_client import HfpError, HfpManager
 from iphonebridge.obex.map_query import list_recent_messages
 from iphonebridge.obex.map_send import send_message
@@ -204,9 +205,13 @@ class MessagesService(dbus.service.Object):
     def Dial(self, number: str) -> str:
         """Place a call. Returns the new oFono VoiceCall object path."""
         log.info("DBus Dial called for %s", number)
-        if not number.strip():
+        # oFono rejects formatted numbers (spaces, parens, dashes) with
+        # InvalidFormat — strip to digits/+/*/# here, the one choke point
+        # every caller (UI, CLI) flows through.
+        number = dialable(number)
+        if not number.strip("+*#"):
             raise dbus.exceptions.DBusException(
-                "number must be non-empty",
+                "number must contain digits",
                 name="me.santisbon.iphonebridge.Error.InvalidArgs",
             )
         try:
