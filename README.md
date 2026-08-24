@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/gabrielmeir53/iphonebridge?color=brightgreen)](https://github.com/gabrielmeir53/iphonebridge/releases)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
-[![Platform: Linux](https://img.shields.io/badge/platform-Linux%20%2F%20GNOME-lightgrey.svg)](#requirements)
+[![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
 
 *No Mac relay. No cloud service. No subscription. Just Bluetooth.*
 
@@ -47,9 +47,9 @@ As far as we know, **iphonebridge is the first free, open-source, Mac-free iMess
 
 | | Minimum | Tested with |
 |---|---|---|
-| **OS** | Linux + GNOME, BlueZ 5.72+ | Pop!_OS 24.04 |
-| **Bluetooth adapter** | Intel chipset (for ANCS) | Intel AX-series |
-| **Python** | 3.10+ | 3.12 |
+| **OS** | Linux (GNOME or KDE Plasma), BlueZ 5.72+ | Pop!_OS 24.04 (GNOME) · Kubuntu 26.04 (Plasma 6) |
+| **Bluetooth adapter** | Intel chipset (for ANCS) | Intel AX-series · BE200 (MAP/PBAP/HFP work; ANCS doesn't — see Troubleshooting) |
+| **Python** | 3.10+ | 3.12, 3.14 |
 | **iPhone** | iOS 16.5+ | iPhone 16 Pro Max, iOS 26.5 |
 | **System packages** | `bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi` (+ `ofono` for calls, `wl-clipboard` for code auto-copy) | — |
 
@@ -362,16 +362,20 @@ single line pointing at `src/`, so Python imports straight out of the working
 tree. **Editing a `.py` file never needs `pip install -e .` again** — adding a
 whole new module doesn't either, since that path entry is searched live.
 
-What needs restarting depends on which process is holding the code:
+What needs restarting: every process that imports the file you changed. Everything in
+`src/iphonebridge/` except `cli.py`, `pair_setup.py`, and `ui/` is daemon code;
+`bus.py` and `config.py` are imported by the app as well, so those two need
+both actions.
 
 | Changed | Do this |
 |---|---|
-| Daemon — `daemon.py`, `dbus_service.py`, `contacts.py`, `bluez_setup.py`, `obex/`, `hfp/`, `ancs/`, `sinks/` | `systemctl --user restart iphonebridge` |
+| Daemon code — anything but `cli.py`, `pair_setup.py`, `ui/` | `systemctl --user restart iphonebridge` |
 | CLI — `cli.py`, `pair_setup.py` | Nothing; every `iphonebridge <cmd>` is a fresh process |
 | App — `ui/` | Close and reopen `iphonebridge-ui` |
+| Shared — `bus.py`, `config.py` | Restart the daemon *and* reopen the app |
 | `systemd/iphonebridge.service` | Re-run the install from step 5, then `systemctl --user daemon-reload`, then restart |
-| `systemd/sudoers-*` or either installer | `sudo bash systemd/install-cod-sudoers.sh` again |
-| `data/*.desktop` or the icon | Re-copy, then `update-desktop-database` and `kbuildsycoca6` |
+| `systemd/sudoers-*`, `set-le-bearer.sh`, or an installer | Re-run the matching installer — `install-cod-sudoers.sh` for the CoD rule, `install-ancs-sudoers.sh` for the ANCS rule + helper |
+| `data/*.desktop` or the icon | Re-run the install snippet under *Adding it to your app launcher* — a plain copy loses the `Exec` rewrite |
 
 Only two changes actually need a reinstall:
 
@@ -387,15 +391,16 @@ before assuming the code is wrong:
 systemctl --user show iphonebridge -p ExecMainStartTimestamp
 ```
 
-A restart is not only about code, either. It's also how the daemon recovers from
-a re-pair, and when it re-reads `local.env` and re-registers the BLE
-advertisement the iPhone toggles depend on.
+A restart is not only about code, either. It's when the daemon re-reads
+`local.env` and re-registers the BLE advertisement the iPhone toggles depend
+on — and after a re-pair it skips the ~2-minute wait for the automatic session
+recovery.
 
 Run the tests with:
 
 ```bash
-pip install -e '.[dev]'
-python -m pytest tests -q
+.venv/bin/pip install -e '.[dev]'   # once, for pytest
+.venv/bin/python -m pytest tests -q
 ```
 
 ## 🩺 Troubleshooting
