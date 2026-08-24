@@ -16,7 +16,11 @@
 
 ---
 
-Microsoft's **Phone Link** gives Windows users their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent — KDE Connect needs the Android/iOS *app* and only does Wi-Fi, `ancs4linux` does notifications only, Mac-relay bridges (BlueBubbles, AirMessage) need an actual Mac, and Beeper costs money.
+Microsoft's Phone Link gives Windows users their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent:
+- KDE Connect needs the Android/iOS *app* and on iOS it's missing notifications, SMS, and needs the iPhone app on-screen to maintain the connection. 
+- `ancs4linux` does notifications only.
+- Mac-relay bridges (BlueBubbles, AirMessage) need an actual Mac. 
+- Beeper no longer supports iMessage.
 
 **iphonebridge is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a GTK4 desktop app.
 
@@ -35,7 +39,6 @@ Microsoft's **Phone Link** gives Windows users their iPhone's texts and notifica
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | GTK4 / libadwaita | ✅ |
 | ⚙️ Runs unattended as a **systemd user service** | — | ✅ |
 
-### 🤯 The iMessage surprise
 
 Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a paired computer — that you *must* use a Mac relay to bridge blue-bubble messages.
 
@@ -61,7 +64,9 @@ Two ways to install. Pick exactly one: from-source symlinks in
 `~/.local/bin` shadow a deb-installed `/usr/bin/iphonebridge` on most
 PATH setups, and mixing the two is confusing to debug.
 
-### Option A: the `.deb` package
+### The `.deb` package
+
+Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces without defeating the purpose of sandboxing.
 
 One package installs everything: daemon, CLI, desktop app, launcher
 entry, systemd unit, and the privileged sudoers rules. Use this on any
@@ -71,7 +76,11 @@ build it yourself (one `dpkg-buildpackage` invocation) and follow the
 self-contained build, install, and uninstall guide in
 [`packaging/deb/README.md`](packaging/deb/README.md).
 
-### Option B: from source
+### From source
+
+<details>
+
+<summary> Install from source </summary>
 
 The rest of this section walks through it: venv, symlinks, sudoers
 installers, and a path-substituted systemd unit. The package names in step 1
@@ -84,7 +93,7 @@ edits to the clone take effect without rebuilding a package (see
 *Working on the code*).
 
 
-### 1 · System packages
+#### 1 · System packages
 
 ```bash
 sudo apt install bluez bluez-obexd python3-dbus python3-gi python3-venv
@@ -94,7 +103,7 @@ sudo apt install gir1.2-gtk-4.0 gir1.2-adw-1
 sudo apt install wl-clipboard
 ```
 
-### 2 · Clone & install
+#### 2 · Clone & install
 
 ```bash
 git clone https://github.com/santisbon/iphonebridge.git
@@ -114,7 +123,7 @@ ln -sf "$(pwd)/.venv/bin/iphonebridge" ~/.local/bin/iphonebridge
 ln -sf "$(pwd)/.venv/bin/iphonebridge-ui" ~/.local/bin/iphonebridge-ui
 ```
 
-### 3 · Pair your iPhone
+#### 3 · Pair your iPhone
 
 Pair normally with your desktop's Bluetooth panel, or with `bluetoothctl`:
 
@@ -138,7 +147,7 @@ iphonebridge pair-setup
 
 It finds your iPhone among paired devices, writes `~/.config/iphonebridge/local.env`, and prints the iPhone-side steps.
 
-### 4 · Let the daemon set the adapter class
+#### 4 · Let the daemon set the adapter class
 
 iOS only offers the message and contacts toggles to a device whose Bluetooth
 Class-of-Device is **A/V Hands-Free** (major 4, minor 8). Your adapter ships as
@@ -157,7 +166,7 @@ Don't want a sudoers rule? Run `sudo btmgmt class 4 8` by hand instead, and
 again after each reboot. Check the current value any time with
 `iphonebridge doctor`.
 
-### 5 · Install the daemon as a service
+#### 5 · Install the daemon as a service
 
 The unit ships with an `@INSTALL_DIR@` placeholder, so substitute your clone
 path rather than copying it straight across:
@@ -175,7 +184,7 @@ Check it came up with `systemctl --user status iphonebridge` and
 is expected: the daemon logs `DEGRADED mode`, stays running, and retries every
 60s.
 
-### 6 · iPhone-side toggles
+#### 6 · iPhone-side toggles
 
 On the iPhone: **Settings → Bluetooth → tap the ⓘ next to your computer →** enable
 
@@ -192,8 +201,8 @@ Two behaviours that look like faults but aren't:
 
 Only two toggles appear until ANCS is working: *Show Message Notifications* and *Sync Contacts*. *Show System Notifications* shows up once the BLE bond from step 7 exists.
 
-<details>
-<summary><b>7 · (Optional) Enable per-app notifications — ANCS</b></summary>
+
+#### 7 · (Optional) Enable per-app notifications — ANCS
 
 ANCS needs a true BLE bond, which only forms during a fresh pairing while the adapter is correctly configured. One-time setup:
 
@@ -224,10 +233,7 @@ the reopen loop restores both sessions and the MNS listener on its next tick —
 allow up to about two minutes. `systemctl --user restart iphonebridge` still gets
 you there immediately if you'd rather not wait.
 
-</details>
-
-<details>
-<summary><b>8 · (Optional) Enable phone calls — HFP</b></summary>
+#### 8 · (Optional) Enable phone calls — HFP
 
 To take and place calls on the laptop, iphonebridge uses **oFono** for HFP
 call control and PipeWire's oFono backend for the call audio.
@@ -275,7 +281,7 @@ Incoming calls then pop up with **Answer / Decline** buttons. Place calls with
 iphonebridge-ui
 ```
 
-### Adding it to your app launcher
+### Adding it to your app launcher (if installed from source)
 
 The repo ships both pieces already — `data/me.santisbon.iphonebridge.UI.desktop`
 and `data/icons/me.santisbon.iphonebridge.UI.svg`. For a user-level install,
@@ -623,12 +629,6 @@ These are Apple's Bluetooth-stack limits, not bugs:
 - **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
 - HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
 - Notification *bodies* are subject to the iPhone's "Show Previews" setting.
-
-## 🗺️ Roadmap
-
-- **Single `.deb`** shipping daemon, CLI, and UI together — one `apt install`, dependencies (`bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`) resolved, sudoers rule and systemd user unit included. Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces; a native package can.
-
-See [`BACKLOG.md`](BACKLOG.md).
 
 ## 🙏 Credits
 

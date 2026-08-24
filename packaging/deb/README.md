@@ -151,7 +151,7 @@ dpkg-buildpackage -us -uc -b     # unsigned, binary-only
 lintian ../iphonebridge_0.6.0_all.deb   # two no-manual-page warnings expected
 ```
 
-## Install and set up (complete, self-contained)
+## Install
 
 Every step from a bare system to working messages, contacts, and calls.
 
@@ -272,7 +272,10 @@ Observed as a one-off; it does not recur once the chain is up.
 ### 8. Optional: per-app notifications (ANCS)
 
 Works only on some adapters (Intel required, and not sufficient; known
-not to work on BE200). If you want to try: `iphonebridge ancs-enable`,
+not to work on BE200). 
+```sh
+iphonebridge ancs-enable
+```
 then forget and re-pair (both ends, as in step 3), re-enable the step 5
 toggles, and look for a third toggle, Show System Notifications.
 
@@ -284,6 +287,20 @@ on it. Messages and contacts are unaffected; restore it with
 Compared to the from-source install, the venv, the `~/.local/bin`
 symlinks, the unit path substitution, the desktop-entry rewrite, and the
 per-user sudoers installers all disappear; the package ships them.
+
+### Reinstall
+
+If you need to reintall
+```sh
+sudo apt reinstall ../iphonebridge_0.6.0_all.deb
+systemctl --user restart iphonebridge
+```
+
+To deploy a new icon
+```sh
+sudo apt reinstall ../iphonebridge_0.6.0_all.deb
+kbuildsycoca6 --noincremental   # nudge Plasma's icon cache; a re-login also does it
+```
 
 ## Uninstall completely
 
