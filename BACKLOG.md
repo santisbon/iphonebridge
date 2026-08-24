@@ -31,7 +31,8 @@ Park ideas here so they don't derail Phase 1.
 ## Phase 3 / nice-to-have
 - [ ] Encrypted SQLite for message cache
 - [ ] Multi-device support (currently hard-coded to one iPhone MAC)
-- [ ] Single `.deb` packaging daemon + CLI + UI. Kills the venv dance
+- [ ] Single `.deb` packaging daemon + CLI + UI (instructions:
+  `packaging/deb/README.md`). Kills the venv dance
   (depends on distro python3-dbus/python3-gi) and the @INSTALL_DIR@
   placeholder (fixed paths under /usr). Ships the sudoers rule, user unit
   (/usr/lib/systemd/user/), desktop entry, and icon.
