@@ -55,17 +55,33 @@ As far as we know, **iphonebridge is the first free, open-source, Mac-free iMess
 
 > ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
-## 🚀 Installation (from source)
+## 🚀 Installation
 
-Everything below builds and installs from a clone: venv, symlinks,
-sudoers installers, and a path-substituted systemd unit. The alternative
-is the single `.deb` (daemon, CLI, and UI in one package), which
-replaces steps 2, 4, and 5 and the launcher setup entirely; build it and
-follow its self-contained guide in
-[`packaging/deb/README.md`](packaging/deb/README.md). Pick one method:
-from-source symlinks in `~/.local/bin` shadow a deb-installed
-`/usr/bin/iphonebridge` on most PATH setups, and mixing the two is
-confusing to debug.
+Two ways to install. Pick exactly one: from-source symlinks in
+`~/.local/bin` shadow a deb-installed `/usr/bin/iphonebridge` on most
+PATH setups, and mixing the two is confusing to debug.
+
+### Option A: the `.deb` package
+
+One package installs everything: daemon, CLI, desktop app, launcher
+entry, systemd unit, and the privileged sudoers rules. Use this on any
+apt-based distro, e.g. **Debian, Ubuntu and its flavors (Kubuntu,
+Xubuntu…), Pop!_OS, Linux Mint**. There's no published release yet, so
+build it yourself (one `dpkg-buildpackage` invocation) and follow the
+self-contained build, install, and uninstall guide in
+[`packaging/deb/README.md`](packaging/deb/README.md).
+
+### Option B: from source
+
+The rest of this section walks through it: venv, symlinks, sudoers
+installers, and a path-substituted systemd unit. The package names in step 1
+are Debian-family. On non-apt distros, e.g. **Fedora, Arch, openSUSE**  
+install your distro's equivalents of BlueZ, `bluez-obexd`, dbus-python, PyGObject, 
+and the GTK4/libadwaita introspection bindings. 
+
+You can also use this on any distro when you're developing —
+edits to the clone take effect without rebuilding a package (see
+*Working on the code*).
 
 
 ### 1 · System packages
