@@ -46,6 +46,16 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
 
 As far as we know, **iphonebridge is the first free, open-source, Mac-free iMessage bridge for Linux.** The empirical proof is in [`spike/RESULTS.md`](spike/RESULTS.md) §6.
 
+## 🚧 Limitations
+
+These are Apple's Bluetooth-stack limits, not bugs:
+
+- No iMessage **attachments, reactions, read receipts, or typing indicators** (MAP doesn't carry them).
+- No **group iMessage / MMS / RCS** — MAP is 1-to-1 only.
+- **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
+- HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
+- Notification *bodies* are subject to the iPhone's "Show Previews" setting.
+
 ## 📋 Requirements
 
 | | Minimum | Tested with |
@@ -619,16 +629,6 @@ rm -rf .venv
 
 The `~/.local/bin` symlinks point at paths inside `.venv`, so they keep working without relinking.
 </details>
-
-## 🚧 Limitations
-
-These are Apple's Bluetooth-stack limits, not bugs:
-
-- No iMessage **attachments, reactions, read receipts, or typing indicators** (MAP doesn't carry them).
-- No **group iMessage / MMS / RCS** — MAP is 1-to-1 only.
-- **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
-- HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
-- Notification *bodies* are subject to the iPhone's "Show Previews" setting.
 
 ## 🙏 Credits
 
