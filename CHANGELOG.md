@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-24
+
+### Added
+- Start a new conversation from the app: a compose button on the Messages
+  tab opens a To: field (number, contact name, or vanity number) over the
+  normal compose box; the sent message creates and selects the thread.
+- Contact-name autocomplete in the Calls dialer and the new-conversation
+  To: field — accent-insensitive, prefix-ranked, popover sized to the
+  match list.
+- Vanity number dialing (1 (800) MYAPPLE) in the Calls tab and CLI;
+  Dial sanitizes formatted numbers to what oFono accepts, fixing
+  "+1 555-123-4567"-style input that always failed.
+- Setup tab marks which iPhone toggles are actually working, backed by a
+  new Messages1.GetStatus D-Bus method (additive).
+- Bundled-icon support: SVGs in ui/icons/ resolve like stock theme icons.
+
+### Fixed
+- The daemon no longer re-logs (and re-notifies) the whole inbox on
+  every obexd restart — six restarts had produced six copies of every
+  message in conversation history.
+- Contact search: deterministic prefix-first ordering (was set-ordered,
+  randomly hiding matches), accent folding (67 accented contacts were
+  unfindable), and popover rendering/resize fixes for real typing.
+- Default window size fits the whole Setup tab.
+
+### Removed
+- The abandoned Flatpak draft; the packaging plan is a single .deb
+  shipping daemon, CLI, and UI (see BACKLOG).
+
+
 ## [0.5.0] — 2026-08-23
 
 First release of the hard fork of
