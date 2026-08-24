@@ -91,21 +91,48 @@ against iPhone 16 Pro Max running iOS 26.5.
 - `pyproject.toml`: `testpaths = ["tests"]` so a bare `pytest` no longer
   recurses (and hangs on) the whole repo tree.
 
-## [Unreleased]
+## [0.5.0] — 2026-08-23
 
-### Hard fork (2026-08-23)
-
-This project is now a hard fork of
+First release of the hard fork of
 [gabrielmeir53/iphonebridge](https://github.com/gabrielmeir53/iphonebridge),
 forked at v0.4.2 and maintained at
 [santisbon/iphonebridge](https://github.com/santisbon/iphonebridge).
 
-- **Breaking:** D-Bus bus name, object path, error names, and app ID
-  renamed from the `com.gabriel.*` namespace to `me.santisbon.*`
-  (`me.santisbon.iphonebridge`, `/me/santisbon/iphonebridge`,
-  `me.santisbon.iphonebridge.UI`). Anything talking to the daemon's D-Bus
-  API by the old name must update; the desktop entry and icon files are
-  renamed to match. Historical entries below keep the old identifiers.
+### Breaking
+- D-Bus bus name, object path, interfaces, error names, and app ID renamed
+  from `com.gabriel.*` to `me.santisbon.*`; desktop entry, icon, metainfo,
+  and flatpak manifest files renamed to match.
+
+### Added
+- `Messages1.RefreshContacts` D-Bus method; `contacts-sync` asks the
+  running daemon instead of tearing down its OBEX sessions.
+- iMessage senders addressed by Apple ID email now resolve to contact
+  names: EMAIL extracted from bMessage vCards, `emails` table in the
+  contacts cache, email-aware `resolve()`, UI fallback.
+- Session health check: the daemon detects MAP/PBAP sessions dying under
+  it (re-pair, obexd restart, iPhone timeout), drops to DEGRADED, and
+  reopens automatically; `IsHealthy` probes the link instead of
+  null-checking.
+- `workflow_dispatch` trigger on CI.
+
+### Fixed
+- sudoers rule hardcoded the original author's username; now rendered
+  from $SUDO_USER with the btmgmt path resolved and the rendered file
+  visudo-checked.
+- systemd unit hardcoded the author's clone path; now an @INSTALL_DIR@
+  placeholder substituted at install.
+- Daemon crash-looped at startup when oFono was absent.
+- BLE advert registration reported success it couldn't verify
+  (ActiveInstances is adapter-wide); now async with honest callbacks,
+  cutting startup from ~12s to under 2s.
+- Unescaped ampersand blanked the "SMS & iMessage" subtitle in the app.
+
+### Docs
+- README: KDE Plasma throughout, conda-venv trap, install restructure
+  (adapter class as its own step, placeholder-substituted unit install),
+  desktop-launcher install, "Working on the code" section, accuracy pass.
+
+## [Unreleased]
 
 ### Project-defining discoveries (2026-05-19, post-launch)
 
