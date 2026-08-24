@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual trigger — lets a run be started from the Actions tab, e.g. after
+  # enabling Actions on a fork where the last push predates enablement.
+  workflow_dispatch:
 
 jobs:
   test:
