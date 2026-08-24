@@ -498,6 +498,8 @@ own sessions and closes them again.
 
 ANCS needs a BLE bond, which needs a fresh pair done with the adapter correctly set up. Run `iphonebridge ancs-enable`, then forget + re-pair the iPhone, then restart the daemon.
 
+Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
+
 Check whether the bond actually formed — if ANCS worked, the iPhone's device object carries the ANCS GATT service UUID:
 
 ```bash

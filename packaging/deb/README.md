@@ -221,7 +221,7 @@ offers to restart the daemon. Say yes.
 ### 5. iPhone-side toggles
 
 On the iPhone: Settings, Bluetooth, tap the info icon next to this
-computer and give it a minute to show the toggles. Then enable:
+computer and **give it a minute** to show the toggles. Then enable:
 
 - **Show Message Notifications** (gates SMS/iMessage)
 - **Sync Contacts** (gates contacts)
@@ -275,6 +275,11 @@ Works only on some adapters (Intel required, and not sufficient; known
 not to work on BE200). If you want to try: `iphonebridge ancs-enable`,
 then forget and re-pair (both ends, as in step 3), re-enable the step 5
 toggles, and look for a third toggle, Show System Notifications.
+
+The connection cycling in this step can crash bystander BlueZ user
+daemons; `mpris-proxy` (media keys for Bluetooth audio) has segfaulted
+on it. Messages and contacts are unaffected; restore it with
+`systemctl --user restart mpris-proxy`.
 
 Compared to the from-source install, the venv, the `~/.local/bin`
 symlinks, the unit path substitution, the desktop-entry rewrite, and the
