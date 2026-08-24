@@ -43,12 +43,18 @@ class StatusPage(Gtk.Box):
             title="iPhone setup",
             description="On the iPhone: Settings → Bluetooth → tap ⓘ next to "
                         "this computer, then enable each toggle:")
-        for item, sub in (
-            ("Show Message Notifications", "SMS &amp; iMessage (MAP)"),
-            ("Sync Contacts", "contact-name resolution (PBAP)"),
-            ("Show System Notifications", "per-app notifications (ANCS)"),
+        # (title, base subtitle, key in the daemon's GetStatus JSON)
+        self._toggle_rows: list[tuple[Adw.ActionRow, Gtk.Image, str, str]] = []
+        for item, sub, key in (
+            ("Show Message Notifications", "SMS &amp; iMessage (MAP)", "map"),
+            ("Sync Contacts", "contact-name resolution (PBAP)", "pbap"),
+            ("Show System Notifications", "per-app notifications (ANCS)", "ancs"),
         ):
-            checklist.add(Adw.ActionRow(title=item, subtitle=sub))
+            row = Adw.ActionRow(title=item, subtitle=sub)
+            icon = Gtk.Image()
+            row.add_suffix(icon)
+            checklist.add(row)
+            self._toggle_rows.append((row, icon, sub, key))
         page.add(checklist)
 
         client.connect("availability-changed", lambda *_: self._refresh())
@@ -69,6 +75,22 @@ class StatusPage(Gtk.Box):
             else "Unavailable — check the iPhone Bluetooth toggles below")
         self._map_icon.set_from_icon_name(
             "emblem-ok-symbolic" if healthy else "dialog-warning-symbolic")
+
+        # Checklist marks are inferred from what's actually working, not
+        # read from the iPhone: a live session proves its toggle is on.
+        status = self._client.profile_status() if reachable else {}
+        for row, icon, base, key in self._toggle_rows:
+            if key not in status:
+                icon.set_from_icon_name("dialog-question-symbolic")
+                row.set_subtitle(base + " — state unknown (daemon unreachable)"
+                                 if not reachable else base)
+                continue
+            if status[key]:
+                icon.set_from_icon_name("emblem-ok-symbolic")
+                row.set_subtitle(base + " — working now")
+            else:
+                icon.set_from_icon_name("dialog-warning-symbolic")
+                row.set_subtitle(base + " — not detected; check this toggle")
 
         try:
             n_contacts = ContactsResolver().count()

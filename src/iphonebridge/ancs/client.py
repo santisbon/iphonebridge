@@ -85,6 +85,12 @@ class AncsClient:
         # Signal subscriptions we need to clean up on stop()
         self._signal_matches: list = []
 
+    @property
+    def active(self) -> bool:
+        """True while the ANCS notification subscription is live — the only
+        signal that per-app notifications are actually flowing."""
+        return self._notify_started
+
     # ---- lifecycle ------------------------------------------------------
 
     def start(self) -> None:

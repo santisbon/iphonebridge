@@ -76,12 +76,14 @@ class MessagesService(dbus.service.Object):
         bus_name: dbus.service.BusName,
         sessions: SessionManager,
         hfp: HfpManager | None = None,
+        ancs=None,
         on_sent=None,
         on_refresh_contacts=None,
     ):
         super().__init__(bus_name, OBJECT_PATH)
         self.sessions = sessions
         self.hfp = hfp
+        self.ancs = ancs
         # on_sent(recipient, body, transfer_path) — daemon hook to record a
         # message we just sent (logs it to history + the event feed).
         self._on_sent = on_sent
@@ -139,6 +141,20 @@ class MessagesService(dbus.service.Object):
                 str(e), name="me.santisbon.iphonebridge.Error.QueryFailed"
             )
         return json.dumps(msgs, ensure_ascii=False)
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def GetStatus(self) -> str:
+        """Per-profile liveness as JSON: {"map": b, "pbap": b, "ancs": b}.
+
+        These are inferences, not reads of the iPhone's toggles — a live
+        session means the corresponding toggle must be on; a dead one means
+        the toggle is off or the session is mid-recovery.
+        """
+        return json.dumps({
+            "map": self.sessions.map_alive(),
+            "pbap": self.sessions.pbap_alive(),
+            "ancs": bool(self.ancs is not None and self.ancs.active),
+        })
 
     @dbus.service.method(IFACE, in_signature="", out_signature="b")
     def IsHealthy(self) -> bool:

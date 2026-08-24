@@ -114,6 +114,7 @@ class Daemon:
             self._bus_name = claim_bus_name()
             self._dbus_service = MessagesService(
                 self._bus_name, self.sessions, hfp=self.hfp,
+                ancs=self.ancs,
                 on_sent=self._record_sent,
                 on_refresh_contacts=lambda: self._refresh_contacts(
                     raise_on_error=True))

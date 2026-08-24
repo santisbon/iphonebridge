@@ -123,6 +123,16 @@ class DaemonClient(GObject.Object):
 
     # ---- Messages1 ------------------------------------------------------
 
+    def profile_status(self) -> dict:
+        """Per-profile liveness from the daemon: {"map","pbap","ancs"} -> bool.
+        Empty dict when the daemon is unreachable or predates GetStatus."""
+        try:
+            import json
+            return dict(json.loads(
+                self._iface(MESSAGES_IFACE).GetStatus(timeout=5)))
+        except Exception:
+            return {}
+
     def send_message(self, recipient: str, body: str, on_ok, on_err) -> None:
         """Send asynchronously. on_ok(transfer_path) / on_err(text)."""
         try:
