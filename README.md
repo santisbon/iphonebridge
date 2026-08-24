@@ -355,6 +355,19 @@ systemctl --user {start,stop,restart} iphonebridge
 
 Design rationale and the empirical Bluetooth findings that shaped it are in [`spike/RESULTS.md`](spike/RESULTS.md).
 
+## 📖 Glossary
+
+- **CoD (Class of Device)**: a 24-bit Bluetooth field every device broadcasts declaring what kind of thing it is: service-class bits, a major class, and a minor class. iOS decides what to offer a paired device based on it. To a *computer* (major 1, minor 12, e.g. `0x3c010c`) iPhones offer nothing interesting; to an *A/V Hands-Free device* (major 4, minor 8, e.g. `0x3c0408`, what a car kit presents as) they offer the message and contacts toggles. That's why install step 4 sets `btmgmt class 4 8`, why it must survive reboots, and why `doctor` checks it. Only major and minor are ours to set; BlueZ derives the service-class bits from registered profiles, so the code compares only major and minor.
+- **BlueZ**: Linux's Bluetooth stack. The `bluetoothd` system service owns the adapter; everything here talks to it over D-Bus as `org.bluez`.
+- **obexd**: BlueZ's OBEX daemon, a separate per-user service (`obex.service`) that speaks the file-transfer protocol MAP and PBAP ride on. The iPhone allows one OBEX session at a time per fresh obexd, which shapes much of the daemon's session handling.
+- **OBEX**: the object-exchange protocol underneath MAP and PBAP.
+- **MAP (Message Access Profile)**: read SMS/iMessage, get real-time pushes of new ones (via its notification channel, **MNS**), and send. Gated by the iPhone's *Show Message Notifications* toggle.
+- **bMessage**: the wire format MAP wraps each message in; the sender lives in an embedded vCard (`TEL` for phone senders, `EMAIL` for iMessage-via-Apple-ID senders).
+- **PBAP (Phone Book Access Profile)**: pull the iPhone's contacts. Gated by *Sync Contacts*. Feeds the SQLite cache that resolves names.
+- **ANCS (Apple Notification Center Service)**: Apple's BLE service carrying every app's notifications. Gated by *Show System Notifications*, needs a true BLE bond, and is the picky one (see Troubleshooting).
+- **HFP (Hands-Free Profile)**: take and place calls. **oFono** is the telephony daemon that speaks HFP; PipeWire's oFono backend carries the call audio.
+- **btmgmt**: BlueZ's low-level management CLI; needs root. Used for exactly one thing here: setting the CoD.
+
 ## 🛠️ Working on the code
 
 The install is editable: `.venv/.../__editable__.iphonebridge-*.pth` holds a
