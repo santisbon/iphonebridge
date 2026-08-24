@@ -147,7 +147,10 @@ class ConversationsPage(Gtk.Box):
         msg = {"body": ev.get("body") or "",
                "ts": event_ts(ev), "outgoing": outgoing}
         thread["messages"].append(msg)
-        thread["last_ts"] = msg["ts"]
+        # Newest message wins the thread's sort key and preview even if
+        # events were ingested out of chronological order (e.g. a seeded
+        # history written newest-first).
+        thread["last_ts"] = max(thread.get("last_ts", ""), msg["ts"])
         if refresh:
             self._rebuild_thread_list()
             if self._current == key:
@@ -243,7 +246,8 @@ class ConversationsPage(Gtk.Box):
             box.append(Gtk.Label(label=thread["name"], xalign=0,
                                  css_classes=["heading"],
                                  ellipsize=_ELLIPSIZE_END))
-            last = thread["messages"][-1]["body"] if thread["messages"] else ""
+            msgs = thread["messages"]
+            last = (max(msgs, key=lambda m: m["ts"])["body"] if msgs else "")
             box.append(Gtk.Label(label=last.replace("\n", " "), xalign=0,
                                   ellipsize=_ELLIPSIZE_END,
                                   css_classes=["dim-label"]))
@@ -263,7 +267,7 @@ class ConversationsPage(Gtk.Box):
         self._send_btn.set_sensitive(True)
         self._stack.set_visible_child_name("messages")
         self._msg_list.remove_all()
-        for msg in thread["messages"]:
+        for msg in sorted(thread["messages"], key=lambda m: m["ts"]):
             self._append_bubble(msg)
         self._scroll_to_bottom()
 

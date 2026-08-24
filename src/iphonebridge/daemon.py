@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import signal
+from datetime import datetime
 
 from gi.repository import GLib
 
@@ -50,6 +51,63 @@ CONTACTS_REFRESH_SEC = 24 * 60 * 60  # 24h
 SESSION_RETRY_SEC = 60
 # How often to confirm the OBEX sessions still exist once we're ready.
 SESSION_HEALTH_SEC = 60
+
+
+def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
+                limit: int = 50) -> int:
+    """Seed conversation history with the inbox window iOS serves.
+
+    A fresh install starts with an empty event log, and iOS only pushes
+    messages over MNS as they arrive (plus opportunistic re-pushes of
+    recent unread ones), so old conversations never appear. This lists
+    the inbox once per session-open (iOS caps the listing at roughly 10
+    messages), logs the ones not already dispatched, and marks them seen
+    so an MNS re-announcement can't duplicate them.
+
+    History only: events go to the JSONL sink alone, never to the
+    notification or clipboard sinks — nobody wants ten popups at start.
+    Returns the number of messages logged.
+    """
+    from iphonebridge.obex.map_query import list_recent_messages
+    msgs = list_recent_messages(sessions.map_path, limit=limit)
+    logged = 0
+    # MAP listings are newest-first; log oldest-first so the JSONL stays
+    # chronological like the live MNS events appended after it.
+    for m in reversed(msgs):
+        handle = m.get("handle") or ""
+        if not handle or handle in listener.seen_handles:
+            continue
+        sender = str(m.get("sender") or "")
+        is_email = "@" in sender
+        ts = None
+        if m.get("timestamp"):
+            try:
+                ts = datetime.fromisoformat(m["timestamp"])
+            except ValueError:
+                ts = None
+        event = SmsEvent(
+            kind="sms_received",
+            handle=handle,
+            sender_phone=None if is_email else (sender or None),
+            sender_phone_norm=m.get("sender_phone_norm") or None,
+            sender_email=sender if is_email else None,
+            contact_name=contacts.resolve(sender) if sender else None,
+            body=m.get("body") or None,
+            timestamp=ts,
+            is_read=bool(m.get("read")),
+            raw_status=str(m.get("status") or "") or None,
+            raw_type=str(m.get("type") or "") or None,
+        )
+        listener.seen_handles.add(handle)
+        try:
+            jsonl_sink.handle(event)
+        except Exception:
+            log.exception("sweep: jsonl write failed for one message")
+            continue
+        logged += 1
+    if logged:
+        log.info("inbox sweep: seeded history with %d message(s)", logged)
+    return logged
 
 
 class Daemon:
@@ -259,6 +317,16 @@ class Daemon:
                 seen_handles=logged_sms_handles(config.EVENTS_JSONL),
             )
             self.listener.start()
+
+        # Seed history with whatever inbox window iOS serves — without
+        # this, a fresh install shows an empty Messages tab until the
+        # first new message arrives.
+        try:
+            jsonl = next((sk for sk in self.sinks if sk.name == "jsonl"), None)
+            if jsonl is not None:
+                sweep_inbox(self.sessions, self.listener, self.contacts, jsonl)
+        except Exception:
+            log.exception("inbox sweep failed — history stays as-is")
 
         # Watch for the sessions dying under us from here on.
         if self._session_health_id is None:
