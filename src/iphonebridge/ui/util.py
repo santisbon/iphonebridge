@@ -46,3 +46,32 @@ def resolve_recipient(contacts, raw: str) -> str | None:
     if not matches:
         return None
     return "+" + matches[0][1]
+
+
+def pin_popover_height(listbox, scroll, cap: int = 320) -> None:
+    """Size a suggestion popover to its content on every rebuild.
+
+    GTK popovers grow with content but don't renegotiate smaller when it
+    shrinks, so a narrowed match list leaves dead space. Pinning the
+    ScrolledWindow's min and max content height to the list's measured
+    natural height (capped) forces the popover to follow in both
+    directions; past the cap it scrolls.
+    """
+    from gi.repository import Gtk
+    _, nat, _, _ = listbox.measure(Gtk.Orientation.VERTICAL, -1)
+    h = min(nat, cap)
+    scroll.set_min_content_height(h)
+    scroll.set_max_content_height(h)
+    # The vertical scrollbar imposes its own minimum height (~58px) on
+    # the scrolled window even when unused, leaving blank space under a
+    # short list — only enable it when the content actually overflows.
+    scroll.set_policy(Gtk.PolicyType.NEVER,
+                      Gtk.PolicyType.AUTOMATIC if nat > cap
+                      else Gtk.PolicyType.NEVER)
+    # A mapped popover never applies a shrink on its own (a fresh map
+    # does, which is why programmatic set_text — delete+insert, closing
+    # and reopening the popover per step — masked this). present() asks
+    # the popover to renegotiate its surface size in place.
+    popover = scroll.get_ancestor(Gtk.Popover)
+    if popover is not None and popover.get_visible():
+        popover.present()

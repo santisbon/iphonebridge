@@ -144,3 +144,10 @@ def test_email_only_contact_is_kept():
         END:VCARD
         """)
     assert _parse_vcards(blob) == [("No Phone", [], ["np@example.com"])]
+
+
+def test_fold_strips_accents_and_case():
+    from iphonebridge.contacts import _fold
+    assert _fold("María") == "maria"
+    assert _fold("JOSÉ Ñuñez ") == "jose nunez"
+    assert _fold("plain") == "plain"

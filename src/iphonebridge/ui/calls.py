@@ -1,9 +1,10 @@
 """Calls page — dial out, and answer / hang up active HFP calls."""
 from __future__ import annotations
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, Pango
 
 from iphonebridge.contacts import ContactsResolver
+from iphonebridge.ui.util import pin_popover_height as _pin_popover_height
 from iphonebridge.ui.util import resolve_recipient
 
 
@@ -39,11 +40,20 @@ class CallsPage(Gtk.Box):
         # steals keyboard focus from the entry while the user types.
         self._suggestions = Gtk.Popover(
             has_arrow=False, autohide=False,
+            css_classes=["suggestion-pop"],
             position=Gtk.PositionType.BOTTOM)
         self._suggestions.set_parent(self._entry)
         self._sug_list = Gtk.ListBox(css_classes=["boxed-list"])
         self._sug_list.connect("row-activated", self._on_suggestion)
-        self._suggestions.set_child(self._sug_list)
+        # propagate_natural_width matters: without it the scrolled
+        # window allocates the list its MINIMUM width, and ellipsized
+        # labels have a minimum of a few pixels — names render as "…".
+        self._sug_scroll = Gtk.ScrolledWindow(
+            propagate_natural_width=True,
+            child=self._sug_list, propagate_natural_height=True,
+            max_content_height=320,
+            hscrollbar_policy=Gtk.PolicyType.NEVER)
+        self._suggestions.set_child(self._sug_scroll)
         self._filling = False  # guard: setting text from a pick re-fires "changed"
         self._entry.connect("changed", self._on_entry_changed)
 
@@ -69,7 +79,7 @@ class CallsPage(Gtk.Box):
             if name not in seen:
                 seen.add(name)
                 names.append((name, phone))
-            if len(names) >= 5:
+            if len(names) >= 10:
                 break
         if not names:
             self._suggestions.popdown()
@@ -77,15 +87,22 @@ class CallsPage(Gtk.Box):
         while (row := self._sug_list.get_row_at_index(0)) is not None:
             self._sug_list.remove(row)
         for name, phone in names:
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
-                          margin_top=6, margin_bottom=6,
+            # Single-line rows keep the popover short enough that
+            # narrowing matches visibly shrinks it (stacked two-line rows
+            # overflowed the height cap at 6+ matches, so 10 matches and
+            # 6 looked the same height).
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12,
+                          margin_top=4, margin_bottom=4,
                           margin_start=10, margin_end=10)
-            box.append(Gtk.Label(label=name, halign=Gtk.Align.START))
-            box.append(Gtk.Label(label=f"+{phone}", halign=Gtk.Align.START,
+            box.append(Gtk.Label(label=name, xalign=0, hexpand=True,
+                                 ellipsize=Pango.EllipsizeMode.END,
+                                 max_width_chars=28))
+            box.append(Gtk.Label(label=f"+{phone}",
                                  css_classes=["dim-label", "caption"]))
             row = Gtk.ListBoxRow(child=box)
             row.contact_name = name
             self._sug_list.append(row)
+        _pin_popover_height(self._sug_list, self._sug_scroll)
         self._suggestions.popup()
 
     def _on_suggestion(self, _list, row) -> None:

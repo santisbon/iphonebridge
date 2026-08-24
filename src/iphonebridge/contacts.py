@@ -11,6 +11,7 @@ import re
 import sqlite3
 import tempfile
 import time
+import unicodedata
 from contextlib import closing
 from pathlib import Path
 
@@ -95,6 +96,13 @@ def _open_db() -> sqlite3.Connection:
     conn = sqlite3.connect(config.CONTACTS_DB)
     conn.executescript(_SCHEMA)
     return conn
+
+
+def _fold(s: str) -> str:
+    """Casefold and strip accents for matching: "María" -> "maria"."""
+    decomposed = unicodedata.normalize("NFD", s.strip())
+    return "".join(ch for ch in decomposed
+                   if not unicodedata.combining(ch)).casefold()
 
 
 # ---- PBAP pull ----------------------------------------------------------
@@ -223,33 +231,36 @@ class ContactsResolver:
     def find_by_name(self, query: str) -> list[tuple[str, str]]:
         """Reverse lookup — name substring → list of (display_name, phone).
 
-        Case-insensitive substring match against full_name. Returns all
-        phones for each matching contact, deduplicated. Empty list if
-        no matches.
+        Case- and accent-insensitive: "mari" matches "María" and vice
+        versa. SQLite's LIKE/LOWER only fold ASCII, so the matching runs
+        in Python over the (small) contact set. Prefix matches sort ahead
+        of mid-name matches so the likely target survives a display cap.
         """
-        q = (query or "").strip().lower()
+        q = _fold(query or "")
         if not q:
             return []
-        seen: set[tuple[str, str]] = set()
+        rows: list[tuple[str, str]] = []
         try:
             with closing(_open_db()) as db:
-                cur = db.execute(
+                rows = list(db.execute(
                     "SELECT c.full_name, p.phone_norm "
                     "FROM contacts c JOIN phones p ON p.contact_id = c.id "
                     "WHERE c.full_name != '' "
-                    "  AND LOWER(c.full_name) LIKE ? "
                     "ORDER BY c.full_name",
-                    (f"%{q}%",),
-                )
-                for name, phone in cur:
-                    key = (name, phone)
-                    if key in seen:
-                        continue
-                    seen.add(key)
+                ))
         except sqlite3.Error as e:
             log.warning("contacts find_by_name failed: %s", e)
             return []
-        return list(seen)
+        out: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for name, phone in rows:
+            folded = _fold(name)
+            if q not in folded or (name, phone) in seen:
+                continue
+            seen.add((name, phone))
+            out.append((name, phone))
+        out.sort(key=lambda np: (not _fold(np[0]).startswith(q), _fold(np[0])))
+        return out
 
     def resolve(self, raw: str | None) -> str | None:
         # An address with @ is an email handle (iMessage via Apple ID) —

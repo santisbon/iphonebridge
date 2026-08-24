@@ -6,10 +6,15 @@ transfer. Live incoming messages arrive via the `message-received` signal.
 """
 from __future__ import annotations
 
+import logging
+
 from gi.repository import GLib, Gtk, Pango
 
 from iphonebridge.contacts import ContactsResolver
 from iphonebridge.ui.util import event_ts, format_ts, resolve_recipient
+from iphonebridge.ui.util import pin_popover_height as _pin_popover_height
+
+log = logging.getLogger(__name__)
 
 _ELLIPSIZE_END = Pango.EllipsizeMode.END
 
@@ -85,11 +90,20 @@ class ConversationsPage(Gtk.Box):
         # popover pattern as the Calls tab dialer.
         self._to_suggestions = Gtk.Popover(
             has_arrow=False, autohide=False,
+            css_classes=["suggestion-pop"],
             position=Gtk.PositionType.BOTTOM)
         self._to_suggestions.set_parent(self._to_entry)
         self._to_sug_list = Gtk.ListBox(css_classes=["boxed-list"])
         self._to_sug_list.connect("row-activated", self._on_to_suggestion)
-        self._to_suggestions.set_child(self._to_sug_list)
+        # propagate_natural_width matters: without it the scrolled
+        # window allocates the list its MINIMUM width, and ellipsized
+        # labels have a minimum of a few pixels — names render as "…".
+        self._to_sug_scroll = Gtk.ScrolledWindow(
+            propagate_natural_width=True,
+            child=self._to_sug_list, propagate_natural_height=True,
+            max_content_height=320,
+            hscrollbar_policy=Gtk.PolicyType.NEVER)
+        self._to_suggestions.set_child(self._to_sug_scroll)
         self._to_filling = False
 
         compose = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
@@ -165,13 +179,19 @@ class ConversationsPage(Gtk.Box):
         if len(text) < 2 or any(ch.isdigit() for ch in text):
             self._to_suggestions.popdown()
             return
+        try:
+            matches = self._contacts.find_by_name(text)
+        except Exception:
+            log.exception("suggestion lookup failed for %d chars", len(text))
+            self._to_suggestions.popdown()
+            return
         seen: set[str] = set()
         names: list[tuple[str, str]] = []
-        for name, phone in self._contacts.find_by_name(text):
+        for name, phone in matches:
             if name not in seen:
                 seen.add(name)
                 names.append((name, phone))
-            if len(names) >= 5:
+            if len(names) >= 10:
                 break
         if not names:
             self._to_suggestions.popdown()
@@ -179,15 +199,22 @@ class ConversationsPage(Gtk.Box):
         while (row := self._to_sug_list.get_row_at_index(0)) is not None:
             self._to_sug_list.remove(row)
         for name, phone in names:
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
-                          margin_top=6, margin_bottom=6,
+            # Single-line rows keep the popover short enough that
+            # narrowing matches visibly shrinks it (stacked two-line rows
+            # overflowed the height cap at 6+ matches, so 10 matches and
+            # 6 looked the same height).
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12,
+                          margin_top=4, margin_bottom=4,
                           margin_start=10, margin_end=10)
-            box.append(Gtk.Label(label=name, halign=Gtk.Align.START))
-            box.append(Gtk.Label(label=f"+{phone}", halign=Gtk.Align.START,
+            box.append(Gtk.Label(label=name, xalign=0, hexpand=True,
+                                 ellipsize=_ELLIPSIZE_END,
+                                 max_width_chars=28))
+            box.append(Gtk.Label(label=f"+{phone}",
                                  css_classes=["dim-label", "caption"]))
             row = Gtk.ListBoxRow(child=box)
             row.contact_name = name
             self._to_sug_list.append(row)
+        _pin_popover_height(self._to_sug_list, self._to_sug_scroll)
         self._to_suggestions.popup()
 
     def _on_to_suggestion(self, _list, row) -> None:
