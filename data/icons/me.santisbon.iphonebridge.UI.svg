@@ -1,8 +1,24 @@
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <rect x="8" y="8" width="112" height="112" rx="26" fill="#3584e4"/>
-  <rect x="42" y="24" width="44" height="80" rx="9" fill="#ffffff"/>
-  <rect x="42" y="35" width="44" height="55" fill="#1c3f6e"/>
-  <rect x="57" y="28" width="14" height="3.5" rx="1.75" fill="#1c3f6e"/>
-  <rect x="56" y="96" width="16" height="3.5" rx="1.75" fill="#cdd3da"/>
-  <path d="M50 44 h28 a5 5 0 0 1 5 5 v15 a5 5 0 0 1 -5 5 h-16 l-9 8 v-8 h-3 a5 5 0 0 1 -5 -5 v-15 a5 5 0 0 1 5 -5 z" fill="#33d17a"/>
+  <defs>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FB5FF"/>
+      <stop offset="1" stop-color="#2E6BE6"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="27" fill="url(#field)"/>
+  <!-- one white bubble, Apple-style tail curling lower-left -->
+  <path d="M64 28
+           C 41 28 24 41.5 24 59
+           C 24 69 29.5 77.8 38.5 83.2
+           C 37.8 88.6 34.9 93.6 30.6 97.2
+           C 29.4 98.2 30.1 100.2 31.7 100.1
+           C 40.3 99.6 47.9 96.4 53.3 92.2
+           C 56.7 93 60.3 93.5 64 93.5
+           C 87 93.5 104 80 104 62.5
+           C 104 43.5 87 28 64 28 Z"
+        fill="#ffffff"/>
+  <!-- the rune, in the field's blue, as the bubble's content -->
+  <path d="M64 43 V 78 M55.5 51.5 L72.5 69.5 M55.5 69.5 L72.5 51.5 M64 43 L72.5 51.5 M64 78 L72.5 69.5"
+        fill="none" stroke="#3178e0" stroke-width="4.4"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
