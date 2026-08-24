@@ -68,10 +68,12 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
             log.info("Adapter CoD = 0x%06x (A/V Hands-Free)  OK", cod)
         else:
             log.warning("Adapter CoD = 0x%06x — not A/V Hands-Free. "
-                        "Run `iphonebridge run` (needs sudo) or set manually:",
-                        cod)
+                        "Set it manually:", cod)
             log.warning("    sudo btmgmt class %d %d",
                         config.COD_MAJOR, config.COD_MINOR)
+            log.warning("    To make the daemon set it: package install → "
+                        "`sudo adduser $USER iphonebridge`, then reboot; "
+                        "from source → `sudo bash systemd/install-cod-sudoers.sh`")
             ok = False
 
     # State dir writable
@@ -355,18 +357,20 @@ def ancs_enable(
     device_mac = config.IPHONE_MAC
     typer.echo(f"adapter: {adapter_mac}  device: {device_mac}")
 
-    # Run the sudoers-gated helper
+    # Run the sudoers-gated helper (deb path first, then from-source path)
+    helper = next((h for h in config.ANCS_HELPER_PATHS if os.path.exists(h)),
+                  config.ANCS_HELPER_PATHS[-1])
     r = subprocess.run(
-        ["sudo", "-n", "/usr/local/bin/iphonebridge-set-le-bearer",
-         adapter_mac, device_mac],
+        ["sudo", "-n", helper, adapter_mac, device_mac],
         capture_output=True, text=True,
     )
     if r.returncode != 0:
         msg = r.stderr.strip() or r.stdout.strip() or "(no output)"
         typer.echo(typer.style(f"helper failed: {msg}", fg=typer.colors.RED))
         if "password is required" in msg or "may not run" in msg.lower():
-            typer.echo("Install the sudoers helper first:")
-            typer.echo("  sudo bash systemd/install-ancs-sudoers.sh")
+            typer.echo("Authorize the helper first:")
+            typer.echo("  package install:  sudo adduser $USER iphonebridge  (then reboot)")
+            typer.echo("  from source:      sudo bash systemd/install-ancs-sudoers.sh")
         raise typer.Exit(code=3)
     typer.echo(typer.style(r.stdout.strip(), fg=typer.colors.GREEN))
 

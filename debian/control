@@ -1,0 +1,24 @@
+Source: iphonebridge
+Section: comm
+Priority: optional
+Maintainer: santisbon <santisbon@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all,
+ python3-setuptools, pybuild-plugin-pyproject
+Standards-Version: 4.6.2
+Homepage: https://github.com/santisbon/iphonebridge
+
+Package: iphonebridge
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends},
+ python3-dbus, python3-gi, python3-typer,
+ gir1.2-gtk-4.0, gir1.2-adw-1,
+ bluez (>= 5.72), bluez-obexd
+Recommends: ofono, wl-clipboard
+Description: iPhone messages, calls, and contacts over Bluetooth
+ Daemon, CLI, and GTK4 app bridging a paired iPhone via the standard
+ Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
+ service, no subscription.
+ .
+ Ships the systemd user unit, desktop entry, and the sudoers rules
+ (group iphonebridge) for the two privileged operations: setting the
+ adapter Class-of-Device and the ANCS BLE-bearer edit.

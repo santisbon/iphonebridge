@@ -45,6 +45,9 @@ iphonebridge-ui = "iphonebridge.ui.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"iphonebridge.ui" = ["icons/*.svg", "icons/README.md"]
+
 [tool.pytest.ini_options]
 # Without this, a bare `pytest` from the repo root recurses the whole tree
 # (src/, spike/, .venv probing, …) during collection and can hang. Scope

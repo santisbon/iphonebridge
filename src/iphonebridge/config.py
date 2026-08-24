@@ -79,3 +79,10 @@ def ensure_dirs() -> None:
 # ---- dbus paths used in the daemon --------------------------------------
 
 BLE_ADVERT_DBUS_PATH: str = "/me/santisbon/iphonebridge/ancs_advert"
+
+# The ANCS sudoers-gated helper: deb install location first, then the
+# from-source installer's location.
+ANCS_HELPER_PATHS: tuple[str, ...] = (
+    "/usr/libexec/iphonebridge/set-le-bearer",
+    "/usr/local/bin/iphonebridge-set-le-bearer",
+)

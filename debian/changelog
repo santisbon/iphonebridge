@@ -1,0 +1,8 @@
+iphonebridge (0.6.0) unstable; urgency=medium
+
+  * First packaged release of the hard fork. See CHANGELOG.md for the
+    project history; this deb ships the daemon, CLI, GTK app, systemd
+    user unit, desktop entry, and group-based sudoers rules in one
+    package.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Mon, 24 Aug 2026 13:40:28 -0500

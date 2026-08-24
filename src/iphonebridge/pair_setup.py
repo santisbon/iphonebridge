@@ -158,10 +158,12 @@ def run_wizard(*, restart_after: bool = True) -> int:
                            fg=typer.colors.WHITE, bold=True))
     typer.echo("")
     typer.echo("If the toggles aren't visible yet, the adapter's CoD likely")
-    typer.echo("isn't set to A/V Hands-Free yet. Make sure you ran:")
-    typer.echo(typer.style("  sudo bash systemd/install-cod-sudoers.sh",
+    typer.echo("isn't set to A/V Hands-Free yet. Authorize the daemon to set it:")
+    typer.echo(typer.style("  package install:  sudo adduser $USER iphonebridge  (then reboot)",
                            fg=typer.colors.WHITE))
-    typer.echo("and that you've started the daemon at least once after.")
+    typer.echo(typer.style("  from source:      sudo bash systemd/install-cod-sudoers.sh",
+                           fg=typer.colors.WHITE))
+    typer.echo("and make sure the daemon has started at least once after.")
 
     if restart_after:
         if typer.confirm("\nRestart the iphonebridge daemon now to pick up the new MAC?",

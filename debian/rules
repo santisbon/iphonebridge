@@ -1,0 +1,30 @@
+#!/usr/bin/make -f
+export PYBUILD_NAME = iphonebridge
+# Tests run in CI; the build environment has no pytest.
+export PYBUILD_DISABLE = test
+
+%:
+	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_auto_build:
+	visudo -cf debian/sudoers-cod
+	visudo -cf debian/sudoers-ancs
+	dh_auto_build
+
+override_dh_install:
+	dh_install
+	mkdir -p debian/iphonebridge/usr/lib/systemd/user
+	sed "s|@INSTALL_DIR@/.venv/bin/iphonebridge|/usr/bin/iphonebridge|" \
+	  systemd/iphonebridge.service \
+	  > debian/iphonebridge/usr/lib/systemd/user/iphonebridge.service
+	mv debian/iphonebridge/usr/libexec/iphonebridge/set-le-bearer.sh \
+	   debian/iphonebridge/usr/libexec/iphonebridge/set-le-bearer
+	chmod 755 debian/iphonebridge/usr/libexec/iphonebridge/set-le-bearer
+	mv debian/iphonebridge/etc/sudoers.d/sudoers-cod \
+	   debian/iphonebridge/etc/sudoers.d/iphonebridge-cod
+	mv debian/iphonebridge/etc/sudoers.d/sudoers-ancs \
+	   debian/iphonebridge/etc/sudoers.d/iphonebridge-ancs
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0440 debian/iphonebridge/etc/sudoers.d/*

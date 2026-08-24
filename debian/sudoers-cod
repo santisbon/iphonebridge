@@ -1,0 +1,4 @@
+# Installed by the iphonebridge package. Members of the iphonebridge
+# group may set the adapter Class-of-Device without a password. This one
+# exact command is the only thing the rule unlocks.
+%iphonebridge ALL=(root) NOPASSWD: /usr/bin/btmgmt class 4 8

@@ -1,0 +1,4 @@
+# Installed by the iphonebridge package. Members of the iphonebridge
+# group may run the ANCS BLE-bearer helper without a password. The
+# helper strictly validates its two MAC arguments.
+%iphonebridge ALL=(root) NOPASSWD: /usr/libexec/iphonebridge/set-le-bearer

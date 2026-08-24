@@ -55,7 +55,18 @@ As far as we know, **iphonebridge is the first free, open-source, Mac-free iMess
 
 > ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
-## 🚀 Installation
+## 🚀 Installation (from source)
+
+Everything below builds and installs from a clone: venv, symlinks,
+sudoers installers, and a path-substituted systemd unit. The alternative
+is the single `.deb` (daemon, CLI, and UI in one package), which
+replaces steps 2, 4, and 5 and the launcher setup entirely; build it and
+follow its self-contained guide in
+[`packaging/deb/README.md`](packaging/deb/README.md). Pick one method:
+from-source symlinks in `~/.local/bin` shadow a deb-installed
+`/usr/bin/iphonebridge` on most PATH setups, and mixing the two is
+confusing to debug.
+
 
 ### 1 · System packages
 
@@ -97,6 +108,11 @@ Pair normally with your desktop's Bluetooth panel, or with `bluetoothctl`:
 
 Keep the iPhone on its **Settings → Bluetooth** screen while you pair; iOS is only
 discoverable while that screen is open. Confirm the matching 6-digit code on both sides.
+
+If this iPhone was paired to this computer before, remove the old bond on **both**
+ends first (Linux: the Bluetooth panel's Remove/Forget, or `bluetoothctl remove <MAC>`;
+iPhone: ⓘ → Forget This Device). Forgetting on only one side leaves a stale
+half-bond that makes the new pairing fail or misbehave.
 
 Then run the wizard:
 
@@ -175,7 +191,9 @@ iphonebridge ancs-enable
 
 Then **forget + re-pair** the iPhone one more time (the wizard walks you through it). After the fresh pair, iOS performs cross-transport key derivation and the BLE bond sticks — ANCS notifications start flowing automatically. You only do this once.
 
-*Forget* means dropping the bond on both ends. On the iPhone: **Settings → Bluetooth → ⓘ → Forget This Device**. On Linux, pick one:
+*Forget* means dropping the bond on **both** ends; one-sided forgetting leaves a
+stale half-bond that breaks the re-pair. On the iPhone: **Settings → Bluetooth →
+ⓘ → Forget This Device**. On Linux, pick one:
 
 - **GNOME** — Settings → Bluetooth → the device → *Forget*
 - **KDE Plasma** — System Settings → Bluetooth → the device → *Remove* (trash icon)
@@ -326,6 +344,7 @@ systemctl --user {start,stop,restart} iphonebridge
 - **Verification codes** — when a text carries a one-time / 2FA code, iphonebridge detects it and copies it to your clipboard automatically; press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste. Detection needs both a verification keyword and a 4–8 digit number, so ordinary texts don't trigger it.
 - **Incoming calls** raise a notification with **Answer / Decline** buttons that act on the call directly.
 - **Sent messages** — replies you send from the desktop are recorded into conversation history, so a thread shows both sides.
+- **History starts shallow** — a fresh install seeds conversations with the recent inbox window iOS exposes over Bluetooth (roughly the last 10 messages); iOS does not serve older history to any Bluetooth bridge. Threads grow from install day forward.
 
 ## 🏗️ How it works
 
@@ -508,6 +527,8 @@ systemctl --user restart iphonebridge
 
 <details>
 <summary><b>Calls don't connect, or there's no call audio</b></summary>
+
+If `systemctl status ofono` shows `core-dump`, the distro's ofonod crashed (seen once when the modem powered during HFP registration): `sudo systemctl restart ofono`, then restart the daemon.
 
 HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HFP profile. Run `iphonebridge hfp-enable`, then `sudo systemctl restart ofono`, reconnect the iPhone, and restart the daemon. If `journalctl -u ofono` shows `RegisterProfile … UUID already registered`, the start order is wrong — restart oFono again after WirePlumber is up.
 </details>

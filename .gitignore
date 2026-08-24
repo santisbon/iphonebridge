@@ -27,3 +27,12 @@ spike/results/**
 
 # Per-machine config
 config.local.toml
+
+# deb build residue (dpkg-buildpackage -b)
+.pybuild/
+debian/.debhelper/
+debian/iphonebridge/
+debian/files
+debian/*.substvars
+debian/debhelper-build-stamp
+debian/*.debhelper
