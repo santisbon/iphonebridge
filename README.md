@@ -5,7 +5,7 @@
 **Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/santisbon/iphonebridge?color=brightgreen)](https://github.com/santisbon/iphonebridge/releases)
+[![Version](https://img.shields.io/github/v/tag/santisbon/iphonebridge?color=brightgreen&label=version)](https://github.com/santisbon/iphonebridge/tags)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
