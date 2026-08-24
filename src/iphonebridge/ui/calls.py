@@ -37,15 +37,75 @@ class CallsPage(Gtk.Box):
         dial_group.add(self._entry)
         page.add(dial_group)
 
+        # Contact-name autocomplete. GtkEntryCompletion can't attach to an
+        # Adw.EntryRow (it wraps GtkText, not GtkEntry), so this is a
+        # popover under the row. autohide stays off so the popover never
+        # steals keyboard focus from the entry while the user types.
+        self._suggestions = Gtk.Popover(
+            has_arrow=False, autohide=False,
+            position=Gtk.PositionType.BOTTOM)
+        self._suggestions.set_parent(self._entry)
+        self._sug_list = Gtk.ListBox(css_classes=["boxed-list"])
+        self._sug_list.connect("row-activated", self._on_suggestion)
+        self._suggestions.set_child(self._sug_list)
+        self._filling = False  # guard: setting text from a pick re-fires "changed"
+        self._entry.connect("changed", self._on_entry_changed)
+
         self._calls_group = Adw.PreferencesGroup(title="Active calls")
         page.add(self._calls_group)
         self._refresh_calls()
 
         client.connect("call-state-changed", self._on_call_state)
 
+    # ---- autocomplete --------------------------------------------------
+
+    def _on_entry_changed(self, _entry) -> None:
+        if self._filling:
+            return
+        text = self._entry.get_text().strip()
+        # Numbers (plain or vanity) don't want name suggestions.
+        if len(text) < 2 or any(ch.isdigit() for ch in text):
+            self._suggestions.popdown()
+            return
+        seen: set[str] = set()
+        names: list[tuple[str, str]] = []   # (display name, first phone)
+        for name, phone in self._contacts.find_by_name(text):
+            if name not in seen:
+                seen.add(name)
+                names.append((name, phone))
+            if len(names) >= 5:
+                break
+        if not names:
+            self._suggestions.popdown()
+            return
+        while (row := self._sug_list.get_row_at_index(0)) is not None:
+            self._sug_list.remove(row)
+        for name, phone in names:
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                          margin_top=6, margin_bottom=6,
+                          margin_start=10, margin_end=10)
+            box.append(Gtk.Label(label=name, halign=Gtk.Align.START))
+            box.append(Gtk.Label(label=f"+{phone}", halign=Gtk.Align.START,
+                                 css_classes=["dim-label", "caption"]))
+            row = Gtk.ListBoxRow(child=box)
+            row.contact_name = name
+            self._sug_list.append(row)
+        self._suggestions.popup()
+
+    def _on_suggestion(self, _list, row) -> None:
+        self._filling = True
+        try:
+            self._entry.set_text(row.contact_name)
+            self._entry.set_position(-1)
+        finally:
+            self._filling = False
+        self._suggestions.popdown()
+        self._entry.grab_focus()
+
     # ---- dialing -------------------------------------------------------
 
     def _on_dial(self, _widget) -> None:
+        self._suggestions.popdown()
         raw = self._entry.get_text().strip()
         if not raw:
             return
