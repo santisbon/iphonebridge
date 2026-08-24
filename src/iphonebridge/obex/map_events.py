@@ -41,10 +41,15 @@ class MapEventListener:
         on_sms: EventCallback,
         *,
         resolve_contact: Callable[[str | None], str | None] = lambda _: None,
+        seen_handles: set[str] | None = None,
     ) -> None:
         self.sessions = sessions
         self.on_sms = on_sms
         self.resolve_contact = resolve_contact
+        # Handles already dispatched (seeded from the event log). obexd
+        # re-announces the whole inbox after every restart; without this,
+        # each daemon start re-logs and re-notifies every message in it.
+        self.seen_handles: set[str] = seen_handles if seen_handles is not None else set()
         self._signal_match = None
         # Track pending transfers so we can correlate PropertyChanged signals
         # back to the message path that triggered them.
@@ -85,6 +90,10 @@ class MapEventListener:
 
         props = dict(ifaces["org.bluez.obex.Message1"])
         handle = path_s.rsplit("/", 1)[-1]
+        if handle in self.seen_handles:
+            log.debug("Message1 %s already dispatched — re-announcement "
+                      "after an obexd restart, skipping", handle)
+            return
         log.info("new Message1 at %s (Status=%s Type=%s Size=%s) — fetching body",
                  handle, props.get("Status"), props.get("Type"),
                  props.get("Size"))
@@ -217,6 +226,7 @@ class _PendingFetch:
         )
         log.info("sms_received from %s: %r",
                  event.display_sender, (event.body or "")[:80])
+        self.listener.seen_handles.add(self.handle)
         try:
             self.listener.on_sms(event)
         except Exception:
@@ -238,6 +248,7 @@ class _PendingFetch:
             message_path=self.message_path,
         )
         try:
+            self.listener.seen_handles.add(self.handle)
             self.listener.on_sms(event)
         except Exception:
             log.exception("on_sms callback raised")

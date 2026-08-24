@@ -15,6 +15,29 @@ from typing import Literal
 
 _PHONE_KEEP = re.compile(r"\D")
 
+def logged_sms_handles(path) -> set[str]:
+    """Handles of every sms_received event already in the JSONL log.
+
+    Seeds the MNS listener's dedupe guard: obexd re-announces the messages
+    still in the iPhone's inbox after every restart, and without the seed
+    each daemon start would log (and notify) them all again.
+    """
+    import json
+    handles: set[str] = set()
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if e.get("kind") == "sms_received" and e.get("handle"):
+                    handles.add(e["handle"])
+    except OSError:
+        pass
+    return handles
+
+
 def normalize_phone(raw: str | None) -> str | None:
     """Reduce a phone string to digits only (E.164-ish minus the +).
 

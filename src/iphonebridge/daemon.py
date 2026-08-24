@@ -30,7 +30,7 @@ from iphonebridge.ancs.events import AncsEvent
 from iphonebridge.bus import main_loop
 from iphonebridge.contacts import ContactsResolver, pull_phonebook
 from iphonebridge.dbus_service import MessagesService, claim_bus_name
-from iphonebridge.events import SmsEvent, sms_sent_event
+from iphonebridge.events import SmsEvent, logged_sms_handles, sms_sent_event
 from iphonebridge.hfp.events import CallEvent
 from iphonebridge.hfp.ofono_client import HfpManager
 from iphonebridge.obex.map_events import MapEventListener
@@ -255,6 +255,7 @@ class Daemon:
                 sessions=self.sessions,
                 on_sms=self._fanout,
                 resolve_contact=lambda raw: self.contacts.resolve(raw),
+                seen_handles=logged_sms_handles(config.EVENTS_JSONL),
             )
             self.listener.start()
 

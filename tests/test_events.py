@@ -170,3 +170,22 @@ class TestSmsEventDisplay:
             raw_status=None, raw_type=None,
         )
         assert e.display_sender == "(unknown)"
+
+
+def test_logged_sms_handles(tmp_path):
+    from iphonebridge.events import logged_sms_handles
+    log = tmp_path / "events.jsonl"
+    log.write_text(
+        '{"kind": "sms_received", "handle": "message1"}\n'
+        '{"kind": "sms_received", "handle": "message1"}\n'   # dupe collapses
+        '{"kind": "sms_received", "handle": "message2"}\n'
+        '{"kind": "sms_sent", "handle": "messageX"}\n'       # wrong kind
+        '{"kind": "sms_received"}\n'                          # no handle
+        'not json\n'
+    )
+    assert logged_sms_handles(log) == {"message1", "message2"}
+
+
+def test_logged_sms_handles_missing_file(tmp_path):
+    from iphonebridge.events import logged_sms_handles
+    assert logged_sms_handles(tmp_path / "absent.jsonl") == set()
