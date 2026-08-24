@@ -1,6 +1,6 @@
 """DaemonClient — the UI's link to the running iphonebridge daemon.
 
-The daemon owns `com.gabriel.iphonebridge` on the session bus. This client:
+The daemon owns `me.santisbon.iphonebridge` on the session bus. This client:
   • subscribes to its live signals (Events1 + Calls1) and re-emits them as
     GObject signals the UI pages connect to;
   • calls its methods (Messages1.Send, Calls1.Dial/Answer/Hangup, …);
@@ -25,11 +25,11 @@ from iphonebridge.bus import session_bus
 
 log = logging.getLogger(__name__)
 
-BUS_NAME = "com.gabriel.iphonebridge"
-OBJECT_PATH = "/com/gabriel/iphonebridge"
-MESSAGES_IFACE = "com.gabriel.iphonebridge.Messages1"
-CALLS_IFACE = "com.gabriel.iphonebridge.Calls1"
-EVENTS_IFACE = "com.gabriel.iphonebridge.Events1"
+BUS_NAME = "me.santisbon.iphonebridge"
+OBJECT_PATH = "/me/santisbon/iphonebridge"
+MESSAGES_IFACE = "me.santisbon.iphonebridge.Messages1"
+CALLS_IFACE = "me.santisbon.iphonebridge.Calls1"
+EVENTS_IFACE = "me.santisbon.iphonebridge.Events1"
 
 
 def _plain(value):

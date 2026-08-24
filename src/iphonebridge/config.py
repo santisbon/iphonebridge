@@ -78,4 +78,4 @@ def ensure_dirs() -> None:
 
 # ---- dbus paths used in the daemon --------------------------------------
 
-BLE_ADVERT_DBUS_PATH: str = "/com/gabriel/iphonebridge/ancs_advert"
+BLE_ADVERT_DBUS_PATH: str = "/me/santisbon/iphonebridge/ancs_advert"

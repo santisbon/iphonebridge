@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.gabriel.iphonebridge.UI</id>
+  <id>me.santisbon.iphonebridge.UI</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-2.0-or-later</project_license>
 
@@ -21,15 +21,15 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">com.gabriel.iphonebridge.UI.desktop</launchable>
+  <launchable type="desktop-id">me.santisbon.iphonebridge.UI.desktop</launchable>
 
   <categories>
     <category>Network</category>
     <category>InstantMessaging</category>
   </categories>
 
-  <url type="homepage">https://github.com/gabrielmeir53/iphonebridge</url>
-  <url type="bugtracker">https://github.com/gabrielmeir53/iphonebridge/issues</url>
+  <url type="homepage">https://github.com/santisbon/iphonebridge</url>
+  <url type="bugtracker">https://github.com/santisbon/iphonebridge/issues</url>
 
   <provides>
     <binary>iphonebridge-ui</binary>

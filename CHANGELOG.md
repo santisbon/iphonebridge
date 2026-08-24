@@ -93,6 +93,20 @@ against iPhone 16 Pro Max running iOS 26.5.
 
 ## [Unreleased]
 
+### Hard fork (2026-08-23)
+
+This project is now a hard fork of
+[gabrielmeir53/iphonebridge](https://github.com/gabrielmeir53/iphonebridge),
+forked at v0.4.2 and maintained at
+[santisbon/iphonebridge](https://github.com/santisbon/iphonebridge).
+
+- **Breaking:** D-Bus bus name, object path, error names, and app ID
+  renamed from the `com.gabriel.*` namespace to `me.santisbon.*`
+  (`me.santisbon.iphonebridge`, `/me/santisbon/iphonebridge`,
+  `me.santisbon.iphonebridge.UI`). Anything talking to the daemon's D-Bus
+  API by the old name must update; the desktop entry and icon files are
+  renamed to match. Historical entries below keep the old identifiers.
+
 ### Project-defining discoveries (2026-05-19, post-launch)
 
 - **Incoming iMessage IS exposed via MAP on iOS 26.5 / iPhone 16 Pro Max**, labeled as `Type: sms-gsm` indistinguishably from SMS. This contradicts every prior Bluetooth-on-Linux writeup. Verified: sender (Contact B, confirmed iMessage thread, both on iPhone) sent "test-iphonebridge-XYZ123" → daemon received and rendered the body within ~2s.

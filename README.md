@@ -4,8 +4,8 @@
 
 **Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**
 
-[![CI](https://github.com/gabrielmeir53/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/gabrielmeir53/iphonebridge/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/gabrielmeir53/iphonebridge?color=brightgreen)](https://github.com/gabrielmeir53/iphonebridge/releases)
+[![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/santisbon/iphonebridge?color=brightgreen)](https://github.com/santisbon/iphonebridge/releases)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
@@ -70,7 +70,7 @@ sudo apt install wl-clipboard
 ### 2 · Clone & install
 
 ```bash
-git clone https://github.com/gabrielmeir53/iphonebridge.git
+git clone https://github.com/santisbon/iphonebridge.git
 cd iphonebridge
 
 # A venv that inherits the system PyGObject + dbus-python.
@@ -243,8 +243,8 @@ iphonebridge-ui
 
 ### Adding it to your app launcher
 
-The repo ships both pieces already — `data/com.gabriel.iphonebridge.UI.desktop`
-and `data/icons/com.gabriel.iphonebridge.UI.svg`. For a user-level install,
+The repo ships both pieces already — `data/me.santisbon.iphonebridge.UI.desktop`
+and `data/icons/me.santisbon.iphonebridge.UI.svg`. For a user-level install,
 copy them into place and rewrite `Exec` to an absolute path:
 
 ```bash
@@ -252,10 +252,10 @@ APPS=~/.local/share/applications
 ICONS=~/.local/share/icons/hicolor/scalable/apps
 mkdir -p "$APPS" "$ICONS"
 
-install -m 644 data/icons/com.gabriel.iphonebridge.UI.svg "$ICONS/"
+install -m 644 data/icons/me.santisbon.iphonebridge.UI.svg "$ICONS/"
 sed "s|^Exec=iphonebridge-ui$|Exec=$HOME/.local/bin/iphonebridge-ui|" \
-  data/com.gabriel.iphonebridge.UI.desktop \
-  > "$APPS/com.gabriel.iphonebridge.UI.desktop"
+  data/me.santisbon.iphonebridge.UI.desktop \
+  > "$APPS/me.santisbon.iphonebridge.UI.desktop"
 
 update-desktop-database "$APPS"
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
@@ -275,8 +275,8 @@ or the taskbar won't associate the running window with this icon.
 Check it registered:
 
 ```bash
-desktop-file-validate ~/.local/share/applications/com.gabriel.iphonebridge.UI.desktop
-gio launch ~/.local/share/applications/com.gabriel.iphonebridge.UI.desktop
+desktop-file-validate ~/.local/share/applications/me.santisbon.iphonebridge.UI.desktop
+gio launch ~/.local/share/applications/me.santisbon.iphonebridge.UI.desktop
 ```
 
 To remove it, delete the two installed files and re-run `update-desktop-database`.
@@ -470,7 +470,7 @@ ANCS-soliciting BLE advertisement the daemon registers at startup
 
 ```bash
 journalctl --user -u iphonebridge | grep -i advert
-# good: BLE advert registered: /com/gabriel/iphonebridge/ancs_advert
+# good: BLE advert registered: /me/santisbon/iphonebridge/ancs_advert
 # bad:  RegisterAdvertisement failed: org.bluez.Error.Failed: ...
 ```
 
@@ -563,6 +563,11 @@ See [`BACKLOG.md`](BACKLOG.md).
 
 ## 🙏 Credits
 
+This repository is a hard fork of
+[gabrielmeir53/iphonebridge](https://github.com/gabrielmeir53/iphonebridge),
+forked at v0.4.2 and maintained independently by
+[santisbon](https://github.com/santisbon).
+
 iphonebridge stands on the shoulders of two prior projects, both GPL-2.0:
 
 - **[bmh129/ancs4linux](https://github.com/bmh129/ancs4linux)** — an actively-maintained 2026 fork whose empirical work on BR/EDR-vs-BLE coexistence, the `LastUsedBearer=le` unlock, and adapter compatibility made iphonebridge's ANCS support possible. The ANCS wire-format code in [`src/iphonebridge/ancs/`](src/iphonebridge/ancs/) is derived from their `observer/ancs/` modules.
@@ -570,4 +575,4 @@ iphonebridge stands on the shoulders of two prior projects, both GPL-2.0:
 
 ## 📄 License
 
-[GPL-2.0-or-later](LICENSE) · © 2026 Gabe Shatunovsky
+[GPL-2.0-or-later](LICENSE) · © 2026 Gabe Shatunovsky · fork modifications © 2026 santisbon

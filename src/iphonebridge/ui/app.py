@@ -1,8 +1,8 @@
 """iphonebridge-ui — GTK4 / libadwaita desktop app entry point.
 
 A separate process from the daemon. Its application id is
-`com.gabriel.iphonebridge.UI` — distinct from the daemon's bus name
-`com.gabriel.iphonebridge`, which it talks to over D-Bus.
+`me.santisbon.iphonebridge.UI` — distinct from the daemon's bus name
+`me.santisbon.iphonebridge`, which it talks to over D-Bus.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
 from iphonebridge.ui.client import DaemonClient  # noqa: E402
 from iphonebridge.ui.window import MainWindow  # noqa: E402
 
-APP_ID = "com.gabriel.iphonebridge.UI"
+APP_ID = "me.santisbon.iphonebridge.UI"
 
 _CSS = """
 .msg-bubble { padding: 6px 10px; }

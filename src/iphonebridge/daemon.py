@@ -7,7 +7,7 @@ Startup order:
   3. ContactsResolver — warm SQLite cache; if empty, pull PBAP
   4. MapEventListener — subscribe to MAP MNS push events
   5. Sinks — register libnotify + jsonl
-  6. DBus service (com.gabriel.iphonebridge.Messages1)
+  6. DBus service (me.santisbon.iphonebridge.Messages1)
   7. GLib.MainLoop().run()
 
 Shutdown order is the reverse.
@@ -117,7 +117,7 @@ class Daemon:
                 on_sent=self._record_sent,
                 on_refresh_contacts=lambda: self._refresh_contacts(
                     raise_on_error=True))
-            log.info("DBus service ready: com.gabriel.iphonebridge")
+            log.info("DBus service ready: me.santisbon.iphonebridge")
         except Exception:
             log.exception("DBus service registration failed — continuing "
                           "without send capability")

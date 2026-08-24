@@ -35,7 +35,7 @@ Park ideas here so they don't derail Phase 1.
   (UI-only; daemon stays native). Needs a build pass; see its README for the
   one open issue (port `ui/client.py` to GDBus to drop the dbus-python module).
 - [ ] iOS version regression test matrix
-- [ ] DBus service `com.gabriel.IPhoneBridge` so other UIs can subscribe to events
+- [ ] DBus service `me.santisbon.iphonebridge` so other UIs can subscribe to events
 
 ## Won't do
 - ~~iMessage send/read~~ — *update 2026-05-19: iMessage *read* works via MAP on iOS 26.5! Send TBD.*

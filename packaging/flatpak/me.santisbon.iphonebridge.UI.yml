@@ -10,7 +10,7 @@
 # build steps and the one open issue the build must resolve (the UI's
 # dbus-python / system-bus import).
 
-id: com.gabriel.iphonebridge.UI
+id: me.santisbon.iphonebridge.UI
 runtime: org.gnome.Platform
 runtime-version: '47'   # bump to the current stable GNOME runtime
 sdk: org.gnome.Sdk
@@ -21,7 +21,7 @@ finish-args:
   - --socket=fallback-x11
   - --share=ipc
   # Reach the native iphonebridge daemon — it owns this name on the session bus.
-  - --talk-name=com.gabriel.iphonebridge
+  - --talk-name=me.santisbon.iphonebridge
   # Desktop notifications.
   - --talk-name=org.freedesktop.Notifications
   # Read the daemon's config + state files (local.env, events.jsonl,
@@ -54,9 +54,9 @@ modules:
       # --no-deps: typer is only used by the CLI, which this Flatpak does not
       # ship; PyGObject + GTK4 + libadwaita come from the GNOME runtime.
       - pip3 install --prefix=/app --no-deps --no-build-isolation .
-      - install -Dm644 data/com.gabriel.iphonebridge.UI.desktop /app/share/applications/com.gabriel.iphonebridge.UI.desktop
-      - install -Dm644 data/com.gabriel.iphonebridge.UI.metainfo.xml /app/share/metainfo/com.gabriel.iphonebridge.UI.metainfo.xml
-      - install -Dm644 data/icons/com.gabriel.iphonebridge.UI.svg /app/share/icons/hicolor/scalable/apps/com.gabriel.iphonebridge.UI.svg
+      - install -Dm644 data/me.santisbon.iphonebridge.UI.desktop /app/share/applications/me.santisbon.iphonebridge.UI.desktop
+      - install -Dm644 data/me.santisbon.iphonebridge.UI.metainfo.xml /app/share/metainfo/me.santisbon.iphonebridge.UI.metainfo.xml
+      - install -Dm644 data/icons/me.santisbon.iphonebridge.UI.svg /app/share/icons/hicolor/scalable/apps/me.santisbon.iphonebridge.UI.svg
     sources:
       - type: dir
         path: ../..

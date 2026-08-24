@@ -7,6 +7,7 @@ name = "iphonebridge"
 version = "0.4.2"
 description = "Bluetooth bridge from iPhone to Linux desktop — SMS + notifications + contacts"
 authors = [{name = "Gabe Shatunovsky", email = "gabriel@shatunovsky.com"}]
+maintainers = [{name = "santisbon"}]
 license = {text = "GPL-2.0-or-later"}
 requires-python = ">=3.10"
 readme = "README.md"

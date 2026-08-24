@@ -4,7 +4,7 @@ This packages **only the GTK desktop app** (`iphonebridge-ui`). The daemon
 stays a native install: it needs privileged setup — `btmgmt` Class-of-Device,
 the `LastUsedBearer=le` file edit, oFono — that a Flatpak sandbox cannot do.
 The sandboxed UI reaches the native daemon over the session bus
-(`--talk-name=com.gabriel.iphonebridge`).
+(`--talk-name=me.santisbon.iphonebridge`).
 
 ## Build
 
@@ -15,9 +15,9 @@ flatpak install flathub org.gnome.Platform//47 org.gnome.Sdk//47
 
 # Build + install for the current user
 flatpak-builder --user --install --force-clean \
-  build-dir packaging/flatpak/com.gabriel.iphonebridge.UI.yml
+  build-dir packaging/flatpak/me.santisbon.iphonebridge.UI.yml
 
-flatpak run com.gabriel.iphonebridge.UI
+flatpak run me.santisbon.iphonebridge.UI
 ```
 
 ## Status — draft

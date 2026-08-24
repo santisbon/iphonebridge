@@ -1,9 +1,9 @@
 """DBus service the daemon exposes on the session bus for CLI clients.
 
-Bus name:    com.gabriel.iphonebridge
-Object path: /com/gabriel/iphonebridge
-Interfaces:  com.gabriel.iphonebridge.Messages1   — messaging
-             com.gabriel.iphonebridge.Calls1      — HFP call control
+Bus name:    me.santisbon.iphonebridge
+Object path: /me/santisbon/iphonebridge
+Interfaces:  me.santisbon.iphonebridge.Messages1   — messaging
+             me.santisbon.iphonebridge.Calls1      — HFP call control
 
 Messages1:
   • Send(string recipient, string body) → string transfer_path
@@ -46,11 +46,11 @@ from iphonebridge.obex.sessions import SessionManager
 
 log = logging.getLogger(__name__)
 
-BUS_NAME = "com.gabriel.iphonebridge"
-OBJECT_PATH = "/com/gabriel/iphonebridge"
-IFACE = "com.gabriel.iphonebridge.Messages1"
-CALLS_IFACE = "com.gabriel.iphonebridge.Calls1"
-EVENTS_IFACE = "com.gabriel.iphonebridge.Events1"
+BUS_NAME = "me.santisbon.iphonebridge"
+OBJECT_PATH = "/me/santisbon/iphonebridge"
+IFACE = "me.santisbon.iphonebridge.Messages1"
+CALLS_IFACE = "me.santisbon.iphonebridge.Calls1"
+EVENTS_IFACE = "me.santisbon.iphonebridge.Events1"
 
 
 def _variant_dict(d: dict) -> dbus.Dictionary:
@@ -97,19 +97,19 @@ class MessagesService(dbus.service.Object):
         if not recipient.strip() or not body.strip():
             raise dbus.exceptions.DBusException(
                 "recipient and body must both be non-empty",
-                name="com.gabriel.iphonebridge.Error.InvalidArgs",
+                name="me.santisbon.iphonebridge.Error.InvalidArgs",
             )
         if self.sessions.map is None:
             raise dbus.exceptions.DBusException(
                 "MAP session not open — iPhone toggles probably off",
-                name="com.gabriel.iphonebridge.Error.NotReady",
+                name="me.santisbon.iphonebridge.Error.NotReady",
             )
         try:
             transfer = send_message(self.sessions.map_path, recipient, body)
         except Exception as e:
             log.exception("Send failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.SendFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.SendFailed"
             )
         # Record the sent message (history + event feed). Never let a logging
         # failure fail the send — the message already went out.
@@ -126,7 +126,7 @@ class MessagesService(dbus.service.Object):
         if self.sessions.map is None:
             raise dbus.exceptions.DBusException(
                 "MAP session not open — iPhone toggles probably off",
-                name="com.gabriel.iphonebridge.Error.NotReady",
+                name="me.santisbon.iphonebridge.Error.NotReady",
             )
         folder = folder or "telecom/msg/INBOX"
         try:
@@ -136,7 +136,7 @@ class MessagesService(dbus.service.Object):
         except Exception as e:
             log.exception("ListRecent failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.QueryFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.QueryFailed"
             )
         return json.dumps(msgs, ensure_ascii=False)
 
@@ -159,19 +159,19 @@ class MessagesService(dbus.service.Object):
         if self._on_refresh_contacts is None:
             raise dbus.exceptions.DBusException(
                 "daemon exposed no contacts-refresh hook",
-                name="com.gabriel.iphonebridge.Error.NotReady",
+                name="me.santisbon.iphonebridge.Error.NotReady",
             )
         if self.sessions.pbap is None:
             raise dbus.exceptions.DBusException(
                 "PBAP session not open — check the iPhone's Sync Contacts toggle",
-                name="com.gabriel.iphonebridge.Error.NotReady",
+                name="me.santisbon.iphonebridge.Error.NotReady",
             )
         try:
             return int(self._on_refresh_contacts())
         except Exception as e:
             log.exception("RefreshContacts failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.RefreshFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.RefreshFailed"
             )
 
     # ---- Calls1 (HFP) ---------------------------------------------------
@@ -180,7 +180,7 @@ class MessagesService(dbus.service.Object):
         if self.hfp is None:
             raise dbus.exceptions.DBusException(
                 "HFP not available in this daemon build",
-                name="com.gabriel.iphonebridge.Error.NotReady",
+                name="me.santisbon.iphonebridge.Error.NotReady",
             )
         return self.hfp
 
@@ -191,18 +191,18 @@ class MessagesService(dbus.service.Object):
         if not number.strip():
             raise dbus.exceptions.DBusException(
                 "number must be non-empty",
-                name="com.gabriel.iphonebridge.Error.InvalidArgs",
+                name="me.santisbon.iphonebridge.Error.InvalidArgs",
             )
         try:
             return self._require_hfp().dial(number)
         except HfpError as e:
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.NotReady"
+                str(e), name="me.santisbon.iphonebridge.Error.NotReady"
             )
         except Exception as e:
             log.exception("Dial failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.CallFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.CallFailed"
             )
 
     @dbus.service.method(CALLS_IFACE, in_signature="s", out_signature="")
@@ -212,12 +212,12 @@ class MessagesService(dbus.service.Object):
             self._require_hfp().answer(call_path)
         except HfpError as e:
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.NotReady"
+                str(e), name="me.santisbon.iphonebridge.Error.NotReady"
             )
         except Exception as e:
             log.exception("AnswerCall failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.CallFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.CallFailed"
             )
 
     @dbus.service.method(CALLS_IFACE, in_signature="s", out_signature="")
@@ -227,12 +227,12 @@ class MessagesService(dbus.service.Object):
             self._require_hfp().hangup(call_path)
         except HfpError as e:
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.NotReady"
+                str(e), name="me.santisbon.iphonebridge.Error.NotReady"
             )
         except Exception as e:
             log.exception("HangupCall failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.CallFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.CallFailed"
             )
 
     @dbus.service.method(CALLS_IFACE, in_signature="", out_signature="")
@@ -242,12 +242,12 @@ class MessagesService(dbus.service.Object):
             self._require_hfp().hangup_all()
         except HfpError as e:
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.NotReady"
+                str(e), name="me.santisbon.iphonebridge.Error.NotReady"
             )
         except Exception as e:
             log.exception("HangupAll failed")
             raise dbus.exceptions.DBusException(
-                str(e), name="com.gabriel.iphonebridge.Error.CallFailed"
+                str(e), name="me.santisbon.iphonebridge.Error.CallFailed"
             )
 
     @dbus.service.method(CALLS_IFACE, in_signature="", out_signature="s")
@@ -308,7 +308,7 @@ class MessagesService(dbus.service.Object):
 
 
 def claim_bus_name() -> dbus.service.BusName:
-    """Acquire com.gabriel.iphonebridge on the session bus.
+    """Acquire me.santisbon.iphonebridge on the session bus.
 
     Raises if the name is already taken by another instance — caller
     should treat that as 'another daemon is already running'.

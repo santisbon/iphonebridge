@@ -103,9 +103,9 @@ def contacts_sync(verbose: bool = typer.Option(False, "-v", "--verbose")):
         # get_object() activates the name, so an absent daemon raises here
         # rather than at the method call — both must sit inside the guard.
         svc = dbus.Interface(
-            dbus.SessionBus().get_object("com.gabriel.iphonebridge",
-                                         "/com/gabriel/iphonebridge"),
-            "com.gabriel.iphonebridge.Messages1")
+            dbus.SessionBus().get_object("me.santisbon.iphonebridge",
+                                         "/me/santisbon/iphonebridge"),
+            "me.santisbon.iphonebridge.Messages1")
         n = int(svc.RefreshContacts())
         typer.echo(f"Refreshed via the running daemon — "
                    f"{n} contacts cached in {config.CONTACTS_DB}")
@@ -218,9 +218,9 @@ def sms_list(
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         bus = dbus.SessionBus()
         try:
-            proxy = bus.get_object("com.gabriel.iphonebridge",
-                                   "/com/gabriel/iphonebridge")
-            iface = dbus.Interface(proxy, "com.gabriel.iphonebridge.Messages1")
+            proxy = bus.get_object("me.santisbon.iphonebridge",
+                                   "/me/santisbon/iphonebridge")
+            iface = dbus.Interface(proxy, "me.santisbon.iphonebridge.Messages1")
         except dbus.exceptions.DBusException as e:
             typer.echo(typer.style(
                 f"Daemon not reachable on DBus: {e.get_dbus_message()}\n"
@@ -489,9 +489,9 @@ def sms_send(
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
     try:
-        proxy = bus.get_object("com.gabriel.iphonebridge",
-                               "/com/gabriel/iphonebridge")
-        iface = dbus.Interface(proxy, "com.gabriel.iphonebridge.Messages1")
+        proxy = bus.get_object("me.santisbon.iphonebridge",
+                               "/me/santisbon/iphonebridge")
+        iface = dbus.Interface(proxy, "me.santisbon.iphonebridge.Messages1")
     except dbus.exceptions.DBusException as e:
         typer.echo(typer.style(
             f"Couldn't reach iphonebridge daemon on DBus: {e.get_dbus_message()}",
@@ -525,8 +525,8 @@ def _daemon_iface(iface_name: str):
     import dbus.mainloop.glib
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SessionBus()
-    proxy = bus.get_object("com.gabriel.iphonebridge",
-                           "/com/gabriel/iphonebridge")
+    proxy = bus.get_object("me.santisbon.iphonebridge",
+                           "/me/santisbon/iphonebridge")
     return dbus.Interface(proxy, iface_name)
 
 
@@ -545,7 +545,7 @@ def call(
     import dbus
 
     resolved = _resolve_recipient(recipient)
-    iface = _daemon_iface("com.gabriel.iphonebridge.Calls1")
+    iface = _daemon_iface("me.santisbon.iphonebridge.Calls1")
     try:
         call_path = str(iface.Dial(resolved, timeout=45))
     except dbus.exceptions.DBusException as e:
@@ -566,7 +566,7 @@ def hangup(verbose: bool = typer.Option(False, "-v", "--verbose")):
     _setup_logging(verbose)
     import dbus
 
-    iface = _daemon_iface("com.gabriel.iphonebridge.Calls1")
+    iface = _daemon_iface("me.santisbon.iphonebridge.Calls1")
     try:
         iface.HangupAll(timeout=30)
     except dbus.exceptions.DBusException as e:
@@ -586,7 +586,7 @@ def calls(verbose: bool = typer.Option(False, "-v", "--verbose")):
 
     import dbus
 
-    iface = _daemon_iface("com.gabriel.iphonebridge.Calls1")
+    iface = _daemon_iface("me.santisbon.iphonebridge.Calls1")
     try:
         raw = str(iface.ListCalls(timeout=20))
     except dbus.exceptions.DBusException as e:
