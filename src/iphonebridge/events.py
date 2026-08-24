@@ -38,6 +38,22 @@ def logged_sms_handles(path) -> set[str]:
     return handles
 
 
+_KEYPAD = {c: d for d, letters in {
+    "2": "ABC", "3": "DEF", "4": "GHI", "5": "JKL",
+    "6": "MNO", "7": "PQRS", "8": "TUV", "9": "WXYZ",
+}.items() for c in letters}
+
+
+def vanity_to_digits(raw: str) -> str:
+    """Translate vanity-number letters to keypad digits (E.161).
+
+    "1 (800) MYAPPLE" -> "1 (800) 6927753". Formatting characters pass
+    through untouched; only A-Z map. Callers decide when to apply this —
+    a bare word like a contact name must not be fed through it.
+    """
+    return "".join(_KEYPAD.get(ch.upper(), ch) for ch in raw)
+
+
 def normalize_phone(raw: str | None) -> str | None:
     """Reduce a phone string to digits only (E.164-ish minus the +).
 

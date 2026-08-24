@@ -292,7 +292,7 @@ The `iphonebridge` command does everything the app does, plus setup and diagnost
 | `iphonebridge pair-setup` | First-run wizard — find the paired iPhone, write config |
 | `iphonebridge sms-list` | Recent messages — `-n N`, `--from <contact>`, `--source iphone\|local` |
 | `iphonebridge sms-send <to> <body>` | Send an SMS / iMessage (`<to>` = number or contact name) |
-| `iphonebridge call <to>` | Place a phone call over HFP |
+| `iphonebridge call <to>` | Place a phone call over HFP — number, contact name, or `1-800-LETTERS` |
 | `iphonebridge calls` | List active calls |
 | `iphonebridge hangup` | Hang up the active call(s) |
 | `iphonebridge contacts-sync` | Force a contacts refresh (otherwise automatic every 24 h) |

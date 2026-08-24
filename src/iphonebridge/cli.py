@@ -412,6 +412,15 @@ def _resolve_recipient(raw: str) -> str:
         # liberal about format.
         return raw
 
+    # Vanity numbers like "1 (800) MYAPPLE": translate letters to keypad
+    # digits, but only when a digit is already present — a bare contact
+    # name must never be translated.
+    if any(ch.isdigit() for ch in raw):
+        from iphonebridge.events import vanity_to_digits
+        translated = vanity_to_digits(raw)
+        if _RECIPIENT_LOOKS_LIKE_PHONE.match(translated):
+            return translated
+
     # Treat as a name. Pull candidates from contact cache.
     from iphonebridge.contacts import ContactsResolver
     resolver = ContactsResolver()
@@ -533,7 +542,8 @@ def _daemon_iface(iface_name: str):
 @app.command()
 def call(
     recipient: str = typer.Argument(...,
-        help="Phone number (e.g. +15551234567) OR contact name (e.g. 'Maddie')"),
+        help="Phone number (e.g. +15551234567), contact name (e.g. 'Maddie'), "
+             "or vanity number (e.g. '1 (800) MYAPPLE')"),
     verbose: bool = typer.Option(False, "-v", "--verbose"),
 ):
     """Place a phone call through the iPhone (HFP Hands-Free).

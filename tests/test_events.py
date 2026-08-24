@@ -189,3 +189,34 @@ def test_logged_sms_handles(tmp_path):
 def test_logged_sms_handles_missing_file(tmp_path):
     from iphonebridge.events import logged_sms_handles
     assert logged_sms_handles(tmp_path / "absent.jsonl") == set()
+
+
+def test_vanity_to_digits():
+    from iphonebridge.events import vanity_to_digits
+    assert vanity_to_digits("1 (800) MYAPPLE") == "1 (800) 6927753"
+    assert vanity_to_digits("1-800-flowers") == "1-800-3569377"
+    assert vanity_to_digits("+1 800 GO FEDEX") == "+1 800 46 33339"
+    # No letters — unchanged
+    assert vanity_to_digits("+15551234567") == "+15551234567"
+
+
+def test_vanity_resolve_rule():
+    """The Calls-tab rule: translate only when a digit is present, so a
+    contact name is never turned into keypad digits."""
+    import re
+
+    from iphonebridge.events import vanity_to_digits
+    phone_re = re.compile(r"^\+?[\d\s()\-.]{7,}$")
+
+    def resolves_as_number(raw: str) -> str | None:
+        if phone_re.match(raw):
+            return raw
+        if any(ch.isdigit() for ch in raw):
+            t = vanity_to_digits(raw)
+            if phone_re.match(t):
+                return t
+        return None  # falls through to contact lookup
+
+    assert resolves_as_number("1 (800) MYAPPLE") == "1 (800) 6927753"
+    assert resolves_as_number("Maddie") is None
+    assert resolves_as_number("MYAPPLE") is None   # no digit -> not a number
