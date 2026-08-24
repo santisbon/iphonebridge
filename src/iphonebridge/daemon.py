@@ -162,12 +162,10 @@ class Daemon:
         # HFP events still reach the desktop while MAP/PBAP are degraded.
         self._setup_sinks()
 
-        # Try to open MAP/PBAP. If blocked, stay alive and retry every minute.
-        self._try_open_sessions(first_attempt=True)
-
-        # Always set up the DBus service so a CLI can at least query
-        # IsHealthy and learn the daemon's status. Send() will fail until
-        # the MAP session is open, but the service surface itself is up.
+        # Claim the DBus name BEFORE the first session attempt: at login the
+        # iPhone is often still reconnecting, so that attempt can block for
+        # a minute — and until the name is claimed, the app and CLI report
+        # "daemon not reachable" instead of the honest degraded state.
         try:
             self._bus_name = claim_bus_name()
             self._dbus_service = MessagesService(
@@ -180,6 +178,9 @@ class Daemon:
         except Exception:
             log.exception("DBus service registration failed — continuing "
                           "without send capability")
+
+        # Try to open MAP/PBAP. If blocked, stay alive and retry every minute.
+        self._try_open_sessions(first_attempt=True)
 
         # Signal handlers
         for sig in (signal.SIGINT, signal.SIGTERM):

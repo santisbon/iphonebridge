@@ -534,6 +534,23 @@ HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HF
 </details>
 
 <details>
+<summary><b>App won't open — no window, no error</b></summary>
+
+GTK apps are single-instance per application ID: one process owns the
+D-Bus name `me.santisbon.iphonebridge.UI`, and every later launch just
+asks it to present its window. If a previous instance is stuck (alive
+but not answering D-Bus), new launches delegate to it, wait 25 seconds,
+and exit silently — the journal shows `Failed to register: Timeout was
+reached`. Fix:
+
+```bash
+pkill -f iphonebridge-ui
+```
+
+then launch again.
+</details>
+
+<details>
 <summary><b><code>Unable to acquire the address of the accessibility bus</code></b></summary>
 
 A GTK warning on every `iphonebridge-ui` launch, not a fault — the app works

@@ -76,6 +76,12 @@ class DaemonClient(GObject.Object):
         self.healthy = False     # is the MAP session up?
         self._subscribe()
         self.refresh_availability()
+        # Live availability: re-probe whenever the daemon's bus name
+        # changes owner, so the "not reachable" banner clears by itself
+        # when the daemon comes up (and reappears if it dies) without
+        # anyone pressing Recheck.
+        self._name_watch = self._bus.watch_name_owner(
+            BUS_NAME, lambda _owner: self.refresh_availability())
 
     # ---- signal subscription -------------------------------------------
 
@@ -96,6 +102,12 @@ class DaemonClient(GObject.Object):
             bus_name=BUS_NAME, path=OBJECT_PATH))
 
     def stop(self) -> None:
+        if self._name_watch is not None:
+            try:
+                self._name_watch.cancel()
+            except Exception:
+                pass
+            self._name_watch = None
         for m in self._matches:
             try:
                 m.remove()
