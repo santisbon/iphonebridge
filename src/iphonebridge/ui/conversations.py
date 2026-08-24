@@ -35,7 +35,7 @@ class ConversationsPage(Gtk.Box):
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         # mail-message-new-symbolic is the stock compose glyph;
         # chat-message-new-symbolic isn't shipped by adwaita-icon-theme.
-        new_btn = Gtk.Button(icon_name="mail-message-new-symbolic",
+        new_btn = Gtk.Button(icon_name="gtk-add-symbolic",
                              tooltip_text="New conversation",
                              css_classes=["flat"],
                              margin_top=6, margin_bottom=6,

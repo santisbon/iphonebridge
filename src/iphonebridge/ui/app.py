@@ -7,6 +7,7 @@ A separate process from the daemon. Its application id is
 from __future__ import annotations
 
 import logging
+import pathlib
 import sys
 
 import gi
@@ -42,6 +43,11 @@ class IphonebridgeApp(Adw.Application):
             Gtk.StyleContext.add_provider_for_display(
                 display, provider,
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            # Bundled icons (ui/icons/*.svg — e.g. exports from Icon
+            # Library) resolve by filename, same as stock theme icons.
+            theme = Gtk.IconTheme.get_for_display(display)
+            theme.add_search_path(
+                str(pathlib.Path(__file__).parent / "icons"))
 
     def do_activate(self) -> None:
         win = self.props.active_window
