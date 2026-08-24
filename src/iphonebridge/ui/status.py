@@ -15,13 +15,22 @@ class StatusPage(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._client = client
 
+        # Page-level header: Recheck refreshes everything on this tab, so it
+        # sits above all groups rather than inside one of them.
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        for setter in (header.set_margin_top, header.set_margin_end,
+                       header.set_margin_start):
+            setter(12)
+        recheck = Gtk.Button(label="Recheck", halign=Gtk.Align.END,
+                             hexpand=True)
+        recheck.connect("clicked", lambda _b: self._refresh())
+        header.append(recheck)
+        self.append(header)
+
         page = Adw.PreferencesPage()
         self.append(page)
 
         daemon_group = Adw.PreferencesGroup(title="Daemon")
-        recheck = Gtk.Button(label="Recheck", valign=Gtk.Align.CENTER)
-        recheck.connect("clicked", lambda _b: self._refresh())
-        daemon_group.set_header_suffix(recheck)
         self._daemon_row = Adw.ActionRow(title="iphonebridge daemon")
         self._daemon_icon = Gtk.Image()
         self._daemon_row.add_suffix(self._daemon_icon)
