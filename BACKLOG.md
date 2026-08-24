@@ -31,9 +31,16 @@ Park ideas here so they don't derail Phase 1.
 ## Phase 3 / nice-to-have
 - [ ] Encrypted SQLite for message cache
 - [ ] Multi-device support (currently hard-coded to one iPhone MAC)
-- [~] Flatpak packaging — draft manifest for the UI in `packaging/flatpak/`
-  (UI-only; daemon stays native). Needs a build pass; see its README for the
-  one open issue (port `ui/client.py` to GDBus to drop the dbus-python module).
+- [ ] Single `.deb` packaging daemon + CLI + UI. Kills the venv dance
+  (depends on distro python3-dbus/python3-gi) and the @INSTALL_DIR@
+  placeholder (fixed paths under /usr). Ships the sudoers rule, user unit
+  (/usr/lib/systemd/user/), desktop entry, and icon.
+  - Design decision: the sudoers rule grants a specific username today;
+    a system package serves all users, so it becomes group-based
+    (NOPASSWD on the one btmgmt command for an `iphonebridge` group,
+    postinst-created; users add themselves).
+  - Debian-family only at first; rpm later if wanted. Auto-updates
+    need a PPA or small apt repo eventually.
 - [ ] iOS version regression test matrix
 - [ ] DBus service `me.santisbon.iphonebridge` so other UIs can subscribe to events
 

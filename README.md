@@ -557,7 +557,7 @@ These are Apple's Bluetooth-stack limits, not bugs:
 
 ## 🗺️ Roadmap
 
-- **Flatpak** for the UI — a draft manifest lives in [`packaging/flatpak/`](packaging/flatpak/); it still needs a build pass.
+- **Single `.deb`** shipping daemon, CLI, and UI together — one `apt install`, dependencies (`bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`) resolved, sudoers rule and systemd user unit included. Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces; a native package can.
 
 See [`BACKLOG.md`](BACKLOG.md).
 
