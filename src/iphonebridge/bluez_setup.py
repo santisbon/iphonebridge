@@ -65,7 +65,13 @@ def set_cod(*, dry_run: bool = False) -> bool:
     if dry_run:
         return True
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        # input="" forces stdin to be a pipe. btmgmt adds stdin to its
+        # event loop with epoll, and /dev/null (a service's stdin, and
+        # subprocess's default here) is not pollable — epoll_ctl returns
+        # EPERM and btmgmt sleeps forever without ever opening the
+        # management socket. Two days of "the adapter is wedged" was this.
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10,
+                           input="")
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         log.error("btmgmt failed: %s", e)
         return False
