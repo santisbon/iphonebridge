@@ -24,7 +24,7 @@ class CallsPage(Gtk.Box):
             description="Call audio routes through this computer's mic and "
                         "speakers.")
         self._entry = Adw.EntryRow(
-            title="Number, contact name, or 1 (800) MYAPPLE")
+            title="Contact name or number e.g. 1 (800) MYAPPLE")
         self._entry.connect("entry-activated", self._on_dial)
         call_btn = Gtk.Button(
             icon_name="call-start-symbolic", valign=Gtk.Align.CENTER,
