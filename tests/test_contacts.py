@@ -17,7 +17,7 @@ def test_single_vcard():
         """)
     cards = _parse_vcards(blob)
     assert len(cards) == 1
-    name, phones = cards[0]
+    name, phones, _emails = cards[0]
     assert name == "John Smith"
     assert phones == ["15551234567"]
 
@@ -51,7 +51,7 @@ def test_multiple_phones_per_card():
         """)
     cards = _parse_vcards(blob)
     assert len(cards) == 1
-    name, phones = cards[0]
+    name, phones, _emails = cards[0]
     assert name == "Multi"
     assert sorted(phones) == ["15551111111", "15552222222", "15553333333"]
 
@@ -64,7 +64,7 @@ def test_card_with_no_phone():
         """)
     cards = _parse_vcards(blob)
     assert len(cards) == 1
-    name, phones = cards[0]
+    name, phones, _emails = cards[0]
     assert name == "Name Only"
     assert phones == []
 
@@ -77,7 +77,7 @@ def test_card_with_no_name():
         """)
     cards = _parse_vcards(blob)
     assert len(cards) == 1
-    name, phones = cards[0]
+    name, phones, _emails = cards[0]
     assert name is None
     assert phones == ["15551234567"]
 
@@ -115,3 +115,32 @@ def test_unicode_names():
     cards = _parse_vcards(blob)
     assert "Mañuel Garçia" in [c[0] for c in cards]
     assert "Маша" in [c[0] for c in cards]
+
+
+def test_email_extracted_and_lowercased():
+    blob = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        FN:Apple Id Friend
+        EMAIL;TYPE=INTERNET:Friend@iCloud.com
+        END:VCARD
+        """)
+    cards = _parse_vcards(blob)
+    assert len(cards) == 1
+    name, phones, emails = cards[0]
+    assert name == "Apple Id Friend"
+    assert phones == []
+    assert emails == ["friend@icloud.com"]
+
+
+def test_email_only_contact_is_kept():
+    # Contacts with no phone used to be dropped entirely — they're exactly
+    # the entries that can name an iMessage-from-Apple-ID thread.
+    blob = textwrap.dedent("""\
+        BEGIN:VCARD
+        VERSION:3.0
+        FN:No Phone
+        EMAIL:np@example.com
+        END:VCARD
+        """)
+    assert _parse_vcards(blob) == [("No Phone", [], ["np@example.com"])]

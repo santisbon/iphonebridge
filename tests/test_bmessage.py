@@ -141,3 +141,20 @@ class TestEdgeCases:
         for garbage in ["", "not a bmessage", "BEGIN:BMSG\r\nEND:BMSG", "{'json': 'huh'}"]:
             p = parse(garbage)
             assert p is not None  # may have None fields, but doesn't crash
+
+
+def test_email_sender_no_tel():
+    # iMessage from an Apple ID: originator vCard has EMAIL, no TEL.
+    blob = (
+        "BEGIN:BMSG\r\nVERSION:1.0\r\nSTATUS:UNREAD\r\nTYPE:SMS_GSM\r\n"
+        "FOLDER:telecom/msg/INBOX\r\n"
+        "BEGIN:VCARD\r\nVERSION:2.1\r\nN:;;;;\r\n"
+        "EMAIL:friend@icloud.com\r\nEND:VCARD\r\n"
+        "BEGIN:BENV\r\nBEGIN:BBODY\r\nCHARSET:UTF-8\r\n"
+        "BEGIN:MSG\r\nhello from blue bubble\r\nEND:MSG\r\n"
+        "END:BBODY\r\nEND:BENV\r\nEND:BMSG\r\n"
+    )
+    p = parse(blob)
+    assert p.sender_phone is None
+    assert p.sender_email == "friend@icloud.com"
+    assert p.body == "hello from blue bubble"

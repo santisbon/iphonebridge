@@ -15,7 +15,8 @@ _ELLIPSIZE_END = Pango.EllipsizeMode.END
 
 def _thread_key(ev: dict) -> str:
     return (ev.get("contact_name") or ev.get("sender_phone")
-            or ev.get("sender_phone_norm") or "(unknown)")
+            or ev.get("sender_phone_norm") or ev.get("sender_email")
+            or "(unknown)")
 
 
 class ConversationsPage(Gtk.Box):
@@ -83,7 +84,8 @@ class ConversationsPage(Gtk.Box):
         if thread is None:
             thread = {"key": key, "name": key,
                       "phone": ev.get("sender_phone")
-                      or ev.get("sender_phone_norm") or key,
+                      or ev.get("sender_phone_norm")
+                      or ev.get("sender_email") or key,
                       "messages": []}
             self._threads[key] = thread
         msg = {"body": ev.get("body") or "",

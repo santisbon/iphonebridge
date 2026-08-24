@@ -191,8 +191,11 @@ class _PendingFetch:
     def _fire_full(self, parsed) -> None:
         sender_raw = parsed.sender_phone
         norm = normalize_phone(sender_raw)
-        # Prefer the parsed phone for resolution; fall back to bMessage's FN
+        # Resolve by phone, then by email (iMessage-from-Apple-ID has no
+        # phone at all); fall back to bMessage's FN
         contact = self.listener.resolve_contact(sender_raw) if sender_raw else None
+        if contact is None and parsed.sender_email:
+            contact = self.listener.resolve_contact(parsed.sender_email)
         if contact is None and parsed.sender_name:
             contact = parsed.sender_name
         # Use timestamp from initial props (BlueZ tends to populate it on the
@@ -203,6 +206,7 @@ class _PendingFetch:
             handle=self.handle,
             sender_phone=sender_raw,
             sender_phone_norm=norm,
+            sender_email=parsed.sender_email,
             contact_name=contact,
             body=parsed.body,
             timestamp=ts,

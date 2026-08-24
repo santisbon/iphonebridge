@@ -30,13 +30,14 @@ _VCARD_BLOCK = re.compile(
     r"BEGIN:VCARD(?P<body>.*?)END:VCARD", re.DOTALL | re.IGNORECASE
 )
 
-def _parse_vcards(blob: str) -> list[tuple[str | None, list[str]]]:
-    """Return [(full_name, [phone_norm, ...]), ...]."""
-    out: list[tuple[str | None, list[str]]] = []
+def _parse_vcards(blob: str) -> list[tuple[str | None, list[str], list[str]]]:
+    """Return [(full_name, [phone_norm, ...], [email_lower, ...]), ...]."""
+    out: list[tuple[str | None, list[str], list[str]]] = []
     for m in _VCARD_BLOCK.finditer(blob):
         body = m.group("body")
         fn: str | None = None
         phones: list[str] = []
+        emails: list[str] = []
         for line in body.splitlines():
             line = line.strip()
             if not line:
@@ -49,8 +50,14 @@ def _parse_vcards(blob: str) -> list[tuple[str | None, list[str]]]:
                 norm = normalize_phone(val)
                 if norm:
                     phones.append(norm)
-        if fn or phones:
-            out.append((fn, phones))
+            elif line.upper().startswith("EMAIL"):
+                # forms: EMAIL:a@b, EMAIL;TYPE=INTERNET:a@b
+                _, _, val = line.partition(":")
+                val = val.strip().lower()
+                if val and "@" in val:
+                    emails.append(val)
+        if fn or phones or emails:
+            out.append((fn, phones, emails))
     return out
 
 
@@ -68,6 +75,13 @@ CREATE TABLE IF NOT EXISTS phones (
     UNIQUE(phone_norm, contact_id)
 );
 CREATE INDEX IF NOT EXISTS idx_phones_norm ON phones(phone_norm);
+
+CREATE TABLE IF NOT EXISTS emails (
+    email_norm   TEXT NOT NULL,
+    contact_id   INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    UNIQUE(email_norm, contact_id)
+);
+CREATE INDEX IF NOT EXISTS idx_emails_norm ON emails(email_norm);
 
 CREATE TABLE IF NOT EXISTS meta (
     key    TEXT PRIMARY KEY,
@@ -129,8 +143,9 @@ def pull_phonebook(sessions: SessionManager, *, max_contacts: int = 65535) -> in
         with db:  # transaction
             db.execute("DELETE FROM contacts")
             db.execute("DELETE FROM phones")
-            for fn, phones in parsed:
-                if not fn and not phones:
+            db.execute("DELETE FROM emails")
+            for fn, phones, emails in parsed:
+                if not fn and not phones and not emails:
                     continue
                 cur = db.execute(
                     "INSERT INTO contacts(full_name, updated_at) VALUES (?, ?)",
@@ -142,6 +157,12 @@ def pull_phonebook(sessions: SessionManager, *, max_contacts: int = 65535) -> in
                         "INSERT OR IGNORE INTO phones(phone_norm, contact_id) "
                         "VALUES (?, ?)",
                         (p, cid),
+                    )
+                for e in emails:
+                    db.execute(
+                        "INSERT OR IGNORE INTO emails(email_norm, contact_id) "
+                        "VALUES (?, ?)",
+                        (e, cid),
                     )
             db.execute(
                 "INSERT OR REPLACE INTO meta(key, value) VALUES "
@@ -171,6 +192,7 @@ class ContactsResolver:
 
     def __init__(self) -> None:
         self._mem: dict[str, str] = {}
+        self._mem_email: dict[str, str] = {}
         self._warm()
 
     def _warm(self) -> None:
@@ -182,12 +204,19 @@ class ContactsResolver:
                     "WHERE c.full_name != ''"
                 ):
                     self._mem[phone] = name
+                for email, name in db.execute(
+                    "SELECT e.email_norm, c.full_name "
+                    "FROM emails e JOIN contacts c ON c.id = e.contact_id "
+                    "WHERE c.full_name != ''"
+                ):
+                    self._mem_email[email] = name
         except sqlite3.Error as e:
             log.warning("contacts cache warm failed: %s", e)
 
     def refresh(self) -> int:
         """Re-read the SQLite cache into memory. Returns new count."""
         self._mem.clear()
+        self._mem_email.clear()
         self._warm()
         return len(self._mem)
 
@@ -223,6 +252,10 @@ class ContactsResolver:
         return list(seen)
 
     def resolve(self, raw: str | None) -> str | None:
+        # An address with @ is an email handle (iMessage via Apple ID) —
+        # phone normalization would just strip it to nothing.
+        if raw and "@" in raw:
+            return self._mem_email.get(raw.strip().lower())
         norm = normalize_phone(raw)
         if not norm:
             return None

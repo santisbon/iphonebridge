@@ -45,6 +45,7 @@ _BMSG_FOLDER_RE = re.compile(r"^FOLDER:(?P<v>\S+)", re.MULTILINE | re.IGNORECASE
 @dataclass(slots=True)
 class ParsedBMessage:
     sender_phone: str | None
+    sender_email: str | None
     sender_name: str | None
     body: str | None
     status: str | None       # "READ" / "UNREAD"
@@ -55,6 +56,7 @@ class ParsedBMessage:
 def parse(blob: str) -> ParsedBMessage:
     # First VCARD = originator (for incoming SMS)
     sender_phone: str | None = None
+    sender_email: str | None = None
     sender_name: str | None = None
     m = _VCARD_RE.search(blob)
     if m:
@@ -76,6 +78,12 @@ def parse(blob: str) -> ParsedBMessage:
                 _, _, val = line.partition(":")
                 if val.strip() and sender_phone is None:
                     sender_phone = val.strip()
+            elif up.startswith("EMAIL"):
+                # iMessage senders addressed by Apple ID arrive with an
+                # EMAIL line and no TEL at all.
+                _, _, val = line.partition(":")
+                if val.strip() and sender_email is None:
+                    sender_email = val.strip()
 
     body_m = _MSG_BODY_RE.search(blob)
     body = body_m.group("body").strip("\r\n ") if body_m else None
@@ -93,6 +101,7 @@ def parse(blob: str) -> ParsedBMessage:
 
     return ParsedBMessage(
         sender_phone=sender_phone,
+        sender_email=sender_email,
         sender_name=sender_name,
         body=body,
         status=_first(_BMSG_STATUS_RE),

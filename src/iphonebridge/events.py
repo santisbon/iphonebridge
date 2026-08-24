@@ -65,6 +65,8 @@ class SmsEvent:
     # Full BlueZ obex DBus path to the Message1 object, so downstream
     # code (e.g. libnotify sink) can write back read-state.
     message_path: str | None = None
+    # iMessage senders addressed by Apple ID arrive with an email, no phone.
+    sender_email: str | None = None
     seen_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -72,7 +74,8 @@ class SmsEvent:
     @property
     def display_sender(self) -> str:
         """Best name we have for the sender."""
-        return self.contact_name or self.sender_phone or "(unknown)"
+        return (self.contact_name or self.sender_phone
+                or self.sender_email or "(unknown)")
 
     def to_dict(self) -> dict:
         """Serializable form for JSONL log."""
@@ -81,6 +84,7 @@ class SmsEvent:
             "handle": self.handle,
             "sender_phone": self.sender_phone,
             "sender_phone_norm": self.sender_phone_norm,
+            "sender_email": self.sender_email,
             "contact_name": self.contact_name,
             "body": self.body,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
