@@ -52,11 +52,19 @@ class MainWindow(Adw.ApplicationWindow):
             display_mode=Adw.InlineViewSwitcherDisplayMode.BOTH)
         header = Adw.HeaderBar(title_widget=switcher)
 
-        # One header bar for the whole app, with a single slot on the right
-        # for whichever action belongs to the visible page (compose on
-        # Messages, Recheck on Setup). Pages opt in via `header_action`.
+        # One header bar for the whole app, with a single slot for whichever
+        # action belongs to the visible page (compose on Messages, Recheck
+        # on Setup). Pages opt in via `header_action`.
+        #
+        # pack_start, not pack_end: on Linux the minimise/maximise/close
+        # buttons sit at the end, and a flat icon button next to them reads
+        # as a fourth window control rather than an app action. At the start
+        # it sits over the sidebar, which is where Messages puts compose
+        # (macOS can use the end because its window controls are on the
+        # left). It also makes the bare "+" unambiguous: over the
+        # conversation list it plainly means a new conversation.
         self._action_slot = Gtk.Box()
-        header.pack_end(self._action_slot)
+        header.pack_start(self._action_slot)
         self._stack.connect("notify::visible-child-name",
                             lambda *_: self._sync_header_action())
         self._sync_header_action()
