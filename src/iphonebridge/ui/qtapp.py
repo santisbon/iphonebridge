@@ -41,6 +41,7 @@ class Bridge(QObject):
         self.messages = MessageListModel(self.store)
         self.notifications = NotificationListModel()
         self._thread_name = ""
+        self._current_key: str | None = None
         self._status = "Checking…"
         self._calls = "No active calls"
 
@@ -68,6 +69,16 @@ class Bridge(QObject):
     def threadName(self) -> str:
         return self._thread_name
 
+    @pyqtProperty(int, notify=changed)
+    def currentIndex(self) -> int:
+        """Where the open conversation currently sits in the list.
+
+        Derived on every read rather than stored: a new message re-sorts
+        the list, so the row that held this thread a moment ago may now
+        hold a different one.
+        """
+        return self.threads.index_of(self._current_key)
+
     @pyqtProperty(str, notify=changed)
     def statusText(self) -> str:
         return self._status
@@ -80,6 +91,7 @@ class Bridge(QObject):
 
     @pyqtSlot(str)
     def openThread(self, key: str) -> None:
+        self._current_key = key
         self._thread_name = (self.store.get(key) or {}).get("name", "")
         self.messages.show(key)
         self.changed.emit()
@@ -124,6 +136,8 @@ class Bridge(QObject):
     def _ingest(self, ev: dict, outgoing: bool) -> None:
         key, _msg = self.store.ingest(ev, outgoing=outgoing)
         self.threads.refresh()
+        # The list just re-sorted; currentIndex is derived, so tell QML.
+        self.changed.emit()
         if key == self.messages.thread_key:
             self.messages.reload()
 

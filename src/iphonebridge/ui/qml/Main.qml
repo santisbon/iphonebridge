@@ -45,18 +45,19 @@ ApplicationWindow {
 
             ListView {
                 id: threadList
+                objectName: "threadList"
                 SplitView.preferredWidth: 300
                 SplitView.minimumWidth: 240
                 clip: true
                 model: threads
-                currentIndex: -1
+                // Bound, never assigned: writing to currentIndex
+                // from the delegate would break this binding and
+                // freeze the highlight on a stale row.
+                currentIndex: bridge.currentIndex
                 delegate: ItemDelegate {
                     width: threadList.width
                     highlighted: ListView.isCurrentItem
-                    onClicked: {
-                        threadList.currentIndex = index
-                        bridge.openThread(model.key)
-                    }
+                    onClicked: bridge.openThread(model.key)
                     contentItem: ColumnLayout {
                         spacing: 1
                         RowLayout {

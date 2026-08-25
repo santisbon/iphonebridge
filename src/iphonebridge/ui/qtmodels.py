@@ -62,6 +62,20 @@ class ThreadListModel(QAbstractListModel):
             return self._rows[row]["key"]
         return None
 
+    def index_of(self, key: str | None) -> int:
+        """The row currently holding `key`, or -1.
+
+        The list re-sorts newest-first on every arrival, so a row index is
+        only meaningful until the next message. Anything that needs to
+        remember a conversation must remember its key and ask again.
+        """
+        if key is None:
+            return -1
+        for i, thread in enumerate(self._rows):
+            if thread["key"] == key:
+                return i
+        return -1
+
 
 class MessageListModel(QAbstractListModel):
     """One conversation's messages, oldest first.
