@@ -611,3 +611,50 @@ class TestSenderSpellingIsCanonical:
                               self.BODY[:128])
         assert seen.matches(listing, "2026-08-25T19:46:01+00:00",
                             has_timestamp=True) is True
+
+
+class TestKeySenderNormalisesNumbers:
+    """A number arrives spelled differently depending on its source: as
+    typed into the composer, as the phone reports it, as the listing
+    spells it. Keying on the raw string made those different people."""
+
+    BODY = "on my way"
+
+    def test_formatting_is_ignored(self):
+        assert (message_key(None, "+1 (555) 123-4567", self.BODY)
+                == message_key(None, "+15551234567", self.BODY))
+
+    def test_spaces_and_dashes_are_ignored(self):
+        assert (message_key(None, "555 123 4567", self.BODY)
+                == message_key(None, "555-123-4567", self.BODY))
+
+    def test_the_map_marker_is_still_stripped(self):
+        assert (message_key(None, "+15551234567(smsft)", self.BODY)
+                == message_key(None, "+15551234567", self.BODY))
+
+    def test_different_numbers_stay_different(self):
+        assert (message_key(None, "+15551234567", self.BODY)
+                != message_key(None, "+15559876543", self.BODY))
+
+    def test_emails_are_not_digit_stripped(self):
+        """An address with digits in it must survive intact."""
+        a = message_key(None, "user1234567@example.com", self.BODY)
+        b = message_key(None, "1234567", self.BODY)
+        assert a != b
+
+    def test_a_name_is_left_alone(self):
+        """Too few digits to be a number, so it stays a name."""
+        assert (message_key(None, "Mom", self.BODY)
+                == message_key(None, "mom", self.BODY))
+
+    def test_country_code_is_not_folded(self):
+        """Documented limit: deciding these are one number needs a region
+        MAP does not give us."""
+        assert (message_key(None, "+15551234567", self.BODY)
+                != message_key(None, "5551234567", self.BODY))
+
+    def test_stored_keys_migrate(self):
+        from iphonebridge.events import normalize_key
+        stale = "\x1f".join(("", "+1 (555) 123-4567", self.BODY[:40]))
+        assert normalize_key(stale) == message_key(None, "+15551234567",
+                                                   self.BODY)

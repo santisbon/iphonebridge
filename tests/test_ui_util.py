@@ -6,6 +6,8 @@ display.
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 from iphonebridge.ui.util import event_ts, same_group, ts_key
 
 # The daemon now writes UTC throughout, but entries logged before that
@@ -76,3 +78,44 @@ class TestSameGroup:
         """Same instant either side of the offset: one minute apart, so
         they belong under the same rule despite the text differing."""
         assert same_group(RECEIVED, SENT_LATER)
+
+
+class TestThreadGrouping:
+    """One person, two spellings of their number. A sent message carries
+    the recipient as typed into the composer; an incoming one carries what
+    the phone reports. Grouping on the raw string split them into two
+    conversations."""
+
+    SENT: ClassVar[dict] = {
+        "kind": "sms_sent", "contact_name": None,
+        "sender_phone": "+1 (555) 123-4567",
+        "sender_phone_norm": "15551234567"}
+    RECV: ClassVar[dict] = {
+        "kind": "sms_received", "contact_name": None,
+        "sender_phone": "+15551234567",
+        "sender_phone_norm": "15551234567"}
+
+    def test_both_spellings_land_in_one_thread(self):
+        from iphonebridge.ui.conversations import _thread_key
+        assert _thread_key(self.SENT) == _thread_key(self.RECV)
+
+    def test_a_resolved_contact_still_wins(self):
+        from iphonebridge.ui.conversations import _thread_key
+        named = dict(self.RECV, contact_name="Dana Whitfield")
+        assert _thread_key(named) == "Dana Whitfield"
+
+    def test_different_numbers_stay_apart(self):
+        from iphonebridge.ui.conversations import _thread_key
+        other = dict(self.RECV, sender_phone_norm="15559876543")
+        assert _thread_key(self.SENT) != _thread_key(other)
+
+    def test_email_senders_still_group(self):
+        from iphonebridge.ui.conversations import _thread_key
+        a = {"kind": "sms_received", "sender_email": "x@example.com"}
+        assert _thread_key(a) == "x@example.com"
+
+    def test_the_displayed_name_keeps_the_readable_form(self):
+        """Grouping by digits must not make the thread show bare digits."""
+        from iphonebridge.ui.conversations import _thread_name
+        assert _thread_name(self.SENT) == "+1 (555) 123-4567"
+        assert _thread_name(dict(self.RECV, contact_name="Dana")) == "Dana"

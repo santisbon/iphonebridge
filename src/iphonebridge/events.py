@@ -43,8 +43,24 @@ _ADDR_SUFFIX_RE = re.compile(r"\s*\([^()]*\)\s*$")
 
 
 def _key_sender(sender: str | None) -> str:
-    """Sender component of a key: one address, one spelling."""
-    return _ADDR_SUFFIX_RE.sub("", (sender or "").strip()).strip().lower()
+    """Sender component of a key: one person, one spelling.
+
+    A number reaches us formatted differently depending on where it came
+    from — as typed into the composer for a sent message, as the phone
+    reports it for an incoming one, as the folder listing spells it for a
+    swept one. Reducing anything phone-like to digits makes those one
+    identity, the same way the UI groups conversations.
+
+    Note this does not fold country codes: "+15551234567" and
+    "5551234567" still differ, because deciding they are the same number
+    needs a region that MAP does not give us.
+    """
+    text = _ADDR_SUFFIX_RE.sub("", (sender or "").strip()).strip()
+    if text and "@" not in text:
+        digits = normalize_phone(text)
+        if digits:
+            return digits
+    return text.lower()
 
 
 def _key_ts(timestamp) -> str:
@@ -274,18 +290,30 @@ class SeenMessages(set):
         if has_timestamp is None:
             has_timestamp = bool(ts)
         index = self._timed if has_timestamp else self._untimed
-        index.setdefault((sender, head), []).append(instant)
+        index.setdefault((sender, head), []).append((instant, key))
 
     # ---- lookup --------------------------------------------------------
 
     def matches(self, key: str, arrival=None, *, has_timestamp=None) -> bool:
         """True when this message is already accounted for."""
+        return self.find(key, arrival, has_timestamp=has_timestamp) is not None
+
+    def find(self, key: str, arrival=None, *, has_timestamp=None):
+        """The key this message is already filed under, or None.
+
+        Returning the key rather than a bool matters for the inbox sweep:
+        a listing entry is the only thing that knows a message's object
+        path, and read-state can only be written back through that path.
+        Filing the path under the sweep's own key would leave it
+        unreachable, because the log holds the key the message was first
+        logged with.
+        """
         if key in self:
-            return True
+            return key
         ts, sender, head = _key_parts(key)
         instant = _as_instant(ts) or _as_instant(arrival)
         if instant is None:
-            return False
+            return None
         if has_timestamp is None:
             has_timestamp = bool(ts)
         # A message that carried a MAP timestamp can only pair with one
@@ -295,8 +323,8 @@ class SeenMessages(set):
         bucket = (self._untimed if has_timestamp
                   else self._timed).get((sender, head))
         if not bucket:
-            return False
-        for i, other in enumerate(bucket):
+            return None
+        for i, (other, matched_key) in enumerate(bucket):
             if abs(other - instant) <= _PUSH_WINDOW:
                 del bucket[i]
                 # Record the key as well, so a second sighting of this
@@ -309,8 +337,8 @@ class SeenMessages(set):
                 # finds the loose entry it needed already consumed here,
                 # and logs the message a second time.
                 super().add(key)
-                return True
-        return False
+                return matched_key
+        return None
 
 
 def mark_logged_read(path, keys) -> int:

@@ -123,16 +123,18 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
         # sweep's own clock, so falling back to it would give the same
         # message a new key on every sweep and log it again.
         key = message_key(ts, sender or None, event.body)
-        # Register the path even for messages we skip: the whole point of
-        # a listing is that it is the only place read-state can be written
-        # back to, and a skipped message is one we already have.
-        if remember_path is not None and m.get("path"):
-            remember_path(key, str(m["path"]))
+
         # seen_at is the sweep's own clock here, but a listing entry has a
         # real timestamp, so it is that which places this message against
         # anything already pushed live.
-        if listener.seen_keys.matches(key, event.seen_at,
-                                      has_timestamp=ts is not None):
+        already = listener.seen_keys.find(key, event.seen_at,
+                                          has_timestamp=ts is not None)
+        # File the path under the key the message is already logged with,
+        # not the sweep's own. A listing is the only place an object path
+        # comes from, and read-state can only be written back through it.
+        if remember_path is not None and m.get("path"):
+            remember_path(already or key, str(m["path"]))
+        if already:
             continue
         listener.seen_keys.note(key, event.seen_at,
                                 has_timestamp=ts is not None)

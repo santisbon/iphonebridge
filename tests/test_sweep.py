@@ -171,3 +171,47 @@ def test_listing_seen_twice_in_one_startup_logs_once(monkeypatch):
     key = message_key("2026-08-25T15:57:49+00:00", "+15551234567", "hi")
     assert seen.matches(key, "2026-08-25T15:57:49+00:00") is True
     assert sink.events == []
+
+
+def test_sweep_files_the_path_under_the_logged_key(monkeypatch):
+    """Read-state can only be written back through an object path, and a
+    listing is the only place one comes from. A message logged from a live
+    push is keyed on its arrival time, so filing the path under the
+    sweep's own key would leave it unreachable."""
+    pushed_at = "2026-08-25T15:57:51+00:00"
+    sent_at = "2026-08-25T15:57:49+00:00"
+    logged_key = message_key(pushed_at, "+15551234567", "hi")
+    seen = SeenMessages()
+    seen.note(logged_key, pushed_at, has_timestamp=False)
+
+    filed = {}
+    _listing(monkeypatch, [
+        {"handle": "message1", "path": "/org/bluez/obex/client/session0/message1",
+         "sender": "+15551234567", "body": "hi", "timestamp": sent_at,
+         "read": True, "status": "complete", "type": "sms-gsm",
+         "sender_phone_norm": "15551234567"},
+    ])
+    lst, sink = _Listener(), _Jsonl()
+    lst.seen_keys = seen
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink,
+                       remember_path=lambda k, p: filed.__setitem__(k, p)) == 0
+    assert logged_key in filed, "path must be reachable by the logged key"
+    assert filed[logged_key].endswith("message1")
+
+
+def test_find_reports_the_matched_key(monkeypatch):
+    """The sweep needs to know which key a message is already filed
+    under, not merely that it is."""
+    pushed_at = "2026-08-25T15:57:51+00:00"
+    logged_key = message_key(pushed_at, "+15551234567", "hi")
+    seen = SeenMessages()
+    seen.note(logged_key, pushed_at, has_timestamp=False)
+    listing_key = message_key("2026-08-25T15:57:49+00:00", "+15551234567", "hi")
+    assert seen.find(listing_key, "2026-08-25T16:26:02+00:00",
+                     has_timestamp=True) == logged_key
+
+
+def test_find_returns_none_for_an_unknown_message(monkeypatch):
+    seen = SeenMessages()
+    assert seen.find(message_key(None, "+15551234567", "hi"),
+                     "2026-08-25T15:57:51+00:00", has_timestamp=False) is None

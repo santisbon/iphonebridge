@@ -27,7 +27,6 @@ log = logging.getLogger(__name__)
 
 _ELLIPSIZE_END = Pango.EllipsizeMode.END
 
-
 def _unread_keys(thread: dict | None) -> list[str]:
     """Keys of the incoming messages in `thread` still marked unread."""
     if not thread:
@@ -36,9 +35,42 @@ def _unread_keys(thread: dict | None) -> list[str]:
             if not m["read"] and not m["outgoing"] and m.get("key")]
 
 
+def _clear_rows(listbox: Gtk.ListBox) -> None:
+    """Empty a list box, detaching row context menus first.
+
+    A popover attached with set_parent() is a child of its row. GTK4 has
+    no destroy signal to hook the cleanup onto, so a row removed while its
+    menu is still attached warns "still has children left" on finalize and
+    leaks the popover.
+    """
+    child = listbox.get_first_child()
+    while child is not None:
+        menu = getattr(child, "_ib_menu", None)
+        if menu is not None and menu.get_parent() is not None:
+            menu.unparent()
+        child = child.get_next_sibling()
+    listbox.remove_all()
+
+
 def _thread_key(ev: dict) -> str:
+    """Which conversation an event belongs to.
+
+    Grouped on the normalised number rather than the raw one, because the
+    two ends spell it differently: a sent message carries the recipient as
+    typed into the composer, while an incoming one carries whatever the
+    phone reports. "+1 (555) 123-4567" and "+15551234567" are one person,
+    and keying on the raw string put them in two threads.
+    """
+    return (ev.get("contact_name") or ev.get("sender_phone_norm")
+            or ev.get("sender_phone") or ev.get("sender_email")
+            or "(unknown)")
+
+
+def _thread_name(ev: dict) -> str:
+    """What to show for that conversation — the most readable form we
+    have, which is not the one it is grouped by."""
     return (ev.get("contact_name") or ev.get("sender_phone")
-            or ev.get("sender_phone_norm") or ev.get("sender_email")
+            or ev.get("sender_email") or ev.get("sender_phone_norm")
             or "(unknown)")
 
 
@@ -53,6 +85,10 @@ class ConversationsPage(Gtk.Box):
         self._composing_new = False
         self._select_next_sent = False
         self._rendered: list[dict] = []
+        # True while _rebuild_thread_list is restoring the selection
+        # it just cleared, so that bookkeeping is not mistaken for
+        # the user opening a conversation.
+        self._restoring_selection = False
 
         # The compose action lives in the window's single header bar (see
         # MainWindow._sync_header_action), the way Messages puts it there
@@ -194,7 +230,7 @@ class ConversationsPage(Gtk.Box):
         key = _thread_key(ev)
         thread = self._threads.get(key)
         if thread is None:
-            thread = {"key": key, "name": key,
+            thread = {"key": key, "name": _thread_name(ev),
                       "phone": ev.get("sender_phone")
                       or ev.get("sender_phone_norm")
                       or ev.get("sender_email") or key,
@@ -316,7 +352,18 @@ class ConversationsPage(Gtk.Box):
 
     def _rebuild_thread_list(self) -> None:
         selected = self._current
-        self._thread_list.remove_all()
+        # remove_all() clears the selection and select_row() puts it back,
+        # and both emit row-selected. Left unguarded that re-runs
+        # _on_thread_selected, which redraws the whole conversation — so a
+        # message that had just been appended got drawn a second time.
+        self._restoring_selection = True
+        try:
+            self._rebuild_rows(selected)
+        finally:
+            self._restoring_selection = False
+
+    def _rebuild_rows(self, selected: str | None) -> None:
+        _clear_rows(self._thread_list)
         order = sorted(self._threads.values(),
                        key=lambda t: t["last_at"], reverse=True)
         for thread in order:
@@ -353,18 +400,23 @@ class ConversationsPage(Gtk.Box):
                 self._thread_list.select_row(row)
 
     def _on_thread_selected(self, _list, row) -> None:
-        if row is None:
+        if row is None or self._restoring_selection:
             return
         if self._composing_new:
             self._leave_new_mode()
-        self._current = row.thread_key
-        thread = self._threads.get(self._current)
+        self._open_thread(row.thread_key)
+
+    def _open_thread(self, key: str) -> None:
+        """Show a conversation. Shared by picking a row and by landing in
+        a thread the moment a first message to it is sent."""
+        self._current = key
+        thread = self._threads.get(key)
         self._entry.set_sensitive(True)
         self._send_btn.set_sensitive(True)
         self._convo_title.set_label(thread["name"] if thread else "")
         self._convo_header.set_visible(True)
         self._stack.set_visible_child_name("messages")
-        self._render_thread(self._current)
+        self._render_thread(key)
         self._scroll_to_bottom()
         self._mark_thread_read(thread)
 
@@ -376,7 +428,7 @@ class ConversationsPage(Gtk.Box):
         Everything that changes what is on screen goes through here or
         _append_message, so grouping and day rules stay consistent.
         """
-        self._msg_list.remove_all()
+        _clear_rows(self._msg_list)
         self._rendered = []
         thread = self._threads.get(key)
         if thread is None:
@@ -497,6 +549,8 @@ class ConversationsPage(Gtk.Box):
         button.connect("clicked", activate)
         popover.set_child(button)
         popover.set_parent(widget)
+        # Held so _clear_rows can detach it before the row dies.
+        widget._ib_menu = popover
 
         def on_right_click(_gesture, _n_press, x, y):
             rect = Gdk.Rectangle()
@@ -604,5 +658,7 @@ class ConversationsPage(Gtk.Box):
         if self._select_next_sent:
             self._select_next_sent = False
             key = _thread_key(ev)
-            self._current = key
             self._rebuild_thread_list()
+            # Explicit, because restoring the selection no longer opens the
+            # thread on its own.
+            self._open_thread(key)
