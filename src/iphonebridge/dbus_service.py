@@ -80,6 +80,7 @@ class MessagesService(dbus.service.Object):
         ancs=None,
         on_sent=None,
         on_refresh_contacts=None,
+        on_delete_local=None,
     ):
         super().__init__(bus_name, OBJECT_PATH)
         self.sessions = sessions
@@ -91,6 +92,9 @@ class MessagesService(dbus.service.Object):
         # on_refresh_contacts() -> int — daemon hook to re-pull the phonebook
         # on its own PBAP session and return the cached contact count.
         self._on_refresh_contacts = on_refresh_contacts
+        # on_delete_local(keys) -> int — daemon hook removing messages from
+        # local history (the phone is never touched; iOS ignores MAP deletes).
+        self._on_delete_local = on_delete_local
 
     # ---- Messages1 ------------------------------------------------------
 
@@ -163,6 +167,29 @@ class MessagesService(dbus.service.Object):
         # session objects while we go on holding their paths, and a handle
         # that is merely non-None says nothing about the link.
         return self.sessions.alive()
+
+    @dbus.service.method(IFACE, in_signature="as", out_signature="i")
+    def DeleteLocal(self, keys) -> int:
+        """Delete messages from local history by content key. Returns the
+        number of events removed.
+
+        Local only. iOS accepts and ignores the MAP Deleted flag, so there
+        is no honest way to delete on the phone from here.
+        """
+        keys = [str(k) for k in keys]
+        log.info("DBus DeleteLocal called for %d key(s)", len(keys))
+        if self._on_delete_local is None:
+            raise dbus.exceptions.DBusException(
+                "daemon exposed no delete hook",
+                name="me.santisbon.iphonebridge.Error.NotReady",
+            )
+        try:
+            return int(self._on_delete_local(keys))
+        except Exception as e:
+            log.exception("DeleteLocal failed")
+            raise dbus.exceptions.DBusException(
+                str(e), name="me.santisbon.iphonebridge.Error.DeleteFailed"
+            )
 
     @dbus.service.method(IFACE, in_signature="", out_signature="i")
     def RefreshContacts(self) -> int:

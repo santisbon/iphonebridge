@@ -250,3 +250,31 @@ def test_message_key_survives_listing_truncation():
     assert message_key("t", "+1", full) == message_key("t", "+1", truncated)
     # Different messages at the same timestamp stay distinct
     assert message_key("t", "+1", "Alpha message") != message_key("t", "+1", "Beta message")
+
+
+def test_drop_events_by_key_and_tombstones(tmp_path):
+    """Local delete removes events and remembers them, so the startup
+    sweep cannot re-add a message still sitting on the phone."""
+    import json
+    from iphonebridge.events import (
+        deleted_keys, drop_events_by_key, message_key, record_deleted_keys)
+
+    log = tmp_path / "events.jsonl"
+    rows = [
+        {"kind": "sms_received", "timestamp": "t1", "sender_phone": "+1", "body": "keep"},
+        {"kind": "sms_received", "timestamp": "t2", "sender_phone": "+1", "body": "drop"},
+        {"kind": "sms_sent", "timestamp": "t3", "sender_phone": "+1", "body": "keep too"},
+    ]
+    log.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    doomed = message_key("t2", "+1", "drop")
+    assert drop_events_by_key(log, {doomed}) == 1
+    left = [json.loads(x) for x in log.read_text().splitlines()]
+    assert [e["body"] for e in left] == ["keep", "keep too"]
+    # deleting nothing rewrites nothing
+    assert drop_events_by_key(log, {message_key("tX", "+9", "absent")}) == 0
+
+    tomb = tmp_path / "deleted-keys.txt"
+    record_deleted_keys(tomb, [doomed, doomed])
+    assert deleted_keys(tomb) == {doomed}
+    assert deleted_keys(tmp_path / "absent.txt") == set()

@@ -33,8 +33,11 @@ from iphonebridge.contacts import ContactsResolver, pull_phonebook
 from iphonebridge.dbus_service import MessagesService, claim_bus_name
 from iphonebridge.events import (
     SmsEvent,
+    deleted_keys,
+    drop_events_by_key,
     logged_sms_keys,
     message_key,
+    record_deleted_keys,
     sms_sent_event,
 )
 from iphonebridge.hfp.events import CallEvent
@@ -179,7 +182,8 @@ class Daemon:
                 ancs=self.ancs,
                 on_sent=self._record_sent,
                 on_refresh_contacts=lambda: self._refresh_contacts(
-                    raise_on_error=True))
+                    raise_on_error=True),
+                on_delete_local=self._delete_local)
             log.info("DBus service ready: me.santisbon.iphonebridge")
         except Exception:
             log.exception("DBus service registration failed — continuing "
@@ -321,7 +325,8 @@ class Daemon:
                 sessions=self.sessions,
                 on_sms=self._fanout,
                 resolve_contact=lambda raw: self.contacts.resolve(raw),
-                seen_keys=logged_sms_keys(config.EVENTS_JSONL),
+                seen_keys=(logged_sms_keys(config.EVENTS_JSONL)
+                           | deleted_keys(config.DELETED_KEYS)),
             )
             self.listener.start()
 
@@ -344,6 +349,24 @@ class Daemon:
         log.info("=== iphonebridge ready (contacts=%d, sinks=%s) ===",
                  self.contacts.count(),
                  [s.name for s in self.sinks])
+
+    def _delete_local(self, keys: list[str]) -> int:
+        """Remove messages from local history and remember them as deleted.
+
+        Local only: iOS ignores the MAP Deleted flag (see README
+        limitations), so this never touches the phone. The tombstones are
+        what stop the startup inbox sweep from re-adding a message that is
+        still in the iPhone's inbox window.
+        """
+        keyset = {k for k in keys if k}
+        if not keyset:
+            return 0
+        record_deleted_keys(config.DELETED_KEYS, keyset)
+        if self.listener is not None:
+            self.listener.seen_keys |= keyset
+        removed = drop_events_by_key(config.EVENTS_JSONL, keyset)
+        log.info("local delete: %d message(s) removed from history", removed)
+        return removed
 
     def _refresh_contacts(self, *, raise_on_error: bool = False) -> int:
         """Pull phonebook from iPhone + reload in-process cache. Idempotent.

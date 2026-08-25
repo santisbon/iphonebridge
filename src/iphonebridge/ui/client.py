@@ -135,6 +135,10 @@ class DaemonClient(GObject.Object):
 
     # ---- Messages1 ------------------------------------------------------
 
+    def delete_local(self, keys: list[str]) -> int:
+        """Remove messages from local history. Returns the count removed."""
+        return int(self._iface(MESSAGES_IFACE).DeleteLocal(keys, timeout=20))
+
     def profile_status(self) -> dict:
         """Per-profile liveness from the daemon: {"map","pbap","ancs"} -> bool.
         Empty dict when the daemon is unreachable or predates GetStatus."""

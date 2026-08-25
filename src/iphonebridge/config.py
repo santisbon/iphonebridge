@@ -71,6 +71,9 @@ _state_home = Path(
 
 STATE_DIR: Path = _state_home
 EVENTS_JSONL: Path = _state_home / "events.jsonl"
+# Keys of messages deleted from local history. Kept forever: without it
+# the startup inbox sweep would re-add anything still on the phone.
+DELETED_KEYS: Path = _state_home / "deleted-keys.txt"
 CONTACTS_DB: Path = _state_home / "contacts.sqlite"
 
 def ensure_dirs() -> None:

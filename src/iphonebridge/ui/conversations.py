@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import logging
 
-from gi.repository import GLib, Gtk, Pango
+from gi.repository import Gdk, GLib, Gtk, Pango
 
 from iphonebridge.contacts import ContactsResolver
+from iphonebridge.events import message_key
+from iphonebridge.ui.client import dbus_error_text
 from iphonebridge.ui.util import event_ts, format_ts, resolve_recipient
 from iphonebridge.ui.util import pin_popover_height as _pin_popover_height
 
@@ -145,7 +147,11 @@ class ConversationsPage(Gtk.Box):
                       "messages": []}
             self._threads[key] = thread
         msg = {"body": ev.get("body") or "",
-               "ts": event_ts(ev), "outgoing": outgoing}
+               "ts": event_ts(ev), "outgoing": outgoing,
+               "key": message_key(
+                   ev.get("timestamp"),
+                   ev.get("sender_phone") or ev.get("sender_email"),
+                   ev.get("body"))}
         thread["messages"].append(msg)
         # Newest message wins the thread's sort key and preview even if
         # events were ingested out of chronological order (e.g. a seeded
@@ -252,6 +258,9 @@ class ConversationsPage(Gtk.Box):
                                   ellipsize=_ELLIPSIZE_END,
                                   css_classes=["dim-label"]))
             row.set_child(box)
+            self._attach_delete_menu(
+                row, "Delete conversation",
+                lambda key=thread["key"]: self._delete_thread(key))
             self._thread_list.append(row)
             if thread["key"] == selected:
                 self._thread_list.select_row(row)
@@ -292,6 +301,10 @@ class ConversationsPage(Gtk.Box):
                                     css_classes=["dim-label", "caption"]))
         outer.append(bubble)
         row.set_child(outer)
+        if msg.get("key"):
+            self._attach_delete_menu(
+                row, "Delete message",
+                lambda key=msg["key"]: self._delete_messages([key]))
         self._msg_list.append(row)
 
     def _scroll_to_bottom(self) -> None:
@@ -300,6 +313,76 @@ class ConversationsPage(Gtk.Box):
             adj.set_value(adj.get_upper())
             return False
         GLib.idle_add(_scroll)
+
+    # ---- delete ---------------------------------------------------------
+
+    def _attach_delete_menu(self, widget, label: str, on_delete) -> None:
+        """Right-click (or long-press) a row for a one-item delete menu."""
+        popover = Gtk.Popover(has_arrow=True, autohide=True)
+        button = Gtk.Button(label=label, css_classes=["flat"],
+                            margin_top=4, margin_bottom=4,
+                            margin_start=4, margin_end=4)
+
+        def activate(_b):
+            popover.popdown()
+            on_delete()
+
+        button.connect("clicked", activate)
+        popover.set_child(button)
+        popover.set_parent(widget)
+
+        def on_right_click(_gesture, _n_press, x, y):
+            rect = Gdk.Rectangle()
+            rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
+            popover.set_pointing_to(rect)
+            popover.popup()
+
+        gesture = Gtk.GestureClick(button=3)
+        gesture.connect("pressed", on_right_click)
+        widget.add_controller(gesture)
+
+        longpress = Gtk.GestureLongPress()
+        longpress.connect("pressed", lambda _g, _x, _y: popover.popup())
+        widget.add_controller(longpress)
+
+    def _delete_thread(self, thread_key: str) -> None:
+        thread = self._threads.get(thread_key)
+        if thread is None:
+            return
+        keys = [m["key"] for m in thread["messages"] if m.get("key")]
+        self._delete_messages(keys, thread_key=thread_key)
+
+    def _delete_messages(self, keys: list[str], thread_key: str | None = None) -> None:
+        """Delete from local history. The phone is never touched: iOS
+        ignores MAP deletes (see README limitations)."""
+        if not keys:
+            return
+        try:
+            removed = self._client.delete_local(keys)
+        except Exception as e:
+            self._toast(f"Delete failed: {dbus_error_text(e)}")
+            return
+        gone = set(keys)
+        for key, thread in list(self._threads.items()):
+            thread["messages"] = [m for m in thread["messages"]
+                                  if m.get("key") not in gone]
+            if not thread["messages"]:
+                del self._threads[key]
+                if self._current == key:
+                    self._current = None
+                    self._stack.set_visible_child_name("empty")
+                    self._entry.set_sensitive(False)
+                    self._send_btn.set_sensitive(False)
+            else:
+                thread["last_ts"] = max(m["ts"] for m in thread["messages"])
+        self._rebuild_thread_list()
+        if self._current and self._current in self._threads:
+            self._msg_list.remove_all()
+            for m in sorted(self._threads[self._current]["messages"],
+                            key=lambda m: m["ts"]):
+                self._append_bubble(m)
+        noun = "message" if removed == 1 else "messages"
+        self._toast(f"Deleted {removed} {noun} from this computer")
 
     # ---- send ----------------------------------------------------------
 

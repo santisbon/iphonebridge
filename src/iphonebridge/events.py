@@ -36,6 +36,74 @@ def message_key(timestamp, sender: str | None, body: str | None) -> str:
     return "\x1f".join((ts, (sender or "").strip().lower(), head))
 
 
+def deleted_keys(path) -> set[str]:
+    """Keys the user deleted from local history.
+
+    Seeds the same guard as logged_sms_keys so a deleted message is not
+    re-added by the startup inbox sweep while it is still on the phone.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            return {line.rstrip("\n") for line in f if line.strip()}
+    except OSError:
+        return set()
+
+
+def record_deleted_keys(path, keys) -> None:
+    """Append tombstones. Idempotent; duplicates are harmless."""
+    keys = [k for k in keys if k]
+    if not keys:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        for k in keys:
+            f.write(k + "\n")
+
+
+def drop_events_by_key(path, keys: set[str]) -> int:
+    """Rewrite the event log without the given messages. Returns the count
+    removed.
+
+    The log is append-only in normal operation, so this is the one place
+    that rewrites it. Events appended while the rewrite runs are carried
+    over, and the swap is atomic.
+    """
+    import json
+    import os
+    if not keys:
+        return 0
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return 0
+    kept, removed = [], 0
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            kept.append(line)
+            continue
+        if e.get("kind") in ("sms_received", "sms_sent") and message_key(
+                e.get("timestamp"),
+                e.get("sender_phone") or e.get("sender_email"),
+                e.get("body")) in keys:
+            removed += 1
+            continue
+        kept.append(line)
+    if not removed:
+        return 0
+    tmp = str(path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(kept)
+    with open(path, encoding="utf-8") as f:
+        now = f.readlines()
+    if len(now) > len(lines):          # appended mid-rewrite
+        with open(tmp, "a", encoding="utf-8") as f:
+            f.writelines(now[len(lines):])
+    os.replace(tmp, path)
+    return removed
+
+
 def logged_sms_keys(path) -> set[str]:
     """Identities of every sms_received event already in the JSONL log.
 
