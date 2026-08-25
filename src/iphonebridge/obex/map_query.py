@@ -37,7 +37,7 @@ def list_recent_messages(
 ) -> list[dict[str, Any]]:
     """Return the most recent `limit` messages in `folder` as normalized dicts.
 
-    Each dict has: handle, sender, sender_phone, sender_phone_norm,
+    Each dict has: handle, path, sender, sender_phone, sender_phone_norm,
     body, timestamp, read, status, type, folder.
     """
     map_iface = obex(session_path, "org.bluez.obex.MessageAccess1")
@@ -65,6 +65,9 @@ def list_recent_messages(
         ts = parse_map_timestamp(raw.get("Timestamp"))
         out.append({
             "handle": path_s.rsplit("/", 1)[-1],
+            # Full object path: marking a message read means writing back
+            # to this object, and the handle alone cannot address it.
+            "path": path_s,
             "sender": sender_raw or "",
             "sender_phone_norm": normalize_phone(sender_raw) or "",
             "body": str(raw.get("Subject", "")) or "",

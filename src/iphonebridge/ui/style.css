@@ -53,6 +53,7 @@
 /* ---- shared text roles ------------------------------------------------ */
 
 .ib-name    { font-weight: 600; }
+.ib-unread  { color: var(--ib-blue); font-size: 0.62em; }
 .ib-preview { color: var(--ib-label-2); font-size: 0.92em; }
 .ib-time    { color: var(--ib-label-2); font-size: 0.78em;
               font-feature-settings: "tnum" 1; }
@@ -78,6 +79,7 @@
  * and the delete menu turns invisible on a light background. */
 .ib-threads > row:selected { background: var(--ib-blue); }
 .ib-threads > row:selected > box label { color: #FFFFFF; }
+.ib-threads > row:selected > box label.ib-unread { color: #FFFFFF; }
 .ib-threads > row:selected > box label.ib-preview,
 .ib-threads > row:selected > box label.ib-time {
   color: rgba(255, 255, 255, 0.72);

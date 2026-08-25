@@ -23,19 +23,22 @@ import logging
 import signal
 from datetime import datetime
 
+import dbus
 from gi.repository import GLib
 
 from iphonebridge import bluez_setup, config
 from iphonebridge.ancs.client import AncsClient
 from iphonebridge.ancs.events import AncsEvent
-from iphonebridge.bus import main_loop
+from iphonebridge.bus import main_loop, session_bus
 from iphonebridge.contacts import ContactsResolver, pull_phonebook
 from iphonebridge.dbus_service import MessagesService, claim_bus_name
 from iphonebridge.events import (
+    SeenEvent,
     SmsEvent,
     deleted_keys,
     drop_events_by_key,
     logged_messages,
+    mark_logged_read,
     message_key,
     record_deleted_keys,
     sms_sent_event,
@@ -74,7 +77,7 @@ def _seed_seen_messages():
 
 
 def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
-                limit: int = 50) -> int:
+                limit: int = 50, remember_path=None) -> int:
     """Seed conversation history with the inbox window iOS serves.
 
     A fresh install starts with an empty event log, and iOS only pushes
@@ -117,6 +120,11 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
             raw_type=str(m.get("type") or "") or None,
         )
         key = message_key(ts, sender or None, event.body)
+        # Register the path even for messages we skip: the whole point of
+        # a listing is that it is the only place read-state can be written
+        # back to, and a skipped message is one we already have.
+        if remember_path is not None and m.get("path"):
+            remember_path(key, str(m["path"]))
         # seen_at is the sweep's own clock here, but a listing entry has a
         # real timestamp, so it is that which places this message against
         # anything already pushed live.
@@ -143,6 +151,12 @@ class Daemon:
         self.ancs: AncsClient | None = None
         self.hfp: HfpManager | None = None
         self._contacts_refresh_id: int | None = None
+        # message key -> live obex object path, and back. Rebuilt every
+        # session rather than persisted: obexd renumbers these objects on
+        # every restart, so a stored path is a lie by the next boot.
+        self._paths: dict[str, str] = {}
+        self._keys_by_path: dict[str, str] = {}
+        self._read_watch = None
         self._session_retry_id: int | None = None
         self._session_health_id: int | None = None
         self._bus_name = None
@@ -198,7 +212,8 @@ class Daemon:
                 on_sent=self._record_sent,
                 on_refresh_contacts=lambda: self._refresh_contacts(
                     raise_on_error=True),
-                on_delete_local=self._delete_local)
+                on_delete_local=self._delete_local,
+                on_mark_read=self.mark_read)
             log.info("DBus service ready: me.santisbon.iphonebridge")
         except Exception:
             log.exception("DBus service registration failed — continuing "
@@ -343,6 +358,7 @@ class Daemon:
                 seen_keys=_seed_seen_messages(),
             )
             self.listener.start()
+        self._watch_read_state()
 
         # Seed history with whatever inbox window iOS serves — without
         # this, a fresh install shows an empty Messages tab until the
@@ -350,7 +366,9 @@ class Daemon:
         try:
             jsonl = next((sk for sk in self.sinks if sk.name == "jsonl"), None)
             if jsonl is not None:
-                sweep_inbox(self.sessions, self.listener, self.contacts, jsonl)
+                sweep_inbox(self.sessions, self.listener,
+                            self.contacts, jsonl,
+                            remember_path=self._remember_path)
         except Exception:
             log.exception("inbox sweep failed — history stays as-is")
 
@@ -438,7 +456,92 @@ class Daemon:
 
     # ---- internals -------------------------------------------------------
 
+    # ---- read-state ------------------------------------------------
+
+    def _remember_path(self, key: str, path: str) -> None:
+        old = self._paths.get(key)
+        if old is not None and old != path:
+            self._keys_by_path.pop(old, None)
+        self._paths[key] = path
+        self._keys_by_path[path] = key
+
+    def _watch_read_state(self) -> None:
+        """Notice when the iPhone marks a message read.
+
+        The libnotify sink already watches this per popup, but only for as
+        long as the popup is up, which is why reading on the phone later
+        went unnoticed. This one lives for the life of the daemon.
+        """
+        if self._read_watch is not None:
+            return
+        self._read_watch = session_bus.add_signal_receiver(
+            self._on_message_props,
+            dbus_interface="org.freedesktop.DBus.Properties",
+            signal_name="PropertiesChanged",
+            path_keyword="path",
+        )
+
+    def _on_message_props(self, iface, changed, _invalidated, path=None) -> None:
+        if str(iface) != "org.bluez.obex.Message1":
+            return
+        if not bool(changed.get("Read", False)):
+            return
+        key = self._keys_by_path.get(str(path))
+        if key is None:
+            return
+        # Nothing changed means this is the echo of our own writeback, so
+        # there is nothing to announce.
+        if mark_logged_read(config.EVENTS_JSONL, {key}):
+            log.info("iPhone marked a message read")
+            self._notify_seen([key])
+
+    def mark_read(self, keys) -> int:
+        """Mark messages read here and on the iPhone. Returns how many.
+
+        Only messages obexd still exports can be written back, since the
+        path is the only handle on them. Anything older is marked locally
+        so the app agrees with itself, and the phone keeps its own state.
+        """
+        keys = [str(k) for k in keys if k]
+        if not keys:
+            return 0
+        pushed = 0
+        for key in keys:
+            path = self._paths.get(key)
+            if path is None:
+                continue
+            try:
+                dbus.Interface(
+                    session_bus.get_object("org.bluez.obex", path),
+                    "org.freedesktop.DBus.Properties",
+                ).Set("org.bluez.obex.Message1", "Read", dbus.Boolean(True))
+                pushed += 1
+            except dbus.exceptions.DBusException as e:
+                log.debug("mark-read failed for %s: %s", path,
+                          e.get_dbus_name())
+        changed = mark_logged_read(config.EVENTS_JSONL, set(keys))
+        log.info("mark read: %d local, %d pushed to the iPhone",
+                 changed, pushed)
+        if changed:
+            self._notify_seen(keys)
+        return changed
+
+    def _notify_seen(self, keys) -> None:
+        """Announce a read-state change on D-Bus only.
+
+        Deliberately not through _fanout: a SeenEvent is not a message,
+        and the JSONL sink would append a line for every read.
+        """
+        if self._dbus_service is not None:
+            self._dbus_service.emit_message(SeenEvent(tuple(keys)))
+
     def _fanout(self, event: SmsEvent) -> None:
+        if event.kind == "sms_received" and event.message_path:
+            self._remember_path(
+                message_key(event.timestamp,
+                            event.sender_phone or event.sender_email,
+                            event.body),
+                event.message_path)
         for sink in self.sinks:
             try:
                 sink.handle(event)

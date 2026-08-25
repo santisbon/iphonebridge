@@ -397,3 +397,85 @@ class TestParseMapTimestampZones:
     def test_garbage_is_none(self):
         for bad in (None, "", "nope", "2026-08-04T20:54:41"):
             assert parse_map_timestamp(bad) is None
+
+
+class TestMarkLoggedRead:
+    """Read-state is persisted in the log because the Message1 objects it
+    comes from are transient: obexd drops them when the OBEX session
+    restarts, taking their Read property with them."""
+
+    @staticmethod
+    def _log(tmp_path, entries):
+        import json
+        p = tmp_path / "events.jsonl"
+        p.write_text("\n".join(json.dumps(e) for e in entries) + "\n")
+        return p
+
+    @staticmethod
+    def _msg(body, read=False, ts=None, sender="+15551234567"):
+        return {"kind": "sms_received", "sender_phone": sender, "body": body,
+                "timestamp": ts, "is_read": read,
+                "seen_at": "2026-08-25T15:00:00+00:00"}
+
+    def _read_back(self, path):
+        import json
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
+    def test_marks_the_named_message(self, tmp_path):
+        from iphonebridge.events import mark_logged_read
+        log = self._log(tmp_path, [self._msg("hi"), self._msg("bye")])
+        key = message_key(None, "+15551234567", "hi")
+        assert mark_logged_read(log, {key}) == 1
+        rows = self._read_back(log)
+        assert rows[0]["is_read"] is True
+        assert rows[1]["is_read"] is False
+
+    def test_already_read_is_not_counted_again(self, tmp_path):
+        from iphonebridge.events import mark_logged_read
+        log = self._log(tmp_path, [self._msg("hi", read=True)])
+        key = message_key(None, "+15551234567", "hi")
+        assert mark_logged_read(log, {key}) == 0
+
+    def test_unknown_key_changes_nothing(self, tmp_path):
+        from iphonebridge.events import mark_logged_read
+        log = self._log(tmp_path, [self._msg("hi")])
+        before = log.read_text()
+        assert mark_logged_read(log, {"nope"}) == 0
+        assert log.read_text() == before
+
+    def test_empty_key_set_is_a_no_op(self, tmp_path):
+        from iphonebridge.events import mark_logged_read
+        log = self._log(tmp_path, [self._msg("hi")])
+        assert mark_logged_read(log, set()) == 0
+
+    def test_missing_file_is_survivable(self, tmp_path):
+        from iphonebridge.events import mark_logged_read
+        assert mark_logged_read(tmp_path / "absent.jsonl", {"k"}) == 0
+
+    def test_other_event_kinds_are_left_alone(self, tmp_path):
+        from iphonebridge.events import mark_logged_read
+        note = {"kind": "ancs_notification", "app_name": "Mail",
+                "seen_at": "2026-08-25T15:00:00+00:00"}
+        log = self._log(tmp_path, [note, self._msg("hi")])
+        assert mark_logged_read(log, {message_key(None, "+15551234567", "hi")}) == 1
+        rows = self._read_back(log)
+        assert rows[0] == note
+        assert len(rows) == 2
+
+    def test_key_matching_survives_timestamp_respelling(self, tmp_path):
+        """The stored timestamp is normalised into the key, so a message
+        logged with a local offset is still addressable."""
+        from iphonebridge.events import mark_logged_read
+        log = self._log(tmp_path,
+                        [self._msg("hi", ts="2026-08-25T10:00:00-05:00")])
+        key = message_key("2026-08-25T15:00:00+00:00", "+15551234567", "hi")
+        assert mark_logged_read(log, {key}) == 1
+
+
+class TestSeenEvent:
+    def test_carries_keys_and_never_looks_like_a_message(self):
+        from iphonebridge.events import SeenEvent
+        d = SeenEvent(("a", "b")).to_dict()
+        assert d["kind"] == "sms_seen"
+        assert d["keys"] == ["a", "b"]
+        assert "body" not in d

@@ -23,6 +23,7 @@ Calls1 (HFP, via oFono):
 Events1 (live event feed for separate UIs):
   • MessageReceived(dict)   [signal] — a new SMS/iMessage arrived
   • MessageSent(dict)       [signal] — a message we sent via Send()
+  • MarkRead(as) -> u       — mark messages read here and on the phone
   • MessageSeen(dict)       [signal] — a message's read-state changed
   • AncsNotification(dict)  [signal] — a per-app ANCS notification
 
@@ -66,6 +67,9 @@ def _variant_dict(d: dict) -> dbus.Dictionary:
             out[k] = dbus.Int64(v)
         elif isinstance(v, float):
             out[k] = dbus.Double(v)
+        elif isinstance(v, (list, tuple)):
+            out[k] = dbus.Array([dbus.String(str(x)) for x in v],
+                                signature="s")
         else:
             out[k] = dbus.String(str(v))
     return out
@@ -81,6 +85,7 @@ class MessagesService(dbus.service.Object):
         on_sent=None,
         on_refresh_contacts=None,
         on_delete_local=None,
+        on_mark_read=None,
     ):
         super().__init__(bus_name, OBJECT_PATH)
         self.sessions = sessions
@@ -95,6 +100,10 @@ class MessagesService(dbus.service.Object):
         # on_delete_local(keys) -> int — daemon hook removing messages from
         # local history (the phone is never touched; iOS ignores MAP deletes).
         self._on_delete_local = on_delete_local
+        # on_mark_read(keys) -> int — daemon hook marking messages read
+        # here and, where the message is still exported by obexd, on the
+        # iPhone too.
+        self._on_mark_read = on_mark_read
 
     # ---- Messages1 ------------------------------------------------------
 
@@ -189,6 +198,30 @@ class MessagesService(dbus.service.Object):
             log.exception("DeleteLocal failed")
             raise dbus.exceptions.DBusException(
                 str(e), name="me.santisbon.iphonebridge.Error.DeleteFailed"
+            )
+
+    @dbus.service.method(IFACE, in_signature="as", out_signature="i")
+    def MarkRead(self, keys) -> int:
+        """Mark messages read by content key. Returns how many changed.
+
+        Unlike deletion, iOS honours this: the MAP read flag is written
+        back to the phone for any message obexd still exports. Older
+        messages are marked locally only, since the object path is the
+        only way to address one and obexd drops those between sessions.
+        """
+        keys = [str(k) for k in keys]
+        log.info("DBus MarkRead called for %d key(s)", len(keys))
+        if self._on_mark_read is None:
+            raise dbus.exceptions.DBusException(
+                "daemon exposed no mark-read hook",
+                name="me.santisbon.iphonebridge.Error.NotReady",
+            )
+        try:
+            return int(self._on_mark_read(keys))
+        except Exception as e:
+            log.exception("MarkRead failed")
+            raise dbus.exceptions.DBusException(
+                str(e), name="me.santisbon.iphonebridge.Error.MarkReadFailed"
             )
 
     @dbus.service.method(IFACE, in_signature="", out_signature="i")

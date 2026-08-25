@@ -33,10 +33,10 @@ def _at(minutes: int) -> str:
 
 
 def _sms(kind: str, name: str | None, phone: str, body: str,
-         minutes: int) -> dict:
+         minutes: int, *, read: bool = True) -> dict:
     ev = {"kind": kind, "contact_name": name, "sender_phone": phone,
           "sender_phone_norm": phone.lstrip("+"), "body": body,
-          "seen_at": _at(minutes)}
+          "is_read": read, "seen_at": _at(minutes)}
     # Only a sent message gets a `timestamp`, mirroring the daemon: BlueZ
     # exports an MNS-pushed message with a property set carrying no
     # Timestamp, so an incoming one falls back to seen_at. Both are UTC,
@@ -63,14 +63,15 @@ def events() -> list[dict]:
              "ok moving now", 0),
         _sms("sms_sent", "Dana Whitfield", "+15550138",
              "see you there", 3),
-        # A long single message, to exercise wrapping and the width cap.
+        # Left unread, so the conversation list shows both states: this
+        # one and the number below carry the accent dot.
         _sms("sms_received", "Margaret Ellison", "+15550172",
              "Reminder that the quarterly numbers are due Thursday morning, "
              "and I still need the revised figures from your side before I "
-             "can close the deck.", -220),
+             "can close the deck.", -220, read=False),
         # An unnamed number, the case sidebar avatars would break on.
         _sms("sms_received", None, "+15550196",
-             "Your verification code is 481502.", -90),
+             "Your verification code is 481502.", -90, read=False),
     ]
     notes = [
         ("Slack", "Design channel",

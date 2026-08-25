@@ -279,6 +279,72 @@ class SeenMessages(set):
         return False
 
 
+def mark_logged_read(path, keys) -> int:
+    """Set is_read on logged messages. Returns how many changed.
+
+    Read-state has to live in the log, not be read back from BlueZ: the
+    Message1 objects it comes from are transient, and obexd drops them
+    whenever the OBEX session restarts, taking their Read property with
+    them. Same atomic rewrite as drop_events_by_key, since this is the
+    other place that touches an otherwise append-only file.
+    """
+    import json
+    import os
+    keys = set(keys)
+    if not keys:
+        return 0
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return 0
+    out, changed = [], 0
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            out.append(line)
+            continue
+        if (e.get("kind") == "sms_received" and not e.get("is_read")
+                and message_key(
+                    e.get("timestamp"),
+                    e.get("sender_phone") or e.get("sender_email"),
+                    e.get("body")) in keys):
+            e["is_read"] = True
+            out.append(json.dumps(e) + "\n")
+            changed += 1
+        else:
+            out.append(line)
+    if not changed:
+        return 0
+    tmp = str(path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(out)
+    with open(path, encoding="utf-8") as f:
+        now = f.readlines()
+    if len(now) > len(lines):          # appended mid-rewrite
+        with open(tmp, "a", encoding="utf-8") as f:
+            f.writelines(now[len(lines):])
+    os.replace(tmp, path)
+    return changed
+
+
+@dataclass(slots=True)
+class SeenEvent:
+    """A read-state change, addressed by message key.
+
+    Deliberately not an SmsEvent: this is not a message and must never
+    reach the JSONL sink, or every read would append a line to a log whose
+    other entries are messages.
+    """
+
+    keys: tuple[str, ...]
+    kind: str = "sms_seen"
+
+    def to_dict(self) -> dict:
+        return {"kind": self.kind, "keys": list(self.keys)}
+
+
 def logged_messages(path) -> SeenMessages:
     """Seed a SeenMessages from every sms_received already in the log.
 

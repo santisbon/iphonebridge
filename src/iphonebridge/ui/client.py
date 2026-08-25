@@ -139,6 +139,10 @@ class DaemonClient(GObject.Object):
         """Remove messages from local history. Returns the count removed."""
         return int(self._iface(MESSAGES_IFACE).DeleteLocal(keys, timeout=20))
 
+    def mark_read(self, keys: list[str]) -> int:
+        """Mark messages read locally and, where possible, on the iPhone."""
+        return int(self._iface(MESSAGES_IFACE).MarkRead(keys, timeout=20))
+
     def profile_status(self) -> dict:
         """Per-profile liveness from the daemon: {"map","pbap","ancs"} -> bool.
         Empty dict when the daemon is unreachable or predates GetStatus."""

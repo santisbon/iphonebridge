@@ -28,6 +28,14 @@ log = logging.getLogger(__name__)
 _ELLIPSIZE_END = Pango.EllipsizeMode.END
 
 
+def _unread_keys(thread: dict | None) -> list[str]:
+    """Keys of the incoming messages in `thread` still marked unread."""
+    if not thread:
+        return []
+    return [m["key"] for m in thread["messages"]
+            if not m["read"] and not m["outgoing"] and m.get("key")]
+
+
 def _thread_key(ev: dict) -> str:
     return (ev.get("contact_name") or ev.get("sender_phone")
             or ev.get("sender_phone_norm") or ev.get("sender_email")
@@ -170,6 +178,7 @@ class ConversationsPage(Gtk.Box):
         self._update_link_pill()
         client.connect("message-received", self._on_incoming)
         client.connect("message-sent", self._on_sent_event)
+        client.connect("message-seen", self._on_seen)
         client.connect("availability-changed",
                        lambda *_: self._update_link_pill())
 
@@ -199,6 +208,10 @@ class ConversationsPage(Gtk.Box):
                # written before that carry a local offset, and mixing the
                # two interleaves replies into the middle of a thread.
                "ts": stamp, "at": ts_key(stamp), "outgoing": outgoing,
+               # Outgoing messages are read by definition; incoming carry
+               # whatever the log says, which the daemon keeps in step
+               # with the phone.
+               "read": bool(outgoing or ev.get("is_read")),
                "key": message_key(
                    ev.get("timestamp"),
                    ev.get("sender_phone") or ev.get("sender_email"),
@@ -309,6 +322,12 @@ class ConversationsPage(Gtk.Box):
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
             top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            unread = _unread_keys(thread)
+            # A filled accent dot, the way Messages marks a conversation
+            # with something waiting in it.
+            dot = Gtk.Label(label="\u25cf", css_classes=["ib-unread"],
+                            valign=Gtk.Align.CENTER, visible=bool(unread))
+            top.append(dot)
             top.append(Gtk.Label(label=thread["name"], xalign=0, hexpand=True,
                                  css_classes=["ib-name"],
                                  ellipsize=_ELLIPSIZE_END))
@@ -344,6 +363,7 @@ class ConversationsPage(Gtk.Box):
         self._stack.set_visible_child_name("messages")
         self._render_thread(self._current)
         self._scroll_to_bottom()
+        self._mark_thread_read(thread)
 
     # ---- message bubbles ----------------------------------------------
 
@@ -406,6 +426,39 @@ class ConversationsPage(Gtk.Box):
             adj.set_value(adj.get_upper())
             return False
         GLib.idle_add(_scroll)
+
+    # ---- read state ------------------------------------------------------
+
+    def _mark_thread_read(self, thread: dict | None) -> None:
+        """Opening a conversation is reading it.
+
+        Marked locally first so the dot clears immediately; the daemon
+        writes back to the iPhone for any message obexd still exports.
+        """
+        keys = _unread_keys(thread)
+        if not keys:
+            return
+        for msg in thread["messages"]:
+            msg["read"] = True
+        self._rebuild_thread_list()
+        try:
+            self._client.mark_read(keys)
+        except Exception as e:
+            log.warning("mark read failed: %s", dbus_error_text(e))
+
+    def _on_seen(self, _client, ev: dict) -> None:
+        """The iPhone marked something read while we were watching."""
+        keys = set(ev.get("keys") or ())
+        if not keys:
+            return
+        touched = False
+        for thread in self._threads.values():
+            for msg in thread["messages"]:
+                if not msg["read"] and msg.get("key") in keys:
+                    msg["read"] = True
+                    touched = True
+        if touched:
+            self._rebuild_thread_list()
 
     # ---- link state -----------------------------------------------------
 
