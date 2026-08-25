@@ -1,3 +1,11 @@
+iphonebridge (0.8.0) unstable; urgency=medium
+
+  * Local delete for messages and conversations; fixes for recipients
+    built with a fabricated country code and for duplicated swept
+    messages. See CHANGELOG.md.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Mon, 24 Aug 2026 23:05:14 -0500
+
 iphonebridge (0.7.0) unstable; urgency=medium
 
   * Inbox history seeding, btmgmt-from-service fix (adapter class now

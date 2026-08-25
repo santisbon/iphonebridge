@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.8.0] — 2026-08-25
+
+### Added
+- **Delete messages and conversations from local history.** Right-click a
+  conversation or a message bubble in the app. New
+  `Messages1.DeleteLocal(keys)` rewrites the event log and records
+  tombstones, so a deleted message is not re-added by the startup inbox
+  sweep while it is still on the phone. Local only, and the app says so:
+  iOS accepts and ignores the MAP `Deleted` flag.
+- Uninstall script for the deb install (`packaging/deb/uninstall.sh`),
+  with `--dry-run`, `--keep-data`, and `--keep-hfp`.
+- Release process and end-user install instructions in the docs.
+
+### Fixed
+- **Messages went to the wrong number.** The recipient was built by
+  prefixing "+" to the digits stored in the contacts cache, so a contact
+  without a country code became a foreign address: "+" plus a 10-digit
+  US number is a Netherlands number. 161 of 348 numbers in a real
+  phonebook were affected. The cache now keeps the raw phone string and
+  restores "+" only when the contact carried one.
+- **Every swept message appeared twice**, once truncated and once
+  complete. The MAP folder listing cuts message text at ~125 characters
+  while a bMessage download carries it whole, so the two paths logged
+  different bodies for the same message and dedupe never matched.
+  Messages are now keyed by a body prefix, inside the truncation point.
+
+### Documented
+- Deletions do not sync in either direction, with the mechanism for each
+  (measured on iOS 26.6.1).
+
 ## [0.7.0] — 2026-08-24
 
 ### Added
