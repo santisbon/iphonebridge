@@ -35,7 +35,7 @@ from iphonebridge.events import (
     SmsEvent,
     deleted_keys,
     drop_events_by_key,
-    logged_sms_keys,
+    logged_messages,
     message_key,
     record_deleted_keys,
     sms_sent_event,
@@ -59,6 +59,18 @@ CONTACTS_REFRESH_SEC = 24 * 60 * 60  # 24h
 SESSION_RETRY_SEC = 60
 # How often to confirm the OBEX sessions still exist once we're ready.
 SESSION_HEALTH_SEC = 60
+
+
+def _seed_seen_messages():
+    """Everything already accounted for: logged messages plus tombstones.
+
+    Tombstones are keys alone, with no arrival time, so they match exactly
+    but cannot pair a push against a listing. A message deleted while it
+    had only ever been pushed can therefore come back on a later sweep.
+    """
+    seen = logged_messages(config.EVENTS_JSONL)
+    seen.update(deleted_keys(config.DELETED_KEYS))
+    return seen
 
 
 def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
@@ -105,9 +117,12 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
             raw_type=str(m.get("type") or "") or None,
         )
         key = message_key(ts, sender or None, event.body)
-        if key in listener.seen_keys:
+        # seen_at is the sweep's own clock here, but a listing entry has a
+        # real timestamp, so it is that which places this message against
+        # anything already pushed live.
+        if listener.seen_keys.matches(key, event.seen_at):
             continue
-        listener.seen_keys.add(key)
+        listener.seen_keys.note(key, event.seen_at)
         try:
             jsonl_sink.handle(event)
         except Exception:
@@ -325,8 +340,7 @@ class Daemon:
                 sessions=self.sessions,
                 on_sms=self._fanout,
                 resolve_contact=lambda raw: self.contacts.resolve(raw),
-                seen_keys=(logged_sms_keys(config.EVENTS_JSONL)
-                           | deleted_keys(config.DELETED_KEYS)),
+                seen_keys=_seed_seen_messages(),
             )
             self.listener.start()
 
@@ -363,7 +377,8 @@ class Daemon:
             return 0
         record_deleted_keys(config.DELETED_KEYS, keyset)
         if self.listener is not None:
-            self.listener.seen_keys |= keyset
+            for k in keyset:
+                self.listener.seen_keys.note(k)
         removed = drop_events_by_key(config.EVENTS_JSONL, keyset)
         log.info("local delete: %d message(s) removed from history", removed)
         return removed

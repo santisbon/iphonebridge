@@ -234,11 +234,13 @@ class _PendingFetch:
             message_path=self.message_path,
         )
         key = message_key(ts, sender_raw or parsed.sender_email, parsed.body)
-        if key in self.listener.seen_keys:
+        # A push carries no timestamp, so its arrival time is what places
+        # it against anything the inbox sweep already logged.
+        if self.listener.seen_keys.matches(key, event.seen_at):
             log.debug("message already in history (handle %s) — obexd "
                       "re-announcement, skipping", self.handle)
             return
-        self.listener.seen_keys.add(key)
+        self.listener.seen_keys.note(key, event.seen_at)
         log.info("sms_received from %s: %r",
                  event.display_sender, (event.body or "")[:80])
         try:
@@ -262,8 +264,9 @@ class _PendingFetch:
             message_path=self.message_path,
         )
         try:
-            self.listener.seen_keys.add(
-                message_key(event.timestamp, event.sender_phone, event.body))
+            self.listener.seen_keys.note(
+                message_key(event.timestamp, event.sender_phone, event.body),
+                event.seen_at)
             self.listener.on_sms(event)
         except Exception:
             log.exception("on_sms callback raised")

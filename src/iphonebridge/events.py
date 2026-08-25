@@ -23,6 +23,20 @@ _PHONE_KEEP = re.compile(r"\D")
 _KEY_BODY_CHARS = 40
 
 
+def _as_instant(value) -> datetime | None:
+    """A datetime or ISO string as an aware datetime, or None."""
+    if not value:
+        return None
+    if hasattr(value, "isoformat"):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return dt if dt.tzinfo is not None else dt.astimezone()
+
+
 def _key_ts(timestamp) -> str:
     """The timestamp component of a message key, always in UTC.
 
@@ -169,6 +183,127 @@ def logged_sms_keys(path) -> set[str]:
     except OSError:
         pass
     return keys
+
+
+#: How far apart a push and a listing may describe the same message. The
+#: gap is MNS delivery latency, measured at ~2s; the margin is for a slow
+#: link, and stays far below any plausible gap between two genuine sends
+#: of identical text.
+_PUSH_WINDOW = timedelta(seconds=120)
+
+
+def _key_parts(key: str) -> tuple[str, str, str]:
+    parts = key.split("\x1f")
+    return (parts[0], parts[1], parts[2]) if len(parts) == 3 else (key, "", "")
+
+
+class SeenMessages(set):
+    """Dedupe guard shared by the MNS listener and the inbox sweep.
+
+    One message reaches the log by two routes carrying different detail.
+    An MNS push is announced as a Message1 with Status="notification",
+    which BlueZ exports with no Timestamp property, so its key holds an
+    empty timestamp. The same message in a folder listing arrives with
+    the real send time. Their exact keys differ, which is what let the
+    startup sweep re-log everything already pushed live.
+
+    Exact keys still decide whenever the two sides agree on what they
+    know. When only one side has a timestamp, a match on sender plus body
+    prefix within `_PUSH_WINDOW` counts as the same message, compared
+    against the push's arrival time. A matched entry is consumed, so two
+    genuinely identical messages still pair off one for one rather than
+    collapsing into one.
+    """
+
+    def __init__(self, keys=()) -> None:
+        super().__init__()
+        self._timed: dict[tuple[str, str], list[datetime]] = {}
+        self._untimed: dict[tuple[str, str], list[datetime]] = {}
+        self.update(keys)
+
+    # ---- population ----------------------------------------------------
+
+    def add(self, key: str) -> None:
+        self.note(key)
+
+    def update(self, keys) -> None:
+        for k in keys:
+            self.note(k)
+
+    def note(self, key: str, arrival=None) -> None:
+        """Record a key, plus the wall-clock time it reached us.
+
+        `arrival` is the event's seen_at, and is the only thing that makes
+        a timestamp-less push comparable to a listing entry. Without it a
+        key is still matched exactly, just not loosely — which is the case
+        for tombstones, since deleted-keys.txt stores keys alone.
+        """
+        super().add(key)
+        ts, sender, head = _key_parts(key)
+        instant = _as_instant(ts) or _as_instant(arrival)
+        if instant is None:
+            return
+        index = self._timed if ts else self._untimed
+        index.setdefault((sender, head), []).append(instant)
+
+    # ---- lookup --------------------------------------------------------
+
+    def matches(self, key: str, arrival=None) -> bool:
+        """True when this message is already accounted for."""
+        if key in self:
+            return True
+        ts, sender, head = _key_parts(key)
+        instant = _as_instant(ts) or _as_instant(arrival)
+        if instant is None:
+            return False
+        # A timestamped candidate can only pair with a timestamp-less
+        # entry, and the other way round; two entries that know the same
+        # amount were already settled by the exact check above.
+        bucket = (self._untimed if ts else self._timed).get((sender, head))
+        if not bucket:
+            return False
+        for i, other in enumerate(bucket):
+            if abs(other - instant) <= _PUSH_WINDOW:
+                del bucket[i]
+                # Record the key as well, so a second sighting of this
+                # same message is an exact hit. One listing is announced
+                # twice in a single startup: once to the sweep that asked
+                # for it, and again to the MNS listener, because
+                # ListMessages makes obexd export Message1 objects and the
+                # resulting InterfacesAdded signals are only delivered
+                # once the sweep returns. Without this the second pass
+                # finds the loose entry it needed already consumed here,
+                # and logs the message a second time.
+                super().add(key)
+                return True
+        return False
+
+
+def logged_messages(path) -> SeenMessages:
+    """Seed a SeenMessages from every sms_received already in the log.
+
+    Richer than reading keys alone: a pushed message has no timestamp, so
+    only its seen_at can place it against a listing entry.
+    """
+    import json
+    seen = SeenMessages()
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if e.get("kind") != "sms_received":
+                    continue
+                seen.note(
+                    message_key(e.get("timestamp"),
+                                e.get("sender_phone") or e.get("sender_email"),
+                                e.get("body")),
+                    e.get("seen_at"))
+    except OSError:
+        pass
+    return seen
 
 
 _KEYPAD = {c: d for d, letters in {

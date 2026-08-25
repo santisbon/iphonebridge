@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from iphonebridge.daemon import sweep_inbox
+from iphonebridge.events import SeenMessages, message_key
 
 
 class _Sessions:
@@ -10,7 +11,7 @@ class _Sessions:
 
 class _Listener:
     def __init__(self, seen=()):
-        self.seen_keys = set(seen)
+        self.seen_keys = SeenMessages(seen)
 
 
 class _Contacts:
@@ -54,7 +55,6 @@ def test_sweep_logs_unseen_and_marks_seen(monkeypatch):
 def test_sweep_skips_already_seen(monkeypatch):
     """Identity is content, not handle: the same message re-listed under a
     fresh handle (as happens after a delete renumbers them) is skipped."""
-    from iphonebridge.events import message_key
     _listing(monkeypatch, [
         {"handle": "message1", "sender": "+15551234567", "body": "hi",
          "timestamp": "", "read": True, "status": "", "type": "",
@@ -78,3 +78,96 @@ def test_sweep_skips_after_handles_renumber(monkeypatch):
     msg["handle"] = "RENUMBERED"
     assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 0
     assert len(sink.events) == 1
+
+
+def test_sweep_skips_a_message_already_pushed_live(monkeypatch):
+    """The duplicate this guard exists for.
+
+    A live MNS push is announced as a Message1 with Status="notification",
+    which BlueZ exports with no Timestamp, so the pushed copy keys on an
+    empty timestamp. The listing carries the real send time. Their exact
+    keys differ, so before the loose match the sweep re-logged every
+    message that had already arrived live.
+    """
+    pushed_at = "2026-08-25T15:57:51+00:00"       # our clock, on arrival
+    sent_at = "2026-08-25T15:57:49+00:00"         # the phone's clock
+    seen = SeenMessages()
+    seen.note(message_key(None, "+15551234567", "hi"), pushed_at)
+
+    _listing(monkeypatch, [
+        {"handle": "message1", "sender": "+15551234567", "body": "hi",
+         "timestamp": sent_at, "read": True, "status": "complete",
+         "type": "sms-gsm", "sender_phone_norm": "15551234567"},
+    ])
+    lst, sink = _Listener(), _Jsonl()
+    lst.seen_keys = seen
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 0
+    assert sink.events == []
+
+
+def test_sweep_still_logs_an_identical_message_sent_much_later(monkeypatch):
+    """The loose match must not swallow a genuine repeat. Same sender and
+    same text, but hours apart, so it is a different message."""
+    seen = SeenMessages()
+    seen.note(message_key(None, "+15551234567", "ok"),
+              "2026-08-25T09:00:00+00:00")
+    _listing(monkeypatch, [
+        {"handle": "message1", "sender": "+15551234567", "body": "ok",
+         "timestamp": "2026-08-25T17:00:00+00:00", "read": True,
+         "status": "complete", "type": "sms-gsm",
+         "sender_phone_norm": "15551234567"},
+    ])
+    lst, sink = _Listener(), _Jsonl()
+    lst.seen_keys = seen
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 1
+
+
+def test_repeated_identical_messages_pair_off_one_for_one(monkeypatch):
+    """Two identical texts really sent a minute apart, each already pushed
+    live. Both listing entries must be recognised, not just one, and
+    neither may be logged twice."""
+    seen = SeenMessages()
+    seen.note(message_key(None, "+15551234567", "ok"),
+              "2026-08-25T15:00:02+00:00")
+    seen.note(message_key(None, "+15551234567", "ok"),
+              "2026-08-25T15:01:02+00:00")
+    _listing(monkeypatch, [
+        {"handle": "m2", "sender": "+15551234567", "body": "ok",
+         "timestamp": "2026-08-25T15:01:00+00:00", "read": True,
+         "status": "complete", "type": "sms-gsm",
+         "sender_phone_norm": "15551234567"},
+        {"handle": "m1", "sender": "+15551234567", "body": "ok",
+         "timestamp": "2026-08-25T15:00:00+00:00", "read": True,
+         "status": "complete", "type": "sms-gsm",
+         "sender_phone_norm": "15551234567"},
+    ])
+    lst, sink = _Listener(), _Jsonl()
+    lst.seen_keys = seen
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 0
+    assert sink.events == []
+
+
+def test_listing_seen_twice_in_one_startup_logs_once(monkeypatch):
+    """ListMessages makes obexd export Message1 objects, so InterfacesAdded
+    fires for every listed message and the MNS listener sees it too. The
+    signals queue behind the synchronous sweep, so each message is offered
+    to the guard twice in one startup. The second offer must still be
+    recognised, even though the first consumed the loose entry."""
+    seen = SeenMessages()
+    seen.note(message_key(None, "+15551234567", "hi"),
+              "2026-08-25T15:57:51+00:00")
+    listing = {"handle": "message1", "sender": "+15551234567", "body": "hi",
+               "timestamp": "2026-08-25T15:57:49+00:00", "read": True,
+               "status": "complete", "type": "sms-gsm",
+               "sender_phone_norm": "15551234567"}
+    _listing(monkeypatch, [listing])
+    lst, sink = _Listener(), _Jsonl()
+    lst.seen_keys = seen
+
+    # First pass: the sweep itself.
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 0
+    # Second pass: the same message arriving via InterfacesAdded, which is
+    # what the listener does with the very same key.
+    key = message_key("2026-08-25T15:57:49+00:00", "+15551234567", "hi")
+    assert seen.matches(key, "2026-08-25T15:57:49+00:00") is True
+    assert sink.events == []
