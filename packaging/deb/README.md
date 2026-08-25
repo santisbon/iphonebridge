@@ -153,6 +153,9 @@ version alone, no `-1` suffix. Bump it in the same commit as
 
 ```bash
 sudo apt install debhelper dh-python pybuild-plugin-pyproject python3-all lintian
+```
+
+```bash
 dpkg-buildpackage -us -uc -b     # unsigned, binary-only
 lintian ../iphonebridge_*_all.deb   # two no-manual-page warnings expected
 ```

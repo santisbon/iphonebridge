@@ -23,13 +23,13 @@ class MainWindow(Adw.ApplicationWindow):
 
         for widget, name, title, icon in (
             (ConversationsPage(client, self.toast), "conversations",
-             "Messages", "dialog-messages-symbolic"),
+             "Messages", "chat-bubbles-empty-symbolic"),
             (NotificationsPage(client, self.toast), "notifications",
-             "Notifications", "notifications-symbolic"),
+             "Notifications", "bell-outline-symbolic"),
             (CallsPage(client, self.toast), "calls",
-             "Calls", "call-start-symbolic"),
+             "Calls", "phone-right-facing-symbolic"),
             (StatusPage(client, self.toast), "status",
-             "Status", "emblem-ok-symbolic"),
+             "Status", "test-pass-symbolic"),
         ):
             self._stack.add_titled_with_icon(widget, name, title, icon)
 
