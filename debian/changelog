@@ -1,3 +1,11 @@
+iphonebridge (0.9.1) unstable; urgency=medium
+
+  * Fixes repeated confirmation codes being silently dropped, duplicated
+    and truncated messages from iMessage senders, and verification codes
+    being written to the journal. See CHANGELOG.md.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 25 Aug 2026 15:07:49 -0500
+
 iphonebridge (0.9.0) unstable; urgency=medium
 
   * UI restyled after Messages, Phone and iOS Settings; read-state now

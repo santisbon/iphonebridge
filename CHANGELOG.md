@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.9.1] — 2026-08-25
+
+Three message-loss and message-leak fixes. 0.9.0 silently drops repeated
+confirmation codes, so upgrading is worth doing promptly.
+
+### Fixed
+- **Confirmation codes were silently dropped.** BlueZ exports a live MNS
+  push with no `Timestamp`, so a message's key collapsed to
+  `(sender, first 40 characters of body)`. In a confirmation code
+  everything but the trailing code is identical, and the code sits past
+  that prefix, so every code from a sender keyed the same: the first
+  arrived and every one after it vanished with no error. Deleting one made
+  it permanent, because the tombstone kept matching. Keys now fall back to
+  the arrival time, which is the rule the UI already used for ordering.
+- **The inbox sweep duplicated messages from iMessage senders**, storing
+  the copy truncated at 128 characters. iOS appends a parenthesised MAP
+  marker to the originator address in a bMessage vCard — `(smsft)` for an
+  SMS forwarded from a paired phone — while the folder listing omits it.
+  One person therefore had two identities: two conversations in the app,
+  and pushes the sweep could not recognise as already logged. The marker
+  is now stripped at the parser and canonicalised in the key, and stored
+  keys normalise onto the clean spelling so existing tombstones still
+  resolve.
+- Marking a thread read no longer fails to reach the iPhone for those
+  senders, which was the same mismatch: the path registry was keyed on one
+  spelling and the message on the other.
+
+### Security
+- **Verification codes are no longer written to the journal.** The
+  clipboard sink named the code in both its success line and its
+  no-clipboard-tool warning, putting live one-time credentials into a
+  persisted, broadly readable log. Both now report only the code's length;
+  the value still reaches the clipboard and the desktop notification.
+- Message content is out of the journal generally. `sms_received`,
+  `sms_sent` and ANCS events logged sender names and the first 40 to 80
+  characters of every body at INFO; that moves to DEBUG. Delivery stays
+  visible at INFO through content-free lines carrying the message handle
+  and a length, and the dedupe skip moves up to INFO so a suppressed
+  message and a transfer that never completed are no longer
+  indistinguishable.
+- A source-wide test walks the AST of `src/` and fails if any log call
+  above DEBUG passes message content or a one-time code.
+
 ## [0.9.0] — 2026-08-25
 
 ### Added
