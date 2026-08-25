@@ -256,8 +256,13 @@ def test_drop_events_by_key_and_tombstones(tmp_path):
     """Local delete removes events and remembers them, so the startup
     sweep cannot re-add a message still sitting on the phone."""
     import json
+
     from iphonebridge.events import (
-        deleted_keys, drop_events_by_key, message_key, record_deleted_keys)
+        deleted_keys,
+        drop_events_by_key,
+        message_key,
+        record_deleted_keys,
+    )
 
     log = tmp_path / "events.jsonl"
     rows = [
