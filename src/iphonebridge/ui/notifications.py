@@ -21,8 +21,9 @@ class NotificationsPage(Gtk.Box):
         scroll = Gtk.ScrolledWindow(
             child=Adw.Clamp(maximum_size=600, child=self._list),
             hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        # No icon: Adw.StatusPage draws it at 128px, which dominates an
+        # otherwise empty pane. Omitting icon-name skips it entirely.
         self._empty = Adw.StatusPage(
-            icon_name="preferences-system-notifications-symbolic",
             title="No notifications yet",
             description="Per-app notifications from your iPhone — Slack, Mail, "
                         "WhatsApp and the rest — show up here as they arrive.")
