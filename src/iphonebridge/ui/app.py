@@ -22,13 +22,7 @@ from iphonebridge.ui.window import MainWindow  # noqa: E402
 
 APP_ID = "me.santisbon.iphonebridge.UI"
 
-_CSS = """
-.msg-bubble { padding: 6px 10px; }
-.msg-out { background: @accent_bg_color; color: @accent_fg_color; }
-/* Suggestion popovers size to their list: the theme's default contents
-   min-height/padding otherwise leaves blank space under a single row. */
-popover.suggestion-pop > contents { min-height: 0; padding: 4px; }
-"""
+STYLESHEET = pathlib.Path(__file__).parent / "style.css"
 
 
 class IphonebridgeApp(Adw.Application):
@@ -40,7 +34,7 @@ class IphonebridgeApp(Adw.Application):
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
         provider = Gtk.CssProvider()
-        provider.load_from_string(_CSS)
+        provider.load_from_path(str(STYLESHEET))
         display = Gdk.Display.get_default()
         if display is not None:
             Gtk.StyleContext.add_provider_for_display(

@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import logging
 
-from gi.repository import Gdk, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 from iphonebridge.contacts import ContactsResolver
 from iphonebridge.events import message_key
 from iphonebridge.ui.client import dbus_error_text
-from iphonebridge.ui.util import event_ts, format_ts, resolve_recipient
+from iphonebridge.ui.util import (
+    daystamp,
+    event_ts,
+    relative_stamp,
+    resolve_recipient,
+    same_group,
+)
 from iphonebridge.ui.util import pin_popover_height as _pin_popover_height
 
 log = logging.getLogger(__name__)
@@ -29,7 +35,7 @@ def _thread_key(ev: dict) -> str:
 
 class ConversationsPage(Gtk.Box):
     def __init__(self, client, toast) -> None:
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._client = client
         self._toast = toast
         self._threads: dict[str, dict] = {}
@@ -37,53 +43,73 @@ class ConversationsPage(Gtk.Box):
         self._contacts = ContactsResolver()
         self._composing_new = False
         self._select_next_sent = False
+        self._rendered: list[dict] = []
+
+        # The compose action lives in the window's single header bar (see
+        # MainWindow._sync_header_action), the way Messages puts it there
+        # rather than floating it above the conversation list.
+        self.header_action = Gtk.Button(
+            icon_name="plus-symbolic", tooltip_text="New conversation",
+            css_classes=["flat"], valign=Gtk.Align.CENTER)
+        self.header_action.connect("clicked", self._on_new_conversation)
 
         # ---- left: thread list ----------------------------------------
-        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        # mail-message-new-symbolic is the stock compose glyph;
-        # chat-message-new-symbolic isn't shipped by adwaita-icon-theme.
-        new_btn = Gtk.Button(icon_name="plus-symbolic",
-                             tooltip_text="New conversation",
-                             css_classes=["flat"],
-                             margin_top=6, margin_bottom=6,
-                             margin_start=6, margin_end=6)
-        new_btn.connect("clicked", self._on_new_conversation)
-        left.append(new_btn)
-        left.append(Gtk.Separator())
-        self._thread_list = Gtk.ListBox(css_classes=["navigation-sidebar"])
+        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                       css_classes=["ib-sidebar"])
+        self._thread_list = Gtk.ListBox(css_classes=["ib-threads"],
+                                        vexpand=True)
         self._thread_list.connect("row-selected", self._on_thread_selected)
         sidebar_scroll = Gtk.ScrolledWindow(
-            hscrollbar_policy=Gtk.PolicyType.NEVER, width_request=240,
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
             vexpand=True, child=self._thread_list)
         left.append(sidebar_scroll)
-        self.append(left)
-        self.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         # ---- right: message view + compose ----------------------------
         right = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
+
+        # Conversation header: who, and the state of the link carrying it.
+        self._convo_header = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=2,
+            css_classes=["ib-convo-header"], visible=False)
+        self._convo_title = Gtk.Label(
+            label="", css_classes=["ib-convo-title"],
+            ellipsize=_ELLIPSIZE_END)
+        self._link_pill = Gtk.Label(label="", css_classes=["ib-linkpill"],
+                                    halign=Gtk.Align.CENTER)
+        self._convo_header.append(self._convo_title)
+        self._convo_header.append(self._link_pill)
+        right.append(self._convo_header)
+
+        # Anchored to the bottom: a short thread sits above the composer
+        # rather than hanging from the top of an empty pane.
         self._msg_list = Gtk.ListBox(
-            selection_mode=Gtk.SelectionMode.NONE, css_classes=["background"])
+            selection_mode=Gtk.SelectionMode.NONE,
+            css_classes=["ib-canvas", "ib-msglist"],
+            valign=Gtk.Align.END)
         self._msg_scroll = Gtk.ScrolledWindow(
-            vexpand=True, child=self._msg_list)
-        self._placeholder = Gtk.Label(
-            label="Select a conversation", css_classes=["dim-label", "title-2"],
-            vexpand=True)
-        self._stack = Gtk.Stack()
+            vexpand=True, child=self._msg_list, css_classes=["ib-canvas"])
+        self._placeholder = Adw.StatusPage(
+            icon_name="chat-bubbles-empty-symbolic",
+            title="No conversation selected",
+            description="Pick a thread on the left, or start a new one from "
+                        "the compose button.")
+        self._new_placeholder = Adw.StatusPage(
+            icon_name="plus-symbolic", title="New message",
+            description="Enter a name or number above, then write your "
+                        "message below.")
+        self._stack = Gtk.Stack(vexpand=True)
         self._stack.add_named(self._placeholder, "empty")
         self._stack.add_named(self._msg_scroll, "messages")
-        self._stack.add_named(
-            Gtk.Label(label="New Message",
-                      css_classes=["dim-label", "title-2"], vexpand=True),
-            "new")
+        self._stack.add_named(self._new_placeholder, "new")
         right.append(self._stack)
 
         # Recipient bar — only visible while composing a new conversation.
         self._to_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
-                               spacing=6, margin_top=6,
-                               margin_start=6, margin_end=6, visible=False)
+                               spacing=6, css_classes=["ib-recipient"],
+                               visible=False)
         self._to_entry = Gtk.Entry(
             placeholder_text="To: number, contact name, or 1 (800) MYAPPLE",
-            hexpand=True)
+            hexpand=True, css_classes=["ib-pill"])
         self._to_entry.connect("changed", self._on_to_changed)
         self._to_bar.append(self._to_entry)
         right.append(self._to_bar)
@@ -108,25 +134,37 @@ class ConversationsPage(Gtk.Box):
         self._to_suggestions.set_child(self._to_sug_scroll)
         self._to_filling = False
 
-        compose = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
-                          margin_top=6, margin_bottom=6,
-                          margin_start=6, margin_end=6)
+        compose = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                          css_classes=["ib-composer"])
         self._entry = Gtk.Entry(
-            placeholder_text="Message", hexpand=True, sensitive=False)
+            placeholder_text="Message", hexpand=True, sensitive=False,
+            css_classes=["ib-pill"])
         self._entry.connect("activate", self._on_send)
         self._send_btn = Gtk.Button(
-            icon_name="document-send-symbolic", sensitive=False,
-            css_classes=["suggested-action"], tooltip_text="Send")
+            icon_name="go-up-symbolic", sensitive=False,
+            valign=Gtk.Align.CENTER, css_classes=["ib-circle"],
+            tooltip_text="Send")
         self._send_btn.connect("clicked", self._on_send)
         compose.append(self._entry)
         compose.append(self._send_btn)
-        right.append(Gtk.Separator())
         right.append(compose)
-        self.append(right)
+
+        # No breakpoint is wired, so the split never collapses: a collapsed
+        # NavigationSplitView pushes the conversation as a page and would
+        # need a header bar with a back button to get out of.
+        split = Adw.NavigationSplitView(
+            sidebar=Adw.NavigationPage(title="Messages", child=left),
+            content=Adw.NavigationPage(title="Conversation", child=right),
+            min_sidebar_width=240, max_sidebar_width=340,
+            sidebar_width_fraction=0.30, vexpand=True)
+        self.append(split)
 
         self._load_history()
+        self._update_link_pill()
         client.connect("message-received", self._on_incoming)
         client.connect("message-sent", self._on_sent_event)
+        client.connect("availability-changed",
+                       lambda *_: self._update_link_pill())
 
     # ---- data ----------------------------------------------------------
 
@@ -160,8 +198,15 @@ class ConversationsPage(Gtk.Box):
         if refresh:
             self._rebuild_thread_list()
             if self._current == key:
-                self._append_bubble(msg)
+                # Live messages are newer than everything rendered, so they
+                # append; anything out of order forces a full rebuild.
+                if self._rendered and msg["ts"] >= self._rendered[-1]["ts"]:
+                    self._append_message(msg)
+                else:
+                    self._render_thread(key)
                 self._scroll_to_bottom()
+            # Message traffic is itself proof the link is up.
+            self._update_link_pill(alive=True)
 
     # ---- new conversation ----------------------------------------------
 
@@ -170,6 +215,7 @@ class ConversationsPage(Gtk.Box):
         self._current = None
         self._thread_list.select_row(None)
         self._stack.set_visible_child_name("new")
+        self._convo_header.set_visible(False)
         self._to_bar.set_visible(True)
         self._entry.set_sensitive(True)
         self._send_btn.set_sensitive(True)
@@ -218,8 +264,7 @@ class ConversationsPage(Gtk.Box):
             box.append(Gtk.Label(label=name, xalign=0, hexpand=True,
                                  ellipsize=_ELLIPSIZE_END,
                                  max_width_chars=28))
-            box.append(Gtk.Label(label=phone,
-                                 css_classes=["dim-label", "caption"]))
+            box.append(Gtk.Label(label=phone, css_classes=["ib-time"]))
             row = Gtk.ListBoxRow(child=box)
             row.contact_name = name
             self._to_sug_list.append(row)
@@ -246,17 +291,22 @@ class ConversationsPage(Gtk.Box):
         for thread in order:
             row = Gtk.ListBoxRow()
             row.thread_key = thread["key"]
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2,
-                          margin_top=8, margin_bottom=8,
-                          margin_start=10, margin_end=10)
-            box.append(Gtk.Label(label=thread["name"], xalign=0,
-                                 css_classes=["heading"],
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+
+            top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            top.append(Gtk.Label(label=thread["name"], xalign=0, hexpand=True,
+                                 css_classes=["ib-name"],
                                  ellipsize=_ELLIPSIZE_END))
+            top.append(Gtk.Label(label=relative_stamp(thread.get("last_ts")),
+                                 css_classes=["ib-time"],
+                                 valign=Gtk.Align.START))
+            box.append(top)
+
             msgs = thread["messages"]
             last = (max(msgs, key=lambda m: m["ts"])["body"] if msgs else "")
             box.append(Gtk.Label(label=last.replace("\n", " "), xalign=0,
-                                  ellipsize=_ELLIPSIZE_END,
-                                  css_classes=["dim-label"]))
+                                 ellipsize=_ELLIPSIZE_END,
+                                 css_classes=["ib-preview"]))
             row.set_child(box)
             self._attach_delete_menu(
                 row, "Delete conversation",
@@ -274,38 +324,66 @@ class ConversationsPage(Gtk.Box):
         thread = self._threads.get(self._current)
         self._entry.set_sensitive(True)
         self._send_btn.set_sensitive(True)
+        self._convo_title.set_label(thread["name"] if thread else "")
+        self._convo_header.set_visible(True)
         self._stack.set_visible_child_name("messages")
-        self._msg_list.remove_all()
-        for msg in sorted(thread["messages"], key=lambda m: m["ts"]):
-            self._append_bubble(msg)
+        self._render_thread(self._current)
         self._scroll_to_bottom()
 
     # ---- message bubbles ----------------------------------------------
 
-    def _append_bubble(self, msg: dict) -> None:
+    def _render_thread(self, key: str) -> None:
+        """Rebuild the whole conversation.
+
+        Everything that changes what is on screen goes through here or
+        _append_message, so grouping and day rules stay consistent.
+        """
+        self._msg_list.remove_all()
+        self._rendered = []
+        thread = self._threads.get(key)
+        if thread is None:
+            return
+        for msg in sorted(thread["messages"], key=lambda m: m["ts"]):
+            self._append_message(msg)
+
+    def _append_message(self, msg: dict) -> None:
+        prev = self._rendered[-1] if self._rendered else None
+        prev_ts = prev["ts"] if prev else None
+        if not same_group(prev_ts, msg["ts"]):
+            self._msg_list.append(self._daystamp_row(msg["ts"]))
+            new_run = True
+        else:
+            new_run = prev is None or prev["outgoing"] != msg["outgoing"]
+        self._msg_list.append(self._bubble_row(msg, new_run))
+        self._rendered.append(msg)
+
+    def _daystamp_row(self, ts: str) -> Gtk.ListBoxRow:
+        label = Gtk.Label(css_classes=["ib-daystamp"],
+                          halign=Gtk.Align.CENTER,
+                          margin_top=14, margin_bottom=6)
+        label.set_markup(daystamp(ts))
+        return Gtk.ListBoxRow(child=label, activatable=False, selectable=False)
+
+    def _bubble_row(self, msg: dict, new_run: bool) -> Gtk.ListBoxRow:
         row = Gtk.ListBoxRow(activatable=False, selectable=False)
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
-                        margin_top=3, margin_bottom=3,
-                        margin_start=8, margin_end=8)
-        bubble = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2,
-                         css_classes=["card", "msg-bubble"])
+                        margin_top=8 if new_run else 2,
+                        margin_start=12, margin_end=12)
+        bubble = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
+                         css_classes=["ib-bubble"])
         bubble.set_halign(Gtk.Align.END if msg["outgoing"] else Gtk.Align.START)
-        if msg["outgoing"]:
-            bubble.add_css_class("msg-out")
-        body = Gtk.Label(label=msg["body"], xalign=0, wrap=True,
-                         selectable=True, max_width_chars=46)
-        bubble.append(body)
-        ts = format_ts(msg["ts"])
-        if ts:
-            bubble.append(Gtk.Label(label=ts, xalign=1,
-                                    css_classes=["dim-label", "caption"]))
+        bubble.add_css_class("ib-out" if msg["outgoing"] else "ib-in")
+        # The timestamp moved out of the bubble and onto the day rule, so a
+        # run of messages reads as one block instead of a stack of cards.
+        bubble.append(Gtk.Label(label=msg["body"], xalign=0, wrap=True,
+                                selectable=True, max_width_chars=40))
         outer.append(bubble)
         row.set_child(outer)
         if msg.get("key"):
             self._attach_delete_menu(
                 row, "Delete message",
                 lambda key=msg["key"]: self._delete_messages([key]))
-        self._msg_list.append(row)
+        return row
 
     def _scroll_to_bottom(self) -> None:
         def _scroll() -> bool:
@@ -313,6 +391,24 @@ class ConversationsPage(Gtk.Box):
             adj.set_value(adj.get_upper())
             return False
         GLib.idle_add(_scroll)
+
+    # ---- link state -----------------------------------------------------
+
+    def _update_link_pill(self, *, alive: bool | None = None) -> None:
+        """The Bluetooth link, stated where it matters.
+
+        Driven by availability changes and by message traffic (which proves
+        the link), never polled: the daemon's IsHealthy call blocks the main
+        loop for up to 5s on a bad link.
+        """
+        up = alive if alive is not None else (
+            self._client.available and self._client.healthy)
+        if up:
+            self._link_pill.set_label("●  iPhone connected")
+            self._link_pill.remove_css_class("warn")
+        else:
+            self._link_pill.set_label("●  Reconnecting…")
+            self._link_pill.add_css_class("warn")
 
     # ---- delete ---------------------------------------------------------
 
@@ -371,16 +467,14 @@ class ConversationsPage(Gtk.Box):
                 if self._current == key:
                     self._current = None
                     self._stack.set_visible_child_name("empty")
+                    self._convo_header.set_visible(False)
                     self._entry.set_sensitive(False)
                     self._send_btn.set_sensitive(False)
             else:
                 thread["last_ts"] = max(m["ts"] for m in thread["messages"])
         self._rebuild_thread_list()
         if self._current and self._current in self._threads:
-            self._msg_list.remove_all()
-            for m in sorted(self._threads[self._current]["messages"],
-                            key=lambda m: m["ts"]):
-                self._append_bubble(m)
+            self._render_thread(self._current)
         noun = "message" if removed == 1 else "messages"
         self._toast(f"Deleted {removed} {noun} from this computer")
 

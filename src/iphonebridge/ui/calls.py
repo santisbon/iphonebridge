@@ -10,33 +10,45 @@ from iphonebridge.ui.util import resolve_recipient
 
 class CallsPage(Gtk.Box):
     def __init__(self, client, toast) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL,
+                         css_classes=["ib-settings"])
         self._client = client
         self._toast = toast
         self._contacts = ContactsResolver()
         self._call_rows: list = []
 
-        page = Adw.PreferencesPage()
-        self.append(page)
+        # The dialer is hand-built rather than an Adw.EntryRow so the field
+        # can be a pill and the call button a filled circle. It sits in its
+        # own Clamp to line up with the PreferencesPage below it.
+        dialer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4,
+                         margin_top=18, margin_bottom=6,
+                         margin_start=12, margin_end=12)
+        dialer.append(Gtk.Label(label="Place a call", xalign=0,
+                                css_classes=["ib-grouptitle"]))
+        dialer.append(Gtk.Label(
+            label="Call audio routes through this computer's mic and "
+                  "speakers.",
+            xalign=0, wrap=True, css_classes=["ib-groupdesc"]))
 
-        dial_group = Adw.PreferencesGroup(
-            title="Place a call",
-            description="Call audio routes through this computer's mic and "
-                        "speakers.")
-        self._entry = Adw.EntryRow(
-            title="Contact name or number e.g. 1 (800) MYAPPLE")
-        self._entry.connect("entry-activated", self._on_dial)
+        field = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                        margin_top=8)
+        self._entry = Gtk.Entry(
+            placeholder_text="Contact name or number e.g. 1 (800) MYAPPLE",
+            hexpand=True, css_classes=["ib-pill"])
+        self._entry.connect("activate", self._on_dial)
         call_btn = Gtk.Button(
             icon_name="call-start-symbolic", valign=Gtk.Align.CENTER,
-            css_classes=["suggested-action"], tooltip_text="Call")
+            css_classes=["ib-circle", "ib-green", "ib-big"],
+            tooltip_text="Call")
         call_btn.connect("clicked", self._on_dial)
-        self._entry.add_suffix(call_btn)
-        dial_group.add(self._entry)
-        page.add(dial_group)
+        field.append(self._entry)
+        field.append(call_btn)
+        dialer.append(field)
+        self.append(Adw.Clamp(maximum_size=600, child=dialer))
 
         # Contact-name autocomplete. GtkEntryCompletion can't attach to an
         # Adw.EntryRow (it wraps GtkText, not GtkEntry), so this is a
-        # popover under the row. autohide stays off so the popover never
+        # popover under the field. autohide stays off so the popover never
         # steals keyboard focus from the entry while the user types.
         self._suggestions = Gtk.Popover(
             has_arrow=False, autohide=False,
@@ -57,6 +69,8 @@ class CallsPage(Gtk.Box):
         self._filling = False  # guard: setting text from a pick re-fires "changed"
         self._entry.connect("changed", self._on_entry_changed)
 
+        page = Adw.PreferencesPage()
+        self.append(page)
         self._calls_group = Adw.PreferencesGroup(title="Active calls")
         page.add(self._calls_group)
         self._refresh_calls()
@@ -97,8 +111,7 @@ class CallsPage(Gtk.Box):
             box.append(Gtk.Label(label=name, xalign=0, hexpand=True,
                                  ellipsize=Pango.EllipsizeMode.END,
                                  max_width_chars=28))
-            box.append(Gtk.Label(label=phone,
-                                 css_classes=["dim-label", "caption"]))
+            box.append(Gtk.Label(label=phone, css_classes=["ib-time"]))
             row = Gtk.ListBoxRow(child=box)
             row.contact_name = name
             self._sug_list.append(row)
@@ -173,12 +186,12 @@ class CallsPage(Gtk.Box):
         if state in ("incoming", "waiting"):
             answer = Gtk.Button(
                 icon_name="call-start-symbolic", valign=Gtk.Align.CENTER,
-                css_classes=["suggested-action"], tooltip_text="Answer")
+                css_classes=["ib-circle", "ib-green"], tooltip_text="Answer")
             answer.connect("clicked", lambda _b, p=path: self._answer(p))
             row.add_suffix(answer)
         hang = Gtk.Button(
             icon_name="call-stop-symbolic", valign=Gtk.Align.CENTER,
-            css_classes=["destructive-action"], tooltip_text="Hang up")
+            css_classes=["ib-circle", "ib-red"], tooltip_text="Hang up")
         hang.connect("clicked", lambda _b, p=path: self._hangup(p))
         row.add_suffix(hang)
         return row

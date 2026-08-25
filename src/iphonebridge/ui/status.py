@@ -9,23 +9,33 @@ from iphonebridge.contacts import ContactsResolver
 
 log = logging.getLogger(__name__)
 
+_STATE_ICONS = {
+    "ok":   ("emblem-ok-symbolic", "ib-ok"),
+    "warn": ("dialog-warning-symbolic", "ib-warn"),
+    "idle": ("dialog-question-symbolic", "ib-idle"),
+}
+
+
+def _set_state(image: Gtk.Image, state: str) -> None:
+    """Point an indicator at one of the three states, tinted iOS-style."""
+    icon, css = _STATE_ICONS[state]
+    image.set_from_icon_name(icon)
+    for _, other in _STATE_ICONS.values():
+        image.remove_css_class(other)
+    image.add_css_class(css)
+
 
 class StatusPage(Gtk.Box):
     def __init__(self, client, toast) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL,
+                         css_classes=["ib-settings"])
         self._client = client
 
-        # Page-level header: Recheck refreshes everything on this tab, so it
-        # sits above all groups rather than inside one of them.
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        for setter in (header.set_margin_top, header.set_margin_end,
-                       header.set_margin_start):
-            setter(12)
-        recheck = Gtk.Button(label="Recheck", halign=Gtk.Align.END,
-                             hexpand=True)
-        recheck.connect("clicked", lambda _b: self._refresh())
-        header.append(recheck)
-        self.append(header)
+        # Recheck refreshes everything on this tab, so it belongs in the
+        # window's header slot rather than in a strip above the groups.
+        self.header_action = Gtk.Button(label="Recheck", css_classes=["flat"],
+                                        valign=Gtk.Align.CENTER)
+        self.header_action.connect("clicked", lambda _b: self._refresh())
 
         page = Adw.PreferencesPage()
         self.append(page)
@@ -75,30 +85,28 @@ class StatusPage(Gtk.Box):
         self._daemon_row.set_subtitle("Running" if reachable
                                       else "Not reachable — start it with "
                                            "systemctl --user start iphonebridge")
-        self._daemon_icon.set_from_icon_name(
-            "emblem-ok-symbolic" if reachable else "dialog-warning-symbolic")
+        _set_state(self._daemon_icon, "ok" if reachable else "warn")
 
         healthy = self._client.healthy
         self._map_row.set_subtitle(
             "Connected" if healthy
             else "Unavailable — check the iPhone Bluetooth toggles below")
-        self._map_icon.set_from_icon_name(
-            "emblem-ok-symbolic" if healthy else "dialog-warning-symbolic")
+        _set_state(self._map_icon, "ok" if healthy else "warn")
 
         # Checklist marks are inferred from what's actually working, not
         # read from the iPhone: a live session proves its toggle is on.
         status = self._client.profile_status() if reachable else {}
         for row, icon, base, key in self._toggle_rows:
             if key not in status:
-                icon.set_from_icon_name("dialog-question-symbolic")
+                _set_state(icon, "idle")
                 row.set_subtitle(base + " — state unknown (daemon unreachable)"
                                  if not reachable else base)
                 continue
             if status[key]:
-                icon.set_from_icon_name("emblem-ok-symbolic")
+                _set_state(icon, "ok")
                 row.set_subtitle(base + " — working now")
             else:
-                icon.set_from_icon_name("dialog-warning-symbolic")
+                _set_state(icon, "warn")
                 row.set_subtitle(base + " — not detected; check this toggle")
 
         try:

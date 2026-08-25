@@ -1,7 +1,7 @@
 """Notifications page — a live feed of per-app ANCS notifications."""
 from __future__ import annotations
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gtk, Pango
 
 from iphonebridge.ui.util import event_ts, format_ts
 
@@ -11,11 +11,16 @@ class NotificationsPage(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._client = client
 
+        # Rows are hand-built cards rather than Adw.ActionRow so each one
+        # can carry its own rounded outline, the way a stack of iOS
+        # notifications reads.
         self._list = Gtk.ListBox(
             selection_mode=Gtk.SelectionMode.NONE,
-            css_classes=["boxed-list"], valign=Gtk.Align.START,
-            margin_top=12, margin_bottom=12, margin_start=12, margin_end=12)
-        scroll = Gtk.ScrolledWindow(child=self._list, vexpand=True)
+            css_classes=["ib-notes"], valign=Gtk.Align.START,
+            margin_top=12, margin_bottom=12)
+        scroll = Gtk.ScrolledWindow(
+            child=Adw.Clamp(maximum_size=600, child=self._list),
+            hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         self._empty = Adw.StatusPage(
             icon_name="preferences-system-notifications-symbolic",
             title="No notifications yet",
@@ -42,15 +47,24 @@ class NotificationsPage(Gtk.Box):
         app = ev.get("app_name") or ev.get("app_id") or "Notification"
         title = (ev.get("title") or "").strip()
         body = (ev.get("body") or "").strip()
-        subtitle = " — ".join(p for p in (title, body) if p) or "(no preview)"
+        preview = " — ".join(p for p in (title, body) if p) or "(no preview)"
 
-        row = Adw.ActionRow(title=app, subtitle=subtitle)
-        row.set_subtitle_lines(2)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        top.append(Gtk.Label(label=app, xalign=0, hexpand=True,
+                             css_classes=["ib-app"],
+                             ellipsize=Pango.EllipsizeMode.END))
         ts = format_ts(event_ts(ev), fmt="%H:%M")
         if ts:
-            row.add_suffix(Gtk.Label(label=ts, css_classes=["dim-label",
-                                                            "caption"]))
-        self._list.prepend(row)
+            top.append(Gtk.Label(label=ts, css_classes=["ib-time"],
+                                 valign=Gtk.Align.START))
+        box.append(top)
+        box.append(Gtk.Label(label=preview, xalign=0, wrap=True, lines=2,
+                             ellipsize=Pango.EllipsizeMode.END,
+                             css_classes=["ib-preview"]))
+
+        self._list.prepend(Gtk.ListBoxRow(child=box, activatable=False,
+                                          selectable=False))
         self._count += 1
 
     def _update_stack(self) -> None:
