@@ -74,8 +74,14 @@ class ConversationsPage(Gtk.Box):
         self._convo_title = Gtk.Label(
             label="", css_classes=["ib-convo-title"],
             ellipsize=_ELLIPSIZE_END)
-        self._link_pill = Gtk.Label(label="", css_classes=["ib-linkpill"],
-                                    halign=Gtk.Align.CENTER)
+        self._link_pill = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=5,
+            css_classes=["ib-linkpill"], halign=Gtk.Align.CENTER)
+        self._link_dot = Gtk.Label(label="●", css_classes=["ib-linkdot"],
+                                   valign=Gtk.Align.CENTER)
+        self._link_text = Gtk.Label(label="")
+        self._link_pill.append(self._link_dot)
+        self._link_pill.append(self._link_text)
         self._convo_header.append(self._convo_title)
         self._convo_header.append(self._link_pill)
         right.append(self._convo_header)
@@ -404,10 +410,10 @@ class ConversationsPage(Gtk.Box):
         up = alive if alive is not None else (
             self._client.available and self._client.healthy)
         if up:
-            self._link_pill.set_label("●  iPhone connected")
+            self._link_text.set_label("iPhone connected")
             self._link_pill.remove_css_class("warn")
         else:
-            self._link_pill.set_label("●  Reconnecting…")
+            self._link_text.set_label("Reconnecting…")
             self._link_pill.add_css_class("warn")
 
     # ---- delete ---------------------------------------------------------

@@ -117,6 +117,10 @@
   color: var(--ib-orange);
   background: color-mix(in srgb, var(--ib-orange) 15%, transparent);
 }
+/* The dot is the signal, so it carries colour in both states while the
+   text stays quiet. A dot that never changes colour earns no place. */
+.ib-linkdot { color: var(--ib-green); font-size: 0.7em; }
+.ib-linkpill.warn .ib-linkdot { color: var(--ib-orange); }
 
 /* ---- composer ---------------------------------------------------------- */
 
