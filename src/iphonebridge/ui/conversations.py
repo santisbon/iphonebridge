@@ -19,6 +19,7 @@ from iphonebridge.ui.util import (
     relative_stamp,
     resolve_recipient,
     same_group,
+    ts_key,
 )
 from iphonebridge.ui.util import pin_popover_height as _pin_popover_height
 
@@ -188,10 +189,16 @@ class ConversationsPage(Gtk.Box):
                       "phone": ev.get("sender_phone")
                       or ev.get("sender_phone_norm")
                       or ev.get("sender_email") or key,
-                      "messages": []}
+                      "messages": [], "last_ts": "",
+                      "last_at": ts_key(None)}
             self._threads[key] = thread
+        stamp = event_ts(ev)
         msg = {"body": ev.get("body") or "",
-               "ts": event_ts(ev), "outgoing": outgoing,
+               # `ts` is for display, `at` for ordering. Current logs are
+               # UTC throughout and would sort as text, but entries
+               # written before that carry a local offset, and mixing the
+               # two interleaves replies into the middle of a thread.
+               "ts": stamp, "at": ts_key(stamp), "outgoing": outgoing,
                "key": message_key(
                    ev.get("timestamp"),
                    ev.get("sender_phone") or ev.get("sender_email"),
@@ -200,13 +207,15 @@ class ConversationsPage(Gtk.Box):
         # Newest message wins the thread's sort key and preview even if
         # events were ingested out of chronological order (e.g. a seeded
         # history written newest-first).
-        thread["last_ts"] = max(thread.get("last_ts", ""), msg["ts"])
+        if msg["at"] >= thread["last_at"]:
+            thread["last_at"] = msg["at"]
+            thread["last_ts"] = msg["ts"]
         if refresh:
             self._rebuild_thread_list()
             if self._current == key:
                 # Live messages are newer than everything rendered, so they
                 # append; anything out of order forces a full rebuild.
-                if self._rendered and msg["ts"] >= self._rendered[-1]["ts"]:
+                if self._rendered and msg["at"] >= self._rendered[-1]["at"]:
                     self._append_message(msg)
                 else:
                     self._render_thread(key)
@@ -293,7 +302,7 @@ class ConversationsPage(Gtk.Box):
         selected = self._current
         self._thread_list.remove_all()
         order = sorted(self._threads.values(),
-                       key=lambda t: t.get("last_ts", ""), reverse=True)
+                       key=lambda t: t["last_at"], reverse=True)
         for thread in order:
             row = Gtk.ListBoxRow()
             row.thread_key = thread["key"]
@@ -309,7 +318,7 @@ class ConversationsPage(Gtk.Box):
             box.append(top)
 
             msgs = thread["messages"]
-            last = (max(msgs, key=lambda m: m["ts"])["body"] if msgs else "")
+            last = (max(msgs, key=lambda m: m["at"])["body"] if msgs else "")
             box.append(Gtk.Label(label=last.replace("\n", " "), xalign=0,
                                  ellipsize=_ELLIPSIZE_END,
                                  css_classes=["ib-preview"]))
@@ -349,7 +358,7 @@ class ConversationsPage(Gtk.Box):
         thread = self._threads.get(key)
         if thread is None:
             return
-        for msg in sorted(thread["messages"], key=lambda m: m["ts"]):
+        for msg in sorted(thread["messages"], key=lambda m: m["at"]):
             self._append_message(msg)
 
     def _append_message(self, msg: dict) -> None:
@@ -477,7 +486,9 @@ class ConversationsPage(Gtk.Box):
                     self._entry.set_sensitive(False)
                     self._send_btn.set_sensitive(False)
             else:
-                thread["last_ts"] = max(m["ts"] for m in thread["messages"])
+                newest = max(thread["messages"], key=lambda m: m["at"])
+                thread["last_at"] = newest["at"]
+                thread["last_ts"] = newest["ts"]
         self._rebuild_thread_list()
         if self._current and self._current in self._threads:
             self._render_thread(self._current)

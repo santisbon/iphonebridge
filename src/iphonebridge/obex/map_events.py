@@ -210,8 +210,14 @@ class _PendingFetch:
             contact = self.listener.resolve_contact(parsed.sender_email)
         if contact is None and parsed.sender_name:
             contact = parsed.sender_name
-        # Use timestamp from initial props (BlueZ tends to populate it on the
-        # Message1 object) when available; otherwise None
+        # Almost always None here, and that is the protocol, not a bug:
+        # an MNS-pushed message is exported as a Message1 with
+        # Status="notification", whose property set is minimal and carries
+        # no Timestamp — it does not gain one after the transfer either.
+        # Only Status="complete" objects, the ones a listing produces, have
+        # Timestamp/Subject/Sender, which is why the inbox sweep gets real
+        # send times and live pushes do not. Consumers fall back to
+        # seen_at, which for a live push is within seconds of the truth.
         ts = parse_map_timestamp(self.initial_props.get("Timestamp"))
         event = SmsEvent(
             kind="sms_received",

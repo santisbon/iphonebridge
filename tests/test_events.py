@@ -2,12 +2,16 @@
 SmsEvent construction from MAP Message1 properties."""
 from __future__ import annotations
 
-from datetime import datetime
+import os
+import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from iphonebridge.events import (
     SmsEvent,
+    message_key,
+    normalize_key,
     normalize_phone,
     parse_map_timestamp,
     sms_event_from_message1_props,
@@ -40,20 +44,19 @@ class TestNormalizePhone:
 
 class TestParseMapTimestamp:
     def test_basic_format(self):
+        """A bare MAP stamp is the phone's local time, and comes back as
+        the same instant expressed in UTC."""
         result = parse_map_timestamp("20260519T181423")
         assert isinstance(result, datetime)
-        assert result.year == 2026
-        assert result.month == 5
-        assert result.day == 19
-        assert result.hour == 18
-        assert result.minute == 14
-        assert result.second == 23
+        assert result.utcoffset() == timedelta(0)
+        assert result == datetime(2026, 5, 19, 18, 14, 23).astimezone(
+            timezone.utc)
 
     def test_with_tz_suffix(self):
-        # iPhone may append a TZ offset; we just take the first 15 chars
-        result = parse_map_timestamp("20260519T181423+0500")
-        assert result is not None
-        assert result.day == 19
+        """An explicit offset is applied rather than discarded: 18:14:23
+        at +0500 is 13:14:23 UTC."""
+        assert parse_map_timestamp("20260519T181423+0500") == datetime(
+            2026, 5, 19, 13, 14, 23, tzinfo=timezone.utc)
 
     @pytest.mark.parametrize("bad", ["", None, "not a date", "20260", "abcdef"])
     def test_invalid_returns_none(self, bad):
@@ -283,3 +286,114 @@ def test_drop_events_by_key_and_tombstones(tmp_path):
     record_deleted_keys(tomb, [doomed, doomed])
     assert deleted_keys(tomb) == {doomed}
     assert deleted_keys(tmp_path / "absent.txt") == set()
+
+
+class TestUtcStorage:
+    """Timestamps are stored in UTC so the log can be ordered as text.
+
+    A local offset is unambiguous to a parser but wrong as storage: carry
+    the machine across a timezone mid-conversation and the offset changes
+    under you, so lexical order stops matching real order inside one file.
+    """
+
+    @staticmethod
+    def _received(**over):
+        base = dict(
+            kind="sms_received", handle="h1", sender_phone="+15551234567",
+            sender_phone_norm="15551234567", contact_name=None, body="hi",
+            timestamp=None, is_read=False, raw_status="notification",
+            raw_type="sms-gsm")
+        base.update(over)
+        return SmsEvent(**base)
+
+    def test_seen_at_is_utc(self):
+        d = self._received().to_dict()
+        assert datetime.fromisoformat(d["seen_at"]).utcoffset() == timedelta(0)
+
+    def test_sent_timestamp_is_utc(self):
+        d = sms_sent_event("+15551234567", "hi").to_dict()
+        for fieldname in ("timestamp", "seen_at"):
+            assert datetime.fromisoformat(d[fieldname]).utcoffset() == \
+                timedelta(0)
+
+    def test_a_live_message_has_no_map_timestamp(self):
+        """Not a defect: BlueZ exports an MNS-pushed message with a
+        property set that carries no Timestamp, so consumers fall back to
+        seen_at."""
+        assert self._received().to_dict()["timestamp"] is None
+
+    def test_string_order_survives_a_timezone_change(self):
+        """The travelling case. Two events written either side of a zone
+        change must still sort correctly as plain text; under local-offset
+        storage the second would sort first."""
+        original = os.environ.get("TZ")
+        try:
+            os.environ["TZ"] = "America/Chicago"
+            time.tzset()
+            first = self._received().to_dict()["seen_at"]
+            os.environ["TZ"] = "America/Los_Angeles"
+            time.tzset()
+            second = self._received().to_dict()["seen_at"]
+        finally:
+            if original is None:
+                os.environ.pop("TZ", None)
+            else:
+                os.environ["TZ"] = original
+            time.tzset()
+        assert first < second
+        assert datetime.fromisoformat(first) < datetime.fromisoformat(second)
+
+
+class TestKeyNormalisation:
+    """Keys identify an instant, not a spelling of one, so the log's
+    storage format can change without orphaning tombstones."""
+
+    INSTANT = datetime(2026, 8, 4, 20, 54, 41,
+                       tzinfo=timezone(timedelta(hours=-5)))
+
+    def test_same_instant_spelled_three_ways_gives_one_key(self):
+        as_utc = self.INSTANT.astimezone(timezone.utc).isoformat()
+        as_local = self.INSTANT.isoformat()
+        keys = {message_key(v, "+15551234567", "hi")
+                for v in (self.INSTANT, as_utc, as_local)}
+        assert len(keys) == 1
+
+    def test_legacy_tombstone_maps_onto_the_current_key(self):
+        """A key written when the log stored local offsets still matches
+        the key computed from the same message today."""
+        legacy = "\x1f".join((self.INSTANT.isoformat(), "+15551234567", "hi"))
+        assert normalize_key(legacy) == message_key(
+            self.INSTANT, "+15551234567", "hi")
+
+    def test_missing_timestamp_keeps_an_empty_field(self):
+        assert message_key(None, "+1", "x") == message_key("", "+1", "x")
+
+    def test_unparseable_timestamp_is_passed_through(self):
+        key = message_key("not a date", "+1", "x")
+        assert key.split("\x1f")[0] == "not a date"
+
+    def test_normalising_a_malformed_key_is_a_no_op(self):
+        assert normalize_key("no separators here") == "no separators here"
+
+
+class TestParseMapTimestampZones:
+    def test_bare_is_read_as_this_machines_zone_and_stored_utc(self):
+        dt = parse_map_timestamp("20260804T205441")
+        assert dt.utcoffset() == timedelta(0)
+        assert dt == datetime(2026, 8, 4, 20, 54, 41).astimezone(timezone.utc)
+
+    def test_explicit_z_is_honoured(self):
+        assert parse_map_timestamp("20260804T205441Z") == \
+            datetime(2026, 8, 4, 20, 54, 41, tzinfo=timezone.utc)
+
+    def test_explicit_offset_is_honoured_not_discarded(self):
+        assert parse_map_timestamp("20260804T205441+0530") == \
+            datetime(2026, 8, 4, 15, 24, 41, tzinfo=timezone.utc)
+
+    def test_negative_offset(self):
+        assert parse_map_timestamp("20260804T205441-0500") == \
+            datetime(2026, 8, 5, 1, 54, 41, tzinfo=timezone.utc)
+
+    def test_garbage_is_none(self):
+        for bad in (None, "", "nope", "2026-08-04T20:54:41"):
+            assert parse_map_timestamp(bad) is None

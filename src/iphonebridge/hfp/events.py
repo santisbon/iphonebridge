@@ -48,6 +48,9 @@ class CallEvent:
     peer_phone_norm: str | None            # digits-only, for contact lookup
     contact_name: str | None               # resolved from the contacts cache
     peer_name: str | None                  # name oFono got from the network
+    # UTC, matching SmsEvent.seen_at: every kind of event shares one
+    # events.jsonl, and a file written in two zones cannot be ordered by
+    # comparing its strings.
     seen_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

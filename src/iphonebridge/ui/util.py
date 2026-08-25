@@ -1,7 +1,7 @@
 """Small shared helpers for the UI pages."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -30,6 +30,29 @@ def format_ts(value: str | None, *, fmt: str = "%b %-d · %H:%M") -> str:
     if dt is None:
         return str(value)[:16]
     return _fmt(dt, fmt)
+
+
+#: Sorts before any real event, for entries with no usable timestamp.
+_BEGINNING = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def ts_key(value: str | None) -> datetime:
+    """Comparable instant for ordering events.
+
+    The daemon writes UTC, so its own stamps do sort correctly as text.
+    This exists for everything else: entries logged before the move to
+    UTC carry a local offset, and "09:30-05:00" sorts before
+    "14:30+00:00" despite being the same instant or later. Parsing rather
+    than comparing keeps a log that mixes both readable, and costs
+    nothing once the log is uniform.
+
+    Always returns an aware datetime, so results are safe to compare with
+    each other; a naive stamp is read as local time.
+    """
+    dt = _parse(value)
+    if dt is None:
+        return _BEGINNING
+    return dt if dt.tzinfo is not None else dt.astimezone()
 
 
 def _days_ago(dt: datetime) -> int:

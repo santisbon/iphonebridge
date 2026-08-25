@@ -10,22 +10,41 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Fixed so re-running produces byte-identical images: the day rules in a
 # thread read "Today" / "Yesterday" relative to this, not to the clock.
 BASE = datetime(2026, 8, 25, 9, 12)
 
 
+def _local(minutes: int) -> datetime:
+    """A wall-clock instant, made timezone-aware in the local zone.
+
+    Anchoring to local wall time keeps the rendered images identical on
+    any machine: the file contents differ by zone, but the UI converts
+    back to local for display.
+    """
+    return (BASE + timedelta(minutes=minutes)).astimezone()
+
+
 def _at(minutes: int) -> str:
-    return (BASE + timedelta(minutes=minutes)).isoformat()
+    """UTC, which is how the daemon writes `seen_at`."""
+    return _local(minutes).astimezone(timezone.utc).isoformat()
 
 
 def _sms(kind: str, name: str | None, phone: str, body: str,
          minutes: int) -> dict:
-    return {"kind": kind, "contact_name": name, "sender_phone": phone,
-            "sender_phone_norm": phone.lstrip("+"), "body": body,
-            "timestamp": _at(minutes), "seen_at": _at(minutes)}
+    ev = {"kind": kind, "contact_name": name, "sender_phone": phone,
+          "sender_phone_norm": phone.lstrip("+"), "body": body,
+          "seen_at": _at(minutes)}
+    # Only a sent message gets a `timestamp`, mirroring the daemon: BlueZ
+    # exports an MNS-pushed message with a property set carrying no
+    # Timestamp, so an incoming one falls back to seen_at. Both are UTC,
+    # as the log is. Ordering across the two fields is covered by
+    # tests/test_ui_util.py, including the legacy mixed-zone case.
+    if kind == "sms_sent":
+        ev["timestamp"] = _at(minutes)
+    return ev
 
 
 def events() -> list[dict]:

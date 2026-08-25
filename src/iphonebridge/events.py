@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 # ---- helpers ------------------------------------------------------------
@@ -23,6 +23,30 @@ _PHONE_KEEP = re.compile(r"\D")
 _KEY_BODY_CHARS = 40
 
 
+def _key_ts(timestamp) -> str:
+    """The timestamp component of a message key, always in UTC.
+
+    Accepts a datetime or an ISO string, because keys get built both from
+    live events and by re-reading the log. Normalising here means a key
+    identifies an instant rather than a spelling of one, so entries
+    written before the log moved to UTC still resolve to the same key as
+    the ones written after. Anything unparseable is passed through
+    verbatim: still stable, just not comparable.
+    """
+    if not timestamp:
+        return ""
+    if hasattr(timestamp, "isoformat"):
+        dt = timestamp
+    else:
+        try:
+            dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        except ValueError:
+            return str(timestamp)
+    if dt.tzinfo is None:
+        dt = dt.astimezone()
+    return dt.astimezone(timezone.utc).isoformat()
+
+
 def message_key(timestamp, sender: str | None, body: str | None) -> str:
     """Stable identity for a message, independent of its MAP handle.
 
@@ -31,9 +55,23 @@ def message_key(timestamp, sender: str | None, body: str | None) -> str:
     survived a single delete), so a handle cannot say "already seen"
     across that. Timestamp, sender, and the start of the body can.
     """
-    ts = timestamp.isoformat() if hasattr(timestamp, "isoformat") else str(timestamp or "")
     head = " ".join((body or "").split())[:_KEY_BODY_CHARS]
-    return "\x1f".join((ts, (sender or "").strip().lower(), head))
+    return "\x1f".join((_key_ts(timestamp), (sender or "").strip().lower(),
+                        head))
+
+
+def normalize_key(key: str) -> str:
+    """Re-spell a stored key's timestamp in UTC.
+
+    Tombstones written before the log moved to UTC carry a local-offset
+    timestamp in their first field. Normalising them on read maps them
+    onto the current key space, so a deleted message stays deleted across
+    the change without rewriting deleted-keys.txt.
+    """
+    parts = key.split("\x1f")
+    if len(parts) != 3:
+        return key
+    return "\x1f".join((_key_ts(parts[0]), parts[1], parts[2]))
 
 
 def deleted_keys(path) -> set[str]:
@@ -44,7 +82,8 @@ def deleted_keys(path) -> set[str]:
     """
     try:
         with open(path, encoding="utf-8") as f:
-            return {line.rstrip("\n") for line in f if line.strip()}
+            return {normalize_key(line.rstrip("\n"))
+                    for line in f if line.strip()}
     except OSError:
         return set()
 
@@ -173,18 +212,37 @@ def normalize_phone(raw: str | None) -> str | None:
     return digits if len(digits) >= 7 else None
 
 
+_MAP_TZ_RE = re.compile(r"^([+-])(\d{2})(\d{2})$")
+
+
 def parse_map_timestamp(ts: str | None) -> datetime | None:
-    """Parse MAP's timestamp format: '20260519T181423' or with timezone suffix."""
+    """Parse MAP's timestamp format into UTC.
+
+    The format is YYYYMMDDTHHMMSS, optionally followed by "Z" or a
+    ±HHMM offset. iOS sends the bare form, which MAP defines as the
+    phone's local time; an explicit suffix is honoured when present
+    rather than discarded, since that is the only case where the phone's
+    zone is actually knowable.
+    """
     if not ts:
         return None
-    # MAP timestamps: YYYYMMDDTHHMMSS, optionally followed by a TZ offset
-    base = ts[:15]
+    text = str(ts).strip()
     try:
-        dt = datetime.strptime(base, "%Y%m%dT%H%M%S")
+        dt = datetime.strptime(text[:15], "%Y%m%dT%H%M%S")
     except ValueError:
         return None
-    # MAP timestamps are local-time on the iPhone; we'll treat as local
-    return dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    suffix = text[15:]
+    if suffix.upper() == "Z":
+        dt = dt.replace(tzinfo=timezone.utc)
+    elif (m := _MAP_TZ_RE.match(suffix)):
+        offset = timedelta(hours=int(m.group(2)), minutes=int(m.group(3)))
+        dt = dt.replace(tzinfo=timezone(offset if m.group(1) == "+"
+                                        else -offset))
+    else:
+        # Bare: assume the phone shares this computer's zone. Wrong while
+        # the two are in different places, and unknowable from MAP alone.
+        dt = dt.astimezone()
+    return dt.astimezone(timezone.utc)
 
 
 # ---- event types --------------------------------------------------------
@@ -211,6 +269,17 @@ class SmsEvent:
     message_path: str | None = None
     # iMessage senders addressed by Apple ID arrive with an email, no phone.
     sender_email: str | None = None
+    # UTC, like every other stamp written to the log. A local offset would
+    # be unambiguous to a parser but useless as storage: carry the laptop
+    # across a timezone mid-conversation and the offset changes under you,
+    # so lexical order stops matching chronological order within a single
+    # file. In UTC every stamp shares one offset and sorting the raw
+    # strings is always correct.
+    #
+    # This field matters more than it looks: a live MNS-pushed message is
+    # exported by BlueZ as a Message1 with Status="notification", whose
+    # property set carries no Timestamp, so `timestamp` above is None for
+    # those and consumers fall back to this.
     seen_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -261,7 +330,7 @@ def sms_sent_event(
         sender_phone_norm=normalize_phone(recipient),
         contact_name=contact_name,
         body=body,
-        timestamp=datetime.now().astimezone(),
+        timestamp=datetime.now(timezone.utc),
         is_read=True,
         raw_status="sent",
         raw_type="sms_sent",
