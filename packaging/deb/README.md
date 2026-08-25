@@ -368,8 +368,16 @@ on the next reboot, or immediately with:
 sudo systemctl restart bluetooth
 ```
 
-Desktop menu and icon caches update themselves via package triggers;
-nothing manual there.
+Desktop menu and icon caches for `/usr/share` update themselves via
+package triggers. Per-user caches do not: if a from-source install ever
+put an icon under `~/.local/share/icons`, KDE's icon cache can keep
+pointing at the deleted file and windows show a broken icon. Clear it
+with:
+
+```bash
+rm -f ~/.cache/icon-cache.kcache
+kbuildsycoca6 --noincremental
+```
 
 ## Known limits
 

@@ -334,7 +334,11 @@ desktop-file-validate ~/.local/share/applications/me.santisbon.iphonebridge.UI.d
 gio launch ~/.local/share/applications/me.santisbon.iphonebridge.UI.desktop
 ```
 
-To remove it, delete the two installed files and re-run `update-desktop-database`.
+To remove it, delete the two installed files, re-run
+`update-desktop-database`, and clear KDE's icon cache
+(`rm -f ~/.cache/icon-cache.kcache && kbuildsycoca6 --noincremental`),
+which otherwise keeps resolving the deleted icon path and shows a broken
+window icon.
 
 ## 💻 CLI
 
@@ -636,7 +640,7 @@ forked at v0.4.2 and maintained independently by
 
 iphonebridge stands on the shoulders of two prior projects, both GPL-2.0:
 
-- **[bmh129/ancs4linux](https://github.com/bmh129/ancs4linux)** — an actively-maintained 2026 fork whose empirical work on BR/EDR-vs-BLE coexistence, the `LastUsedBearer=le` unlock, and adapter compatibility made iphonebridge's ANCS support possible. The ANCS wire-format code in [`src/iphonebridge/ancs/`](src/iphonebridge/ancs/) is derived from their `observer/ancs/` modules.
+- **[bmh129/ancs4linux](https://github.com/bmh129/ancs4linux)** — an archived (2026-05-31) fork whose empirical work on BR/EDR-vs-BLE coexistence, the `LastUsedBearer=le` unlock, and adapter compatibility made iphonebridge's ANCS support possible. The ANCS wire-format code in [`src/iphonebridge/ancs/`](src/iphonebridge/ancs/) is derived from their `observer/ancs/` modules.
 - **[pzmarzly/ancs4linux](https://github.com/pzmarzly/ancs4linux)** — the original 2022 reference implementation of ANCS on Linux.
 
 ## 📄 License
