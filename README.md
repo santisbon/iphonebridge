@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📱 iphonebridge
+# 📱 iPhone Bridge
 
 **Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**
 
@@ -16,11 +16,13 @@
 
 ---
 
-Microsoft's Phone Link gives Windows users their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent:
+Windows and macOS users can get their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent:
+
 - KDE Connect needs the Android/iOS *app* and on iOS it's missing notifications, SMS, and needs the iPhone app on-screen to maintain the connection. 
 - `ancs4linux` does notifications only.
 - Mac-relay bridges (BlueBubbles, AirMessage) need an actual Mac. 
 - Beeper no longer supports iMessage.
+- Microsoft's Phone Link is Windows-only.
 
 **iphonebridge is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a GTK4 desktop app.
 
@@ -105,11 +107,11 @@ then:
 
 ```bash
 sudo apt install ./iphonebridge_*_all.deb
-sudo adduser $USER iphonebridge
+sudo adduser $USER iphonebridge # then reboot
 ```
 
-Reboot (a re-login is not enough — user services keep their old groups
-while any session survives the logout), then pair your iPhone and run
+Reboot is needed because a re-login is not enough — user services keep their old groups
+while any session survives the logout. Then pair your iPhone and run
 `iphonebridge pair-setup`.
 
 The full walkthrough, including the iPhone-side toggles, optional calls
