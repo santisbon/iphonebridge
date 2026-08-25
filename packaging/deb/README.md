@@ -127,16 +127,21 @@ debian/sudoers-ancs                            etc/sudoers.d/
 rules from step 1; mode 0440 via `debian/postinst` or
 `dh_fixperms` overrides. Validate with `visudo -cf` in the build.)
 
-`debian/postinst`:
+`debian/postinst` (creates the group, and reloads each logged-in user's
+systemd manager so the rewritten user unit is not served from cache):
 
 ```sh
 #!/bin/sh
 set -e
 if [ "$1" = "configure" ]; then
     getent group iphonebridge >/dev/null || addgroup --system iphonebridge
-    chmod 0440 /etc/sudoers.d/iphonebridge-cod /etc/sudoers.d/iphonebridge-ancs
 fi
 #DEBHELPER#
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    for _ib_user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
+        systemctl --machine="${_ib_user}@.host" --user daemon-reload >/dev/null 2>&1 || true
+    done
+fi
 ```
 
 `debian/changelog`: hand-written; keep in sync with `CHANGELOG.md`
@@ -349,17 +354,19 @@ Install the new package over the old one. Do not uninstall first:
 
 ```bash
 sudo apt install ./iphonebridge_<version>_all.deb
-systemctl --user daemon-reload
 systemctl --user restart iphonebridge
 ```
 
-Both steps matter. dpkg rewrites the unit file, so systemd warns that it
-"changed on disk" and keeps using its cached copy until the reload;
-skipping it is harmless while the unit's contents are unchanged between
-releases, and applies a stale definition on any release that changes
-them. And dpkg cannot restart per-user services at all, so the running
-daemon keeps executing the old code until you restart it. Reopen the app
-too if it is running.
+The restart is required and is not optional politeness: dpkg cannot
+restart per-user services, so the running daemon keeps executing the old
+code until you restart it. Reopen the app too if it is running.
+
+No `daemon-reload` is needed: dpkg rewrites the unit file and systemd
+would otherwise keep its cached copy, so `postinst` reloads each
+logged-in user's manager. (`systemctl --global daemon-reload` does not
+exist — `--global` covers enable and disable only — so the reload
+iterates over `loginctl list-users`. Anyone logging in later starts a
+fresh manager that reads the unit anyway.)
 
 What survives an upgrade, so none of it needs redoing: your group
 membership (postinst only creates the group if missing, so no second

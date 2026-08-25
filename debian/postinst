@@ -4,3 +4,15 @@ if [ "$1" = "configure" ]; then
     getent group iphonebridge >/dev/null || addgroup --system iphonebridge
 fi
 #DEBHELPER#
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    # dpkg just rewrote the user unit, and systemd keeps using its cached
+    # copy until told otherwise. `systemctl --global daemon-reload` does
+    # not exist (--global covers enable/disable only), so reload each
+    # logged-in user's manager directly. Users who log in later start a
+    # fresh manager that reads the unit anyway.
+    # Never fatal: a failed postinst leaves the package half-configured,
+    # and a stale unit cache is not worth that.
+    for _ib_user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
+        systemctl --machine="${_ib_user}@.host" --user daemon-reload >/dev/null 2>&1 || true
+    done
+fi
