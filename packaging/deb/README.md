@@ -343,6 +343,31 @@ sudo apt reinstall ../iphonebridge_*_all.deb
 kbuildsycoca6 --noincremental   # nudge Plasma's icon cache; a re-login also does it
 ```
 
+## Upgrading
+
+Install the new package over the old one. Do not uninstall first:
+
+```bash
+sudo apt install ./iphonebridge_<version>_all.deb
+systemctl --user daemon-reload
+systemctl --user restart iphonebridge
+```
+
+Both steps matter. dpkg rewrites the unit file, so systemd warns that it
+"changed on disk" and keeps using its cached copy until the reload;
+skipping it is harmless while the unit's contents are unchanged between
+releases, and applies a stale definition on any release that changes
+them. And dpkg cannot restart per-user services at all, so the running
+daemon keeps executing the old code until you restart it. Reopen the app
+too if it is running.
+
+What survives an upgrade, so none of it needs redoing: your group
+membership (postinst only creates the group if missing, so no second
+reboot), the pairing, and everything in your home directory — the iPhone
+MAC in `~/.config/iphonebridge`, message history and the contacts cache
+in `~/.local/state/iphonebridge`. The sudoers rules are conffiles, so
+dpkg replaces them when untouched and prompts if you edited them.
+
 ## Uninstall completely
 
 ```bash
