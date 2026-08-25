@@ -39,7 +39,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 🔁 **Read-state sync** — read on either device, syncs to both | MAP read-state writes | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | GTK4 / libadwaita | ✅ |
-| ⚙️ Runs unattended as a **systemd user service** | — | ✅ |
+| ⚙️ **Runs unattended** | systemd user service | ✅ |
 
 ### Details
 - **Incoming messages** appear as **persistent notifications** — they stay until you dismiss them on the desktop *or* read the message on your iPhone. **Read-state syncs both ways.**
