@@ -24,7 +24,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 - Beeper no longer supports iMessage.
 - Microsoft's Phone Link is Windows-only.
 
-**iphonebridge is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a GTK4 desktop app.
+**This is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a GTK4 desktop app.
 
 ## ✨ What it does
 
@@ -94,12 +94,10 @@ Two ways to install. Pick **exactly one** as mixing the two is confusing to debu
 
 ### With a `.deb` package
 
-Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces without defeating the purpose of sandboxing.
+Use this on any apt-based distro, e.g. **Debian, Ubuntu and its flavors (Kubuntu, Xubuntu…), Pop!_OS, Linux Mint**. Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces without defeating the purpose of sandboxing.
 
 One package installs everything: daemon, CLI, desktop app, launcher
-entry, systemd unit, and the privileged sudoers rules. Use this on any
-apt-based distro, e.g. **Debian, Ubuntu and its flavors (Kubuntu,
-Xubuntu…), Pop!_OS, Linux Mint**.
+entry, systemd unit, and the privileged sudoers rules.
 
 Download the `.deb` from the
 [latest release](https://github.com/santisbon/iphonebridge/releases/latest),
@@ -313,13 +311,7 @@ Incoming calls then pop up with **Answer / Decline** buttons. Place calls with
 
 ## 🖥️ Desktop app
 
-`iphonebridge-ui` is a GTK4 / libadwaita app — a separate process from the daemon, talking to it over D-Bus, so you can open and close it freely while the daemon keeps running in the background. Four tabs:
-
-- **Messages** — SMS & iMessage conversations grouped by contact. Read history and reply from a compose box; the replies you send are saved into the thread.
-- **Notifications** — a live feed of every app's notifications (Slack, Mail, WhatsApp…), mirrored from the iPhone over ANCS.
-- **Calls** — a dialer to place calls, plus Answer / Hang-up controls for active ones; an incoming call raises this tab automatically.
-- **Setup** — daemon health, contact and message counts, and the iPhone-toggle checklist.
-
+GTK4 / libadwaita app — a separate process from the daemon, talking to it over D-Bus, so you can open and close it freely while the daemon keeps running in the background.
 ```bash
 iphonebridge-ui
 ```
