@@ -24,7 +24,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 - Beeper no longer supports iMessage.
 - Microsoft's Phone Link is Windows-only.
 
-**This is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a GTK4 desktop app.
+**This is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a desktop app.
 
 ## ✨ What it does
 
@@ -49,11 +49,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 - **History starts shallow** — a fresh install seeds conversations with the recent inbox window iOS exposes over Bluetooth (roughly the last 10 messages); iOS does not serve older history to any Bluetooth bridge. Threads grow from install day forward.
 
 ### Note
-Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a paired computer — that you *must* use a Mac relay to bridge blue-bubble messages.
-
-**That is not true on iOS 26.5.** iphonebridge receives *and sends* iMessage through the standard MAP Bluetooth profile, with no Mac, no Apple ID login, nothing. iOS labels iMessage and SMS identically (`Type: sms-gsm`) and exposes both. Outgoing messages route as iMessage automatically when the recipient is iMessage-capable.
-
-As far as we know, **iphonebridge is the first free, open-source, Mac-free iMessage bridge for Linux.** The empirical proof is in [`spike/RESULTS.md`](spike/RESULTS.md) §6.
+Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a paired computer — that you *must* use a Mac relay to bridge blue-bubble messages. **That is not true on iOS 26.5.** iPhone Bridge receives *and sends* iMessage through the standard MAP Bluetooth profile, with no Mac, no Apple ID login, nothing. iOS labels iMessage and SMS identically (`Type: sms-gsm`) and exposes both. Outgoing messages route as iMessage automatically when the recipient is iMessage-capable. The empirical proof is in [`spike/RESULTS.md`](spike/RESULTS.md) §6.
 
 ## 🚧 Limitations
 
@@ -311,7 +307,7 @@ Incoming calls then pop up with **Answer / Decline** buttons. Place calls with
 
 ## 🖥️ Desktop app
 
-GTK4 / libadwaita app — a separate process from the daemon, talking to it over D-Bus, so you can open and close it freely while the daemon keeps running in the background.
+A separate process from the daemon, talking to it over D-Bus, so you can open and close it freely while the daemon keeps running in the background.
 ```bash
 iphonebridge-ui
 ```
@@ -653,7 +649,7 @@ The `~/.local/bin` symlinks point at paths inside `.venv`, so they keep working 
 
 ## 🙏 Credits
 
-This repository is a hard fork of
+This repository is a fork of
 [gabrielmeir53/iphonebridge](https://github.com/gabrielmeir53/iphonebridge),
 forked at v0.4.2 and maintained independently by
 [santisbon](https://github.com/santisbon).
