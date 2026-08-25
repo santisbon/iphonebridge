@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.7.0] — 2026-08-24
+
+### Added
+- **Single `.deb` package**: one `apt install` ships the daemon, CLI, GTK
+  app, systemd user unit, desktop entry, icon, metainfo, the ANCS helper,
+  and group-based sudoers rules. Build and install instructions in
+  `packaging/deb/README.md` (self-contained, including uninstall).
+- Conversation history is seeded at startup from the inbox window iOS
+  serves over Bluetooth (~10 messages), so a fresh install no longer
+  shows an empty Messages tab. Logged to the JSONL sink only — no
+  notification or clipboard popups — deduplicated against MNS
+  re-announcements, and written oldest-first.
+- Glossary in the README (CoD, BlueZ, obexd, OBEX, MAP/MNS, bMessage,
+  PBAP, ANCS, HFP/oFono, btmgmt).
+
+### Fixed
+- **btmgmt hung forever when run from a service.** It registers stdin in
+  its epoll loop, and `/dev/null` — the stdin of every systemd service
+  and `subprocess.run` call — is not pollable, so it slept without ever
+  opening the management socket. Every "adapter wedge" and "settling
+  window" observed while debugging the adapter class was this one bug.
+  The adapter class now sets itself at boot, in milliseconds.
+- The daemon claims its D-Bus name before the first MAP/PBAP attempt, so
+  the app and CLI can reach it during the minute the iPhone may take to
+  reconnect at login; the app also watches the name's owner and clears
+  its "not reachable" banner without a manual Recheck.
+- Conversations order by timestamp rather than ingestion order, so no
+  log ordering can invert a thread.
+
+### Changed
+- New app icon: a white speech bubble with the Bluetooth rune on an
+  iMessage-blue gradient.
+- README installation is split into two labeled options (the `.deb` for
+  apt-family distros, from source for everything else and for
+  development) with a warning against mixing them.
+
 ## [0.6.0] — 2026-08-24
 
 ### Added

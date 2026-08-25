@@ -67,8 +67,8 @@ Top-level `debian/` exists in the repo with these files, plus
 `debian/copyright` (GPL-2+, upstream and ancs4linux attribution;
 required, lintian errors without it) and `debian/source/format`
 containing `3.0 (native)`. Native format means the version has no
-Debian revision: the package is `iphonebridge_0.6.0_all.deb`, not
-`0.6.0-1`. `debian/rules` also renames the sudoers files at install
+Debian revision: the package is `iphonebridge_<version>_all.deb`, not
+`<version>-1`. `debian/rules` also renames the sudoers files at install
 time (dh_install keeps source basenames) and disables pybuild's test
 run (`PYBUILD_DISABLE = test`); tests run in CI.
 
@@ -140,15 +140,16 @@ fi
 ```
 
 `debian/changelog`: hand-written; keep in sync with `CHANGELOG.md`
-manually (or use `dch` from `devscripts`). Native versioning: `0.6.0`,
-no `-1` suffix.
+manually (or use `dch` from `devscripts`). Native versioning: the
+version alone, no `-1` suffix. Bump it in the same commit as
+`pyproject.toml`, `src/iphonebridge/__init__.py`, and `CHANGELOG.md`.
 
 ## Build
 
 ```bash
 sudo apt install debhelper dh-python pybuild-plugin-pyproject python3-all lintian
 dpkg-buildpackage -us -uc -b     # unsigned, binary-only
-lintian ../iphonebridge_0.6.0_all.deb   # two no-manual-page warnings expected
+lintian ../iphonebridge_*_all.deb   # two no-manual-page warnings expected
 ```
 
 ## Install
@@ -158,7 +159,7 @@ Every step from a bare system to working messages, contacts, and calls.
 ### 1. Install the package
 
 ```bash
-sudo apt install ./iphonebridge_0.6.0_all.deb
+sudo apt install ./iphonebridge_*_all.deb
 ```
 
 Dependencies (`bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`,
@@ -292,13 +293,13 @@ per-user sudoers installers all disappear; the package ships them.
 
 If you need to reintall
 ```sh
-sudo apt reinstall ../iphonebridge_0.6.0_all.deb
+sudo apt reinstall ../iphonebridge_*_all.deb
 systemctl --user restart iphonebridge
 ```
 
 To deploy a new icon
 ```sh
-sudo apt reinstall ../iphonebridge_0.6.0_all.deb
+sudo apt reinstall ../iphonebridge_*_all.deb
 kbuildsycoca6 --noincremental   # nudge Plasma's icon cache; a re-login also does it
 ```
 

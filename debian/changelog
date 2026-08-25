@@ -1,3 +1,11 @@
+iphonebridge (0.7.0) unstable; urgency=medium
+
+  * Inbox history seeding, btmgmt-from-service fix (adapter class now
+    sets itself at boot), daemon reachable at login, new app icon.
+    See CHANGELOG.md.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Mon, 24 Aug 2026 20:04:36 -0500
+
 iphonebridge (0.6.0) unstable; urgency=medium
 
   * First packaged release of the hard fork. See CHANGELOG.md for the
