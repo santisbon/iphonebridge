@@ -10,7 +10,7 @@ class _Sessions:
 
 class _Listener:
     def __init__(self, seen=()):
-        self.seen_handles = set(seen)
+        self.seen_keys = set(seen)
 
 
 class _Contacts:
@@ -43,7 +43,7 @@ def test_sweep_logs_unseen_and_marks_seen(monkeypatch):
     ])
     lst, sink = _Listener(), _Jsonl()
     assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 2
-    assert lst.seen_handles == {"message1", "message2"}
+    assert len(lst.seen_keys) == 2
     # MAP listings are newest-first; the log must be chronological, so
     # the listing's second entry is written first.
     ev2, ev1 = sink.events
@@ -52,11 +52,29 @@ def test_sweep_logs_unseen_and_marks_seen(monkeypatch):
 
 
 def test_sweep_skips_already_seen(monkeypatch):
+    """Identity is content, not handle: the same message re-listed under a
+    fresh handle (as happens after a delete renumbers them) is skipped."""
+    from iphonebridge.events import message_key
     _listing(monkeypatch, [
         {"handle": "message1", "sender": "+15551234567", "body": "hi",
          "timestamp": "", "read": True, "status": "", "type": "",
          "sender_phone_norm": ""},
     ])
-    lst, sink = _Listener(seen={"message1"}), _Jsonl()
+    seen = {message_key(None, "+15551234567", "hi")}
+    lst, sink = _Listener(seen=seen), _Jsonl()
     assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 0
     assert sink.events == []
+
+
+def test_sweep_skips_after_handles_renumber(monkeypatch):
+    """A delete on the iPhone renumbers every handle; the same messages
+    must not be re-logged under their new ones."""
+    msg = {"handle": "OLD", "sender": "+15551234567", "body": "hi",
+           "timestamp": "", "read": True, "status": "", "type": "",
+           "sender_phone_norm": ""}
+    _listing(monkeypatch, [msg])
+    lst, sink = _Listener(), _Jsonl()
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 1
+    msg["handle"] = "RENUMBERED"
+    assert sweep_inbox(_Sessions(), lst, _Contacts(), sink) == 0
+    assert len(sink.events) == 1

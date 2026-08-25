@@ -95,7 +95,7 @@ class TestBuildBmessage:
 
 
 def test_listener_skips_seen_handles():
-    """A re-announced handle must return before any D-Bus call is made."""
+    """The listener filters on the session path before any D-Bus call."""
     from iphonebridge.obex.map_events import MapEventListener
 
     class _Sessions:
@@ -104,12 +104,12 @@ def test_listener_skips_seen_handles():
     fired = []
     lst = MapEventListener(
         sessions=_Sessions(), on_sms=fired.append,
-        seen_handles={"message42"},
+        seen_keys=set(),
     )
     # Would raise on the Message1.Get D-Bus call if the guard didn't return
     # first — there is no real obexd object behind this path.
     lst._on_interfaces_added(
-        "/org/bluez/obex/client/session0/message42",
+        "/org/bluez/obex/client/OTHER/message42",
         {"org.bluez.obex.Message1": {"Status": "unread"}},
     )
     assert fired == [] and lst._pending == {}

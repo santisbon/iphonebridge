@@ -15,15 +15,37 @@ from typing import Literal
 
 _PHONE_KEEP = re.compile(r"\D")
 
-def logged_sms_handles(path) -> set[str]:
-    """Handles of every sms_received event already in the JSONL log.
+# The MAP folder listing truncates message text (measured at ~125 chars
+# on iOS 26.6.1) while a bMessage download carries it in full, so the two
+# acquisition paths report different bodies for the same message. Key on
+# a prefix short enough to survive that cut but long enough to keep
+# distinct messages apart.
+_KEY_BODY_CHARS = 40
 
-    Seeds the MNS listener's dedupe guard: obexd re-announces the messages
-    still in the iPhone's inbox after every restart, and without the seed
-    each daemon start would log (and notify) them all again.
+
+def message_key(timestamp, sender: str | None, body: str | None) -> str:
+    """Stable identity for a message, independent of its MAP handle.
+
+    Handles are only stable while the iPhone's message set is: deleting
+    one message renumbers the rest (measured — zero of eleven handles
+    survived a single delete), so a handle cannot say "already seen"
+    across that. Timestamp, sender, and the start of the body can.
+    """
+    ts = timestamp.isoformat() if hasattr(timestamp, "isoformat") else str(timestamp or "")
+    head = " ".join((body or "").split())[:_KEY_BODY_CHARS]
+    return "\x1f".join((ts, (sender or "").strip().lower(), head))
+
+
+def logged_sms_keys(path) -> set[str]:
+    """Identities of every sms_received event already in the JSONL log.
+
+    Seeds the dedupe guard shared by the MNS listener and the startup
+    inbox sweep: obexd re-announces the inbox after every restart, and
+    the sweep lists it deliberately, so without this both would re-log
+    (and the listener would re-notify) messages already in history.
     """
     import json
-    handles: set[str] = set()
+    keys: set[str] = set()
     try:
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -31,11 +53,15 @@ def logged_sms_handles(path) -> set[str]:
                     e = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if e.get("kind") == "sms_received" and e.get("handle"):
-                    handles.add(e["handle"])
+                if e.get("kind") != "sms_received":
+                    continue
+                keys.add(message_key(
+                    e.get("timestamp"),
+                    e.get("sender_phone") or e.get("sender_email"),
+                    e.get("body")))
     except OSError:
         pass
-    return handles
+    return keys
 
 
 _KEYPAD = {c: d for d, letters in {

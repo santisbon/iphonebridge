@@ -23,7 +23,12 @@ from pathlib import Path
 import dbus
 
 from iphonebridge.bus import obex, session_bus
-from iphonebridge.events import SmsEvent, normalize_phone, parse_map_timestamp
+from iphonebridge.events import (
+    SmsEvent,
+    message_key,
+    normalize_phone,
+    parse_map_timestamp,
+)
 from iphonebridge.obex.bmessage import parse as parse_bmessage
 from iphonebridge.obex.sessions import SessionManager
 
@@ -41,15 +46,17 @@ class MapEventListener:
         on_sms: EventCallback,
         *,
         resolve_contact: Callable[[str | None], str | None] = lambda _: None,
-        seen_handles: set[str] | None = None,
+        seen_keys: set[str] | None = None,
     ) -> None:
         self.sessions = sessions
         self.on_sms = on_sms
         self.resolve_contact = resolve_contact
-        # Handles already dispatched (seeded from the event log). obexd
-        # re-announces the whole inbox after every restart; without this,
-        # each daemon start re-logs and re-notifies every message in it.
-        self.seen_handles: set[str] = seen_handles if seen_handles is not None else set()
+        # Messages already dispatched, keyed by content (seeded from the
+        # event log). obexd re-announces the whole inbox after every
+        # restart; without this, each daemon start re-logs and re-notifies
+        # every message in it. Keyed by content rather than MAP handle
+        # because deleting one message on the iPhone renumbers the rest.
+        self.seen_keys: set[str] = seen_keys if seen_keys is not None else set()
         self._signal_match = None
         # Track pending transfers so we can correlate PropertyChanged signals
         # back to the message path that triggered them.
@@ -90,10 +97,6 @@ class MapEventListener:
 
         props = dict(ifaces["org.bluez.obex.Message1"])
         handle = path_s.rsplit("/", 1)[-1]
-        if handle in self.seen_handles:
-            log.debug("Message1 %s already dispatched — re-announcement "
-                      "after an obexd restart, skipping", handle)
-            return
         log.info("new Message1 at %s (Status=%s Type=%s Size=%s) — fetching body",
                  handle, props.get("Status"), props.get("Type"),
                  props.get("Size"))
@@ -224,9 +227,14 @@ class _PendingFetch:
             raw_type=parsed.type or str(self.initial_props.get("Type") or "") or None,
             message_path=self.message_path,
         )
+        key = message_key(ts, sender_raw or parsed.sender_email, parsed.body)
+        if key in self.listener.seen_keys:
+            log.debug("message already in history (handle %s) — obexd "
+                      "re-announcement, skipping", self.handle)
+            return
+        self.listener.seen_keys.add(key)
         log.info("sms_received from %s: %r",
                  event.display_sender, (event.body or "")[:80])
-        self.listener.seen_handles.add(self.handle)
         try:
             self.listener.on_sms(event)
         except Exception:
@@ -248,7 +256,8 @@ class _PendingFetch:
             message_path=self.message_path,
         )
         try:
-            self.listener.seen_handles.add(self.handle)
+            self.listener.seen_keys.add(
+                message_key(event.timestamp, event.sender_phone, event.body))
             self.listener.on_sms(event)
         except Exception:
             log.exception("on_sms callback raised")

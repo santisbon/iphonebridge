@@ -31,7 +31,12 @@ from iphonebridge.ancs.events import AncsEvent
 from iphonebridge.bus import main_loop
 from iphonebridge.contacts import ContactsResolver, pull_phonebook
 from iphonebridge.dbus_service import MessagesService, claim_bus_name
-from iphonebridge.events import SmsEvent, logged_sms_handles, sms_sent_event
+from iphonebridge.events import (
+    SmsEvent,
+    logged_sms_keys,
+    message_key,
+    sms_sent_event,
+)
 from iphonebridge.hfp.events import CallEvent
 from iphonebridge.hfp.ofono_client import HfpManager
 from iphonebridge.obex.map_events import MapEventListener
@@ -75,8 +80,6 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
     # chronological like the live MNS events appended after it.
     for m in reversed(msgs):
         handle = m.get("handle") or ""
-        if not handle or handle in listener.seen_handles:
-            continue
         sender = str(m.get("sender") or "")
         is_email = "@" in sender
         ts = None
@@ -98,7 +101,10 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
             raw_status=str(m.get("status") or "") or None,
             raw_type=str(m.get("type") or "") or None,
         )
-        listener.seen_handles.add(handle)
+        key = message_key(ts, sender or None, event.body)
+        if key in listener.seen_keys:
+            continue
+        listener.seen_keys.add(key)
         try:
             jsonl_sink.handle(event)
         except Exception:
@@ -315,7 +321,7 @@ class Daemon:
                 sessions=self.sessions,
                 on_sms=self._fanout,
                 resolve_contact=lambda raw: self.contacts.resolve(raw),
-                seen_handles=logged_sms_handles(config.EVENTS_JSONL),
+                seen_keys=logged_sms_keys(config.EVENTS_JSONL),
             )
             self.listener.start()
 

@@ -172,23 +172,30 @@ class TestSmsEventDisplay:
         assert e.display_sender == "(unknown)"
 
 
-def test_logged_sms_handles(tmp_path):
-    from iphonebridge.events import logged_sms_handles
+def test_logged_sms_keys(tmp_path):
+    from iphonebridge.events import logged_sms_keys, message_key
     log = tmp_path / "events.jsonl"
     log.write_text(
-        '{"kind": "sms_received", "handle": "message1"}\n'
-        '{"kind": "sms_received", "handle": "message1"}\n'   # dupe collapses
-        '{"kind": "sms_received", "handle": "message2"}\n'
-        '{"kind": "sms_sent", "handle": "messageX"}\n'       # wrong kind
-        '{"kind": "sms_received"}\n'                          # no handle
+        '{"kind": "sms_received", "timestamp": "t1", "sender_phone": "+1", "body": "a"}\n'
+        '{"kind": "sms_received", "timestamp": "t1", "sender_phone": "+1", "body": "a"}\n'
+        '{"kind": "sms_received", "timestamp": "t2", "sender_email": "x@y", "body": "b"}\n'
+        '{"kind": "sms_sent", "timestamp": "t3", "sender_phone": "+9", "body": "c"}\n'
         'not json\n'
     )
-    assert logged_sms_handles(log) == {"message1", "message2"}
+    assert logged_sms_keys(log) == {
+        message_key("t1", "+1", "a"), message_key("t2", "x@y", "b")}
 
 
-def test_logged_sms_handles_missing_file(tmp_path):
-    from iphonebridge.events import logged_sms_handles
-    assert logged_sms_handles(tmp_path / "absent.jsonl") == set()
+def test_logged_sms_keys_missing_file(tmp_path):
+    from iphonebridge.events import logged_sms_keys
+    assert logged_sms_keys(tmp_path / "absent.jsonl") == set()
+
+
+def test_message_key_ignores_handle_and_normalizes():
+    from iphonebridge.events import message_key
+    assert message_key("t", " +15551234567 ", " hi ") == message_key("t", "+15551234567", "hi")
+    assert message_key("t", "A@B.com", "hi") == message_key("t", "a@b.com", "hi")
+    assert message_key("t1", "+1", "hi") != message_key("t2", "+1", "hi")
 
 
 def test_vanity_to_digits():
@@ -232,3 +239,14 @@ def test_dialable():
     assert dialable("555+123") == "555123"
     # formatting-only input reduces to nothing dialable
     assert dialable("() -") == ""
+
+
+def test_message_key_survives_listing_truncation():
+    """The MAP listing truncates bodies (~125 chars) while a bMessage
+    download carries them whole; both must produce the same key."""
+    from iphonebridge.events import message_key
+    full = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, " * 4
+    truncated = full[:125]
+    assert message_key("t", "+1", full) == message_key("t", "+1", truncated)
+    # Different messages at the same timestamp stay distinct
+    assert message_key("t", "+1", "Alpha message") != message_key("t", "+1", "Beta message")
