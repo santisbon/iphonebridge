@@ -39,7 +39,14 @@ Microsoft's Phone Link gives Windows users their iPhone's texts and notification
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | GTK4 / libadwaita | ✅ |
 | ⚙️ Runs unattended as a **systemd user service** | — | ✅ |
 
+### Details
+- **Incoming messages** appear as **persistent notifications** — they stay until you dismiss them on the desktop *or* read the message on your iPhone. **Read-state syncs both ways.**
+- **Verification codes** — when a text carries a one-time / 2FA code, iphonebridge detects it and copies it to your clipboard automatically; press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste. Detection needs both a verification keyword and a 4–8 digit number, so ordinary texts don't trigger it.
+- **Incoming calls** raise a notification with **Answer / Decline** buttons that act on the call directly.
+- **Sent messages** — replies you send from the desktop are recorded into conversation history, so a thread shows both sides.
+- **History starts shallow** — a fresh install seeds conversations with the recent inbox window iOS exposes over Bluetooth (roughly the last 10 messages); iOS does not serve older history to any Bluetooth bridge. Threads grow from install day forward.
 
+### Note
 Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a paired computer — that you *must* use a Mac relay to bridge blue-bubble messages.
 
 **That is not true on iOS 26.5.** iphonebridge receives *and sends* iMessage through the standard MAP Bluetooth profile, with no Mac, no Apple ID login, nothing. iOS labels iMessage and SMS identically (`Type: sms-gsm`) and exposes both. Outgoing messages route as iMessage automatically when the recipient is iMessage-capable.
@@ -70,11 +77,9 @@ These are Apple's Bluetooth-stack limits, not bugs:
 
 ## 🚀 Installation
 
-Two ways to install. Pick exactly one: from-source symlinks in
-`~/.local/bin` shadow a deb-installed `/usr/bin/iphonebridge` on most
-PATH setups, and mixing the two is confusing to debug.
+Two ways to install. Pick **exactly one** as mixing the two is confusing to debug: from-source symlinks in `~/.local/bin` shadow a deb-installed `/usr/bin/iphonebridge` on most PATH setups.
 
-### The `.deb` package
+### With a `.deb` package
 
 Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces without defeating the purpose of sandboxing.
 
@@ -370,14 +375,6 @@ journalctl --user -u iphonebridge -f
 systemctl --user {start,stop,restart} iphonebridge
 ```
 
-## 🔔 How it behaves
-
-- **Incoming messages** appear as **persistent notifications** — they stay until you dismiss them on the desktop *or* read the message on your iPhone. **Read-state syncs both ways.**
-- **Verification codes** — when a text carries a one-time / 2FA code, iphonebridge detects it and copies it to your clipboard automatically; press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste. Detection needs both a verification keyword and a 4–8 digit number, so ordinary texts don't trigger it.
-- **Incoming calls** raise a notification with **Answer / Decline** buttons that act on the call directly.
-- **Sent messages** — replies you send from the desktop are recorded into conversation history, so a thread shows both sides.
-- **History starts shallow** — a fresh install seeds conversations with the recent inbox window iOS exposes over Bluetooth (roughly the last 10 messages); iOS does not serve older history to any Bluetooth bridge. Threads grow from install day forward.
-
 ## 🏗️ How it works
 
 ```
@@ -419,9 +416,9 @@ Design rationale and the empirical Bluetooth findings that shaped it are in [`sp
 - **HFP (Hands-Free Profile)**: take and place calls. **oFono** is the telephony daemon that speaks HFP; PipeWire's oFono backend carries the call audio.
 - **btmgmt**: BlueZ's low-level management CLI; needs root. Used for exactly one thing here: setting the CoD.
 
-## 🛠️ Working on the code
+## 🛠️ Working on the code (if installed from source)
 
-The install is editable: `.venv/.../__editable__.iphonebridge-*.pth` holds a
+The from-source install is editable: `.venv/.../__editable__.iphonebridge-*.pth` holds a
 single line pointing at `src/`, so Python imports straight out of the working
 tree. **Editing a `.py` file never needs `pip install -e .` again** — adding a
 whole new module doesn't either, since that path entry is searched live.
