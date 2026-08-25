@@ -44,11 +44,12 @@ class MainWindow(Adw.ApplicationWindow):
             self._stack.add_titled_with_icon(widget, name, title, icon)
 
         # Adw.InlineViewSwitcher renders as a segmented control, which is
-        # the Apple section switcher. Labels only: icons make it read as a
-        # toolbar rather than one control.
+        # the Apple section switcher. BOTH rather than LABELS so the
+        # bundled tab icons in ui/icons are actually drawn: with labels
+        # only they are set on the stack pages and never appear.
         switcher = Adw.InlineViewSwitcher(
             stack=self._stack,
-            display_mode=Adw.InlineViewSwitcherDisplayMode.LABELS)
+            display_mode=Adw.InlineViewSwitcherDisplayMode.BOTH)
         header = Adw.HeaderBar(title_widget=switcher)
 
         # One header bar for the whole app, with a single slot on the right
