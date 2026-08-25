@@ -152,6 +152,46 @@ dpkg-buildpackage -us -uc -b     # unsigned, binary-only
 lintian ../iphonebridge_*_all.deb   # two no-manual-page warnings expected
 ```
 
+## Cutting a release
+
+Four files carry the version and must move together:
+
+```
+pyproject.toml            version = "X.Y.Z"
+src/iphonebridge/__init__.py   __version__ = "X.Y.Z"
+CHANGELOG.md              new [X.Y.Z] section at the top
+debian/changelog          new entry, native versioning (no -1 suffix)
+```
+
+Then, from a clean tree:
+
+```bash
+python -m pytest tests -q && ruff check src/ tests/   # both must pass
+git add pyproject.toml src/iphonebridge/__init__.py CHANGELOG.md debian/changelog
+git commit -m "Release X.Y.Z"
+git tag -a vX.Y.Z -m "vX.Y.Z — one-line summary"
+git push && git push origin vX.Y.Z
+
+dpkg-buildpackage -us -uc -b                          # builds ../iphonebridge_X.Y.Z_all.deb
+lintian ../iphonebridge_X.Y.Z_all.deb                 # two no-manual-page warnings expected
+
+gh release create vX.Y.Z -R santisbon/iphonebridge \
+  --title "vX.Y.Z" --notes "..." ../iphonebridge_X.Y.Z_all.deb
+```
+
+Notes on that last command:
+
+- **`-R` is not optional.** This repo was created with `gh repo fork`,
+  which set `upstream` as gh's default repository, so a bare
+  `gh release create` targets the original project and fails. Fix it
+  permanently with `gh repo set-default santisbon/iphonebridge`.
+- Attach the `.deb`. The README's install instructions point users at
+  the latest release, so a release without the asset is a broken link
+  for them.
+- Build the package *after* tagging, so what you attach matches the tag.
+- Version numbering is SemVer, pre-1.0: breaking changes and new
+  features bump the minor, fixes bump the patch.
+
 ## Install
 
 Every step from a bare system to working messages, contacts, and calls.

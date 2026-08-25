@@ -5,7 +5,7 @@
 **Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/github/v/tag/santisbon/iphonebridge?color=brightgreen&label=version)](https://github.com/santisbon/iphonebridge/tags)
+[![Release](https://img.shields.io/github/v/release/santisbon/iphonebridge?color=brightgreen)](https://github.com/santisbon/iphonebridge/releases/latest)
 [![License: GPL v2](https://img.shields.io/badge/license-GPL--2.0-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
@@ -86,9 +86,24 @@ Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces witho
 One package installs everything: daemon, CLI, desktop app, launcher
 entry, systemd unit, and the privileged sudoers rules. Use this on any
 apt-based distro, e.g. **Debian, Ubuntu and its flavors (Kubuntu,
-Xubuntu…), Pop!_OS, Linux Mint**. There's no published release yet, so
-build it yourself (one `dpkg-buildpackage` invocation) and follow the
-self-contained build, install, and uninstall guide in
+Xubuntu…), Pop!_OS, Linux Mint**.
+
+Download the `.deb` from the
+[latest release](https://github.com/santisbon/iphonebridge/releases/latest),
+then:
+
+```bash
+sudo apt install ./iphonebridge_*_all.deb
+sudo adduser $USER iphonebridge
+```
+
+Reboot (a re-login is not enough — user services keep their old groups
+while any session survives the logout), then pair your iPhone and run
+`iphonebridge pair-setup`.
+
+The full walkthrough, including the iPhone-side toggles, optional calls
+and per-app notifications, building the package yourself, and a
+teardown script, is in
 [`packaging/deb/README.md`](packaging/deb/README.md).
 
 ### From source
