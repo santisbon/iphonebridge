@@ -233,16 +233,30 @@ class _PendingFetch:
             raw_type=parsed.type or str(self.initial_props.get("Type") or "") or None,
             message_path=self.message_path,
         )
-        key = message_key(ts, sender_raw or parsed.sender_email, parsed.body)
+        # `ts` is None for a push; seen_at is then the only thing that
+        # separates two messages sharing a sender and a body prefix.
+        key = message_key(ts or event.seen_at,
+                          sender_raw or parsed.sender_email, parsed.body)
         # A push carries no timestamp, so its arrival time is what places
         # it against anything the inbox sweep already logged.
-        if self.listener.seen_keys.matches(key, event.seen_at):
-            log.debug("message already in history (handle %s) — obexd "
-                      "re-announcement, skipping", self.handle)
+        if self.listener.seen_keys.matches(key, event.seen_at,
+                                           has_timestamp=ts is not None):
+            # INFO for the same reason: without it, a suppressed message
+            # and a transfer that never completed look identical.
+            log.info("message already in history (handle %s) — obexd "
+                     "re-announcement, skipping", self.handle)
             return
-        self.listener.seen_keys.note(key, event.seen_at)
-        log.info("sms_received from %s: %r",
-                 event.display_sender, (event.body or "")[:80])
+        self.listener.seen_keys.note(key, event.seen_at,
+                                     has_timestamp=ts is not None)
+        # INFO, but content-free. This is the only evidence that a message
+        # was actually delivered rather than dropped, so it has to be
+        # visible at the default level — but the sender and body belong in
+        # DEBUG, since the journal is persisted and broadly readable. The
+        # handle ties it back to the "new Message1 at ..." line above.
+        log.info("sms_received: handle=%s, %d-char body — logged",
+                 self.handle, len(parsed.body or ""))
+        log.debug("sms_received from %s: %r",
+                  event.display_sender, (event.body or "")[:80])
         try:
             self.listener.on_sms(event)
         except Exception:
@@ -265,8 +279,9 @@ class _PendingFetch:
         )
         try:
             self.listener.seen_keys.note(
-                message_key(event.timestamp, event.sender_phone, event.body),
-                event.seen_at)
+                message_key(event.timestamp or event.seen_at,
+                            event.sender_phone, event.body),
+                event.seen_at, has_timestamp=event.timestamp is not None)
             self.listener.on_sms(event)
         except Exception:
             log.exception("on_sms callback raised")

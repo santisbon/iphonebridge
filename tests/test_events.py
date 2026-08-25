@@ -422,18 +422,18 @@ class TestMarkLoggedRead:
         return [json.loads(line) for line in path.read_text().splitlines()]
 
     def test_marks_the_named_message(self, tmp_path):
-        from iphonebridge.events import mark_logged_read
+        from iphonebridge.events import event_key, mark_logged_read
         log = self._log(tmp_path, [self._msg("hi"), self._msg("bye")])
-        key = message_key(None, "+15551234567", "hi")
+        key = event_key(self._msg("hi"))
         assert mark_logged_read(log, {key}) == 1
         rows = self._read_back(log)
         assert rows[0]["is_read"] is True
         assert rows[1]["is_read"] is False
 
     def test_already_read_is_not_counted_again(self, tmp_path):
-        from iphonebridge.events import mark_logged_read
+        from iphonebridge.events import event_key, mark_logged_read
         log = self._log(tmp_path, [self._msg("hi", read=True)])
-        key = message_key(None, "+15551234567", "hi")
+        key = event_key(self._msg("hi", read=True))
         assert mark_logged_read(log, {key}) == 0
 
     def test_unknown_key_changes_nothing(self, tmp_path):
@@ -457,7 +457,8 @@ class TestMarkLoggedRead:
         note = {"kind": "ancs_notification", "app_name": "Mail",
                 "seen_at": "2026-08-25T15:00:00+00:00"}
         log = self._log(tmp_path, [note, self._msg("hi")])
-        assert mark_logged_read(log, {message_key(None, "+15551234567", "hi")}) == 1
+        from iphonebridge.events import event_key
+        assert mark_logged_read(log, {event_key(self._msg("hi"))}) == 1
         rows = self._read_back(log)
         assert rows[0] == note
         assert len(rows) == 2
@@ -479,3 +480,134 @@ class TestSeenEvent:
         assert d["kind"] == "sms_seen"
         assert d["keys"] == ["a", "b"]
         assert "body" not in d
+
+
+class TestConfirmationCodes:
+    """The failure this fix exists for.
+
+    A live MNS push is exported by BlueZ with no Timestamp, so the key's
+    timestamp used to collapse to "". Confirmation codes are the worst
+    case: every one from a sender shares its opening and differs only in
+    the trailing code, which sits past the 40-character body prefix. All
+    of them keyed identically, so the first arrived and every one after it
+    was silently dropped — permanently, once one was deleted and its
+    tombstone kept matching.
+    """
+
+    # Longer than _KEY_BODY_CHARS, so the code falls outside the prefix.
+    PREFIX = "Your Example Corp verification code is: "
+    SENDER = "+15550143"
+
+    def _push(self, code, seen_at):
+        return {"kind": "sms_received", "sender_phone": self.SENDER,
+                "body": self.PREFIX + code, "timestamp": None,
+                "seen_at": seen_at}
+
+    def test_the_prefix_really_does_collide(self):
+        """Guards the premise: the two bodies are indistinguishable to a
+        40-character prefix, so only the timestamp can separate them."""
+        from iphonebridge.events import _KEY_BODY_CHARS
+        a = (self.PREFIX + "111111")[:_KEY_BODY_CHARS]
+        b = (self.PREFIX + "222222")[:_KEY_BODY_CHARS]
+        assert a == b
+
+    def test_old_derivation_collapsed_them_into_one(self):
+        """What the bug was: dropping seen_at gives one key for both."""
+        a = message_key(None, self.SENDER, self.PREFIX + "111111")
+        b = message_key(None, self.SENDER, self.PREFIX + "222222")
+        assert a == b
+
+    def test_two_codes_are_now_distinct(self):
+        from iphonebridge.events import event_key
+        a = self._push("111111", "2026-08-25T19:05:53+00:00")
+        b = self._push("222222", "2026-08-25T19:14:05+00:00")
+        assert event_key(a) != event_key(b)
+
+    def test_the_second_code_is_delivered(self):
+        """End to end through the guard: the first is recorded, the second
+        must not be mistaken for a re-sighting of it."""
+        from iphonebridge.events import SeenMessages, event_key
+        seen = SeenMessages()
+        first = self._push("111111", "2026-08-25T19:05:53+00:00")
+        seen.note(event_key(first), first["seen_at"], has_timestamp=False)
+        second = self._push("222222", "2026-08-25T19:14:05+00:00")
+        assert seen.matches(event_key(second), second["seen_at"],
+                            has_timestamp=False) is False
+
+    def test_a_deleted_code_does_not_block_the_next_one(self):
+        """The permanent-block case: a tombstone must not swallow a later
+        message that merely shares a sender and an opening."""
+        from iphonebridge.events import SeenMessages, event_key
+        seen = SeenMessages()
+        deleted = self._push("111111", "2026-08-25T19:05:53+00:00")
+        seen.update({event_key(deleted)})          # as deleted-keys.txt seeds it
+        later = self._push("222222", "2026-08-25T19:14:05+00:00")
+        assert seen.matches(event_key(later), later["seen_at"],
+                            has_timestamp=False) is False
+
+    def test_a_push_and_its_listing_copy_still_dedupe(self):
+        """The property that must not regress: one message seen twice, as
+        a push and then in a listing, is still one message."""
+        from iphonebridge.events import SeenMessages, event_key
+        seen = SeenMessages()
+        push = self._push("111111", "2026-08-25T19:05:53+00:00")
+        seen.note(event_key(push), push["seen_at"], has_timestamp=False)
+        listing_key = message_key(
+            datetime(2026, 8, 25, 19, 5, 51, tzinfo=timezone.utc),
+            self.SENDER, self.PREFIX + "111111")
+        assert seen.matches(listing_key, "2026-08-25T19:26:02+00:00",
+                            has_timestamp=True) is True
+
+    def test_two_pushes_never_pair_with_each_other(self):
+        """Even seconds apart. Only a timestamped sighting may pair with a
+        timestamp-less one."""
+        from iphonebridge.events import SeenMessages, event_key
+        seen = SeenMessages()
+        a = self._push("111111", "2026-08-25T19:05:53+00:00")
+        seen.note(event_key(a), a["seen_at"], has_timestamp=False)
+        b = self._push("222222", "2026-08-25T19:05:58+00:00")
+        assert seen.matches(event_key(b), b["seen_at"],
+                            has_timestamp=False) is False
+
+
+class TestSenderSpellingIsCanonical:
+    """A push and a listing report the same sender differently: the
+    bMessage vCard carries a trailing MAP marker, the listing does not.
+    Keys must not treat that as two people, or the sweep re-logs every
+    message it already has — truncated, since a listing caps at 128 chars.
+    """
+
+    ADDR = "someone@example.com"
+    BODY = "Your Example Corp verification code is: 111111"
+
+    def test_both_spellings_give_one_key(self):
+        assert (message_key(None, f"{self.ADDR}(smsft)", self.BODY)
+                == message_key(None, self.ADDR, self.BODY))
+
+    def test_a_stored_key_normalises_onto_the_clean_form(self):
+        """Tombstones written before the fix still resolve."""
+        from iphonebridge.events import normalize_key
+        stale = "\x1f".join(("", f"{self.ADDR}(smsft)", self.BODY[:40]))
+        assert normalize_key(stale) == message_key(None, self.ADDR, self.BODY)
+
+    def test_case_and_whitespace_still_fold(self):
+        assert (message_key(None, f"  {self.ADDR.upper()} (smsft) ", self.BODY)
+                == message_key(None, self.ADDR, self.BODY))
+
+    def test_different_senders_stay_different(self):
+        assert (message_key(None, "a@example.com", self.BODY)
+                != message_key(None, "b@example.com", self.BODY))
+
+    def test_a_push_and_its_listing_copy_dedupe_across_spellings(self):
+        """The duplicate that was appearing: push keyed on the marked
+        address, listing on the clean one, so the guard saw two messages."""
+        from iphonebridge.events import SeenMessages
+        seen = SeenMessages()
+        push = message_key("2026-08-25T19:29:51.301588+00:00",
+                           f"{self.ADDR}(smsft)", self.BODY)
+        seen.note(push, "2026-08-25T19:29:51.301588+00:00",
+                  has_timestamp=False)
+        listing = message_key("2026-08-25T19:29:50+00:00", self.ADDR,
+                              self.BODY[:128])
+        assert seen.matches(listing, "2026-08-25T19:46:01+00:00",
+                            has_timestamp=True) is True

@@ -212,8 +212,11 @@ class ConversationsPage(Gtk.Box):
                # whatever the log says, which the daemon keeps in step
                # with the phone.
                "read": bool(outgoing or ev.get("is_read")),
+               # `stamp` is timestamp-or-seen_at, matching event_key in
+               # the daemon: the two must agree or delete and mark-read
+               # address messages the daemon cannot find.
                "key": message_key(
-                   ev.get("timestamp"),
+                   stamp,
                    ev.get("sender_phone") or ev.get("sender_email"),
                    ev.get("body"))}
         thread["messages"].append(msg)

@@ -119,6 +119,9 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
             raw_status=str(m.get("status") or "") or None,
             raw_type=str(m.get("type") or "") or None,
         )
+        # No seen_at fallback here, unlike a live push: seen_at is the
+        # sweep's own clock, so falling back to it would give the same
+        # message a new key on every sweep and log it again.
         key = message_key(ts, sender or None, event.body)
         # Register the path even for messages we skip: the whole point of
         # a listing is that it is the only place read-state can be written
@@ -128,9 +131,11 @@ def sweep_inbox(sessions, listener, contacts, jsonl_sink, *,
         # seen_at is the sweep's own clock here, but a listing entry has a
         # real timestamp, so it is that which places this message against
         # anything already pushed live.
-        if listener.seen_keys.matches(key, event.seen_at):
+        if listener.seen_keys.matches(key, event.seen_at,
+                                      has_timestamp=ts is not None):
             continue
-        listener.seen_keys.note(key, event.seen_at)
+        listener.seen_keys.note(key, event.seen_at,
+                                has_timestamp=ts is not None)
         try:
             jsonl_sink.handle(event)
         except Exception:
@@ -538,7 +543,7 @@ class Daemon:
     def _fanout(self, event: SmsEvent) -> None:
         if event.kind == "sms_received" and event.message_path:
             self._remember_path(
-                message_key(event.timestamp,
+                message_key(event.timestamp or event.seen_at,
                             event.sender_phone or event.sender_email,
                             event.body),
                 event.message_path)
@@ -559,7 +564,8 @@ class Daemon:
             contact_name=self.contacts.resolve(recipient),
             transfer_path=transfer_path,
         )
-        log.info("sms_sent to %s: %r", event.display_sender, (body or "")[:80])
+        log.info("sms_sent: %d-char body", len(body or ""))
+        log.debug("sms_sent to %s: %r", event.display_sender, (body or "")[:80])
         self._fanout(event)
 
     def _fanout_ancs(self, event: AncsEvent) -> None:

@@ -158,3 +158,44 @@ def test_email_sender_no_tel():
     assert p.sender_phone is None
     assert p.sender_email == "friend@icloud.com"
     assert p.body == "hello from blue bubble"
+
+
+class TestAddressSuffixStripped:
+    """iOS appends a parenthesised MAP marker to the originator address in
+    a bMessage vCard — "(smsft)" for an SMS forwarded from a paired phone.
+    The folder listing reports the same sender without it, so leaving it on
+    gives one person two identities: two conversations in the app, and a
+    push the inbox sweep cannot recognise as already logged.
+    """
+
+    def _vcard(self, line):
+        return ("BEGIN:BMSG\r\nBEGIN:VCARD\r\nVERSION:2.1\r\n"
+                f"{line}\r\nEND:VCARD\r\n"
+                "BEGIN:BENV\r\nBEGIN:BBODY\r\nBEGIN:MSG\r\n"
+                "hello\r\nEND:MSG\r\nEND:BBODY\r\nEND:BENV\r\nEND:BMSG\r\n")
+
+    def test_email_marker_is_dropped(self):
+        from iphonebridge.obex.bmessage import parse
+        p = parse(self._vcard("EMAIL:someone@example.com(smsft)"))
+        assert p.sender_email == "someone@example.com"
+
+    def test_tel_marker_is_dropped(self):
+        from iphonebridge.obex.bmessage import parse
+        p = parse(self._vcard("TEL:+15551234567(smsft)"))
+        assert p.sender_phone == "+15551234567"
+
+    def test_a_plain_address_is_untouched(self):
+        from iphonebridge.obex.bmessage import parse
+        p = parse(self._vcard("EMAIL:someone@example.com"))
+        assert p.sender_email == "someone@example.com"
+
+    def test_parentheses_inside_an_address_survive(self):
+        """Only a trailing group is a marker; anything earlier is address."""
+        from iphonebridge.obex.bmessage import parse
+        p = parse(self._vcard("EMAIL:od(d)name@example.com"))
+        assert p.sender_email == "od(d)name@example.com"
+
+    def test_an_address_that_is_only_a_marker_becomes_none(self):
+        from iphonebridge.obex.bmessage import parse
+        p = parse(self._vcard("EMAIL:(smsft)"))
+        assert p.sender_email is None

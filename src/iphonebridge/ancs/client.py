@@ -319,7 +319,12 @@ class AncsClient:
             positive_action=attrs.positive_action,
             negative_action=attrs.negative_action,
         )
-        log.info(
+        # The app is metadata and stays at INFO; the title and body are
+        # content and go to DEBUG.
+        log.info("ANCS event from %s (%d-char title, %d-char body)",
+                 event.app_name or event.app_id,
+                 len(event.title or ""), len(event.body or ""))
+        log.debug(
             "ANCS event: app=%r title=%r body=%r",
             event.app_name or event.app_id,
             (event.title or "")[:40],

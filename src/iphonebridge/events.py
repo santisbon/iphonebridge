@@ -37,6 +37,16 @@ def _as_instant(value) -> datetime | None:
     return dt if dt.tzinfo is not None else dt.astimezone()
 
 
+#: Same marker bmessage.py strips. Applied here too so keys written before
+#: that fix, and the tombstones holding them, still resolve to one message.
+_ADDR_SUFFIX_RE = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def _key_sender(sender: str | None) -> str:
+    """Sender component of a key: one address, one spelling."""
+    return _ADDR_SUFFIX_RE.sub("", (sender or "").strip()).strip().lower()
+
+
 def _key_ts(timestamp) -> str:
     """The timestamp component of a message key, always in UTC.
 
@@ -70,8 +80,27 @@ def message_key(timestamp, sender: str | None, body: str | None) -> str:
     across that. Timestamp, sender, and the start of the body can.
     """
     head = " ".join((body or "").split())[:_KEY_BODY_CHARS]
-    return "\x1f".join((_key_ts(timestamp), (sender or "").strip().lower(),
-                        head))
+    return "\x1f".join((_key_ts(timestamp), _key_sender(sender), head))
+
+
+def event_key(ev: dict) -> str:
+    """Identity of a logged or serialized message event.
+
+    The timestamp falls back to seen_at, and that fallback is the whole
+    point. A live MNS push is exported by BlueZ with no Timestamp, so
+    without it the key collapses to (sender, first 40 chars of body) and
+    two different messages become one. Confirmation codes are the worst
+    case: everything but the trailing code is identical, and the code sits
+    past the prefix — so every code from a sender keyed the same, the
+    first was delivered, and every one after it was silently dropped.
+
+    It is also the rule the UI already uses for ordering and display, so
+    keys and timestamps now agree on what identifies a message.
+    """
+    return message_key(
+        ev.get("timestamp") or ev.get("seen_at"),
+        ev.get("sender_phone") or ev.get("sender_email"),
+        ev.get("body"))
 
 
 def normalize_key(key: str) -> str:
@@ -85,7 +114,7 @@ def normalize_key(key: str) -> str:
     parts = key.split("\x1f")
     if len(parts) != 3:
         return key
-    return "\x1f".join((_key_ts(parts[0]), parts[1], parts[2]))
+    return "\x1f".join((_key_ts(parts[0]), _key_sender(parts[1]), parts[2]))
 
 
 def deleted_keys(path) -> set[str]:
@@ -136,10 +165,8 @@ def drop_events_by_key(path, keys: set[str]) -> int:
         except json.JSONDecodeError:
             kept.append(line)
             continue
-        if e.get("kind") in ("sms_received", "sms_sent") and message_key(
-                e.get("timestamp"),
-                e.get("sender_phone") or e.get("sender_email"),
-                e.get("body")) in keys:
+        if (e.get("kind") in ("sms_received", "sms_sent")
+                and event_key(e) in keys):
             removed += 1
             continue
         kept.append(line)
@@ -176,10 +203,7 @@ def logged_sms_keys(path) -> set[str]:
                     continue
                 if e.get("kind") != "sms_received":
                     continue
-                keys.add(message_key(
-                    e.get("timestamp"),
-                    e.get("sender_phone") or e.get("sender_email"),
-                    e.get("body")))
+                keys.add(event_key(e))
     except OSError:
         pass
     return keys
@@ -230,25 +254,31 @@ class SeenMessages(set):
         for k in keys:
             self.note(k)
 
-    def note(self, key: str, arrival=None) -> None:
+    def note(self, key: str, arrival=None, *, has_timestamp=None) -> None:
         """Record a key, plus the wall-clock time it reached us.
 
-        `arrival` is the event's seen_at, and is the only thing that makes
-        a timestamp-less push comparable to a listing entry. Without it a
-        key is still matched exactly, just not loosely — which is the case
-        for tombstones, since deleted-keys.txt stores keys alone.
+        `has_timestamp` says whether the message carried a MAP timestamp
+        of its own. It has to be passed rather than read off the key,
+        because a key's timestamp now falls back to seen_at and so is
+        never empty. That distinction is what lets a push pair with its
+        listing copy without two pushes pairing with each other.
+
+        Left as None it is inferred from the key, which is right for
+        tombstones: deleted-keys.txt stores keys alone.
         """
         super().add(key)
         ts, sender, head = _key_parts(key)
         instant = _as_instant(ts) or _as_instant(arrival)
         if instant is None:
             return
-        index = self._timed if ts else self._untimed
+        if has_timestamp is None:
+            has_timestamp = bool(ts)
+        index = self._timed if has_timestamp else self._untimed
         index.setdefault((sender, head), []).append(instant)
 
     # ---- lookup --------------------------------------------------------
 
-    def matches(self, key: str, arrival=None) -> bool:
+    def matches(self, key: str, arrival=None, *, has_timestamp=None) -> bool:
         """True when this message is already accounted for."""
         if key in self:
             return True
@@ -256,10 +286,14 @@ class SeenMessages(set):
         instant = _as_instant(ts) or _as_instant(arrival)
         if instant is None:
             return False
-        # A timestamped candidate can only pair with a timestamp-less
-        # entry, and the other way round; two entries that know the same
-        # amount were already settled by the exact check above.
-        bucket = (self._untimed if ts else self._timed).get((sender, head))
+        if has_timestamp is None:
+            has_timestamp = bool(ts)
+        # A message that carried a MAP timestamp can only pair with one
+        # that did not, and the other way round. Two pushes are never
+        # paired, which is what keeps a second confirmation code from
+        # being mistaken for a re-sighting of the first.
+        bucket = (self._untimed if has_timestamp
+                  else self._timed).get((sender, head))
         if not bucket:
             return False
         for i, other in enumerate(bucket):
@@ -306,10 +340,7 @@ def mark_logged_read(path, keys) -> int:
             out.append(line)
             continue
         if (e.get("kind") == "sms_received" and not e.get("is_read")
-                and message_key(
-                    e.get("timestamp"),
-                    e.get("sender_phone") or e.get("sender_email"),
-                    e.get("body")) in keys):
+                and event_key(e) in keys):
             e["is_read"] = True
             out.append(json.dumps(e) + "\n")
             changed += 1
@@ -363,10 +394,8 @@ def logged_messages(path) -> SeenMessages:
                 if e.get("kind") != "sms_received":
                     continue
                 seen.note(
-                    message_key(e.get("timestamp"),
-                                e.get("sender_phone") or e.get("sender_email"),
-                                e.get("body")),
-                    e.get("seen_at"))
+                    event_key(e), e.get("seen_at"),
+                    has_timestamp=bool(e.get("timestamp")))
     except OSError:
         pass
     return seen

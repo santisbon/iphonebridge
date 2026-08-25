@@ -43,13 +43,20 @@ class ClipboardSink:
         code = extract_verification_code(event.body)
         if code is None:
             return
+        # The code itself never reaches the log. The journal is persisted
+        # and readable by anything with journal access, and a one-time code
+        # is a live credential for as long as it is valid. The length is
+        # enough to debug extraction; the desktop notification below is
+        # where the value belongs, on the user's own screen.
         tool = copy_to_clipboard(code)
         if tool is None:
             log.warning(
-                "verification code %s detected but no clipboard tool worked "
-                "— install wl-clipboard (Wayland) or xclip (X11)", code)
+                "a %d-character verification code was detected but no "
+                "clipboard tool worked — install wl-clipboard (Wayland) or "
+                "xclip (X11)", len(code))
             return
-        log.info("verification code %s copied to clipboard (via %s)", code, tool)
+        log.info("verification code copied to clipboard "
+                 "(%d characters, via %s)", len(code), tool)
         self._notify(code, event)
 
     def _notify(self, code: str, event: SmsEvent) -> None:

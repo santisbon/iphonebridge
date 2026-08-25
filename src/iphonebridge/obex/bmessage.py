@@ -53,6 +53,21 @@ class ParsedBMessage:
     folder: str | None
 
 
+#: iOS appends a parenthesised MAP marker to the originator address in a
+#: bMessage vCard — "(smsft)" for an SMS forwarded from a paired phone.
+#: The folder listing reports the same sender without it, so leaving it on
+#: gives one person two identities: two conversations in the app, and a
+#: push that the inbox sweep cannot recognise as already logged.
+_ADDR_SUFFIX_RE = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def _clean_address(value: str | None) -> str | None:
+    """Drop a trailing parenthesised MAP marker from an address."""
+    if value is None:
+        return None
+    return _ADDR_SUFFIX_RE.sub("", value).strip() or None
+
+
 def parse(blob: str) -> ParsedBMessage:
     # First VCARD = originator (for incoming SMS)
     sender_phone: str | None = None
@@ -77,13 +92,13 @@ def parse(blob: str) -> ParsedBMessage:
             elif up.startswith("TEL"):
                 _, _, val = line.partition(":")
                 if val.strip() and sender_phone is None:
-                    sender_phone = val.strip()
+                    sender_phone = _clean_address(val)
             elif up.startswith("EMAIL"):
                 # iMessage senders addressed by Apple ID arrive with an
                 # EMAIL line and no TEL at all.
                 _, _, val = line.partition(":")
                 if val.strip() and sender_email is None:
-                    sender_email = val.strip()
+                    sender_email = _clean_address(val)
 
     body_m = _MSG_BODY_RE.search(blob)
     body = body_m.group("body").strip("\r\n ") if body_m else None
