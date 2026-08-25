@@ -40,19 +40,30 @@ dev = [
 iphonebridge = "iphonebridge.cli:app"
 
 [project.gui-scripts]
-iphonebridge-ui = "iphonebridge.ui.app:main"
+iphonebridge-ui = "iphonebridge.ui.qtapp:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"iphonebridge.ui" = ["icons/*.svg", "icons/README.md", "style.css"]
+# qml/*.qml rides inside the wheel like the icons do. Miss it and
+# the app installs but cannot draw anything.
+"iphonebridge.ui" = ["icons/*.svg", "icons/README.md", "style.css",
+                     "qml/*.qml"]
 
 [tool.pytest.ini_options]
 # Without this, a bare `pytest` from the repo root recurses the whole tree
 # (src/, spike/, .venv probing, …) during collection and can hang. Scope
 # collection to the test suite — matches what CI runs.
 testpaths = ["tests"]
+filterwarnings = [
+  # PyGObject emits this from its own GLib overrides the moment
+  # gi.repository.GLib is imported — nothing in this project calls
+  # unix_signal_add, so there is nothing here to fix. Matched by message
+  # rather than by module so a real deprecation from our own code is
+  # still reported.
+  "ignore:GLib\\.unix_signal_add.*is deprecated:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100

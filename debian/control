@@ -11,11 +11,14 @@ Package: iphonebridge
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends},
  python3-dbus, python3-gi, python3-typer,
- gir1.2-gtk-4.0, gir1.2-adw-1,
+ python3-pyqt6, python3-pyqt6.qtqml, python3-pyqt6.qtquick,
+ python3-dbus.mainloop.pyqt6,
+ qml6-module-qtquick-controls, qml6-module-qtquick-layouts,
+ qml6-module-qtquick-templates, qml6-module-qtquick-window,
  bluez (>= 5.72), bluez-obexd
 Recommends: ofono, wl-clipboard
 Description: iPhone messages, calls, and contacts over Bluetooth
- Daemon, CLI, and GTK4 app bridging a paired iPhone via the standard
+ Daemon, CLI, and Qt app bridging a paired iPhone via the standard
  Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
  service, no subscription.
  .

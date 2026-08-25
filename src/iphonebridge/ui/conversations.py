@@ -11,15 +11,13 @@ import logging
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango
 
 from iphonebridge.contacts import ContactsResolver
-from iphonebridge.events import message_key
 from iphonebridge.ui.client import dbus_error_text
+from iphonebridge.ui.model import ThreadStore, thread_key, unread_keys
 from iphonebridge.ui.util import (
     daystamp,
-    event_ts,
     relative_stamp,
     resolve_recipient,
     same_group,
-    ts_key,
 )
 from iphonebridge.ui.util import pin_popover_height as _pin_popover_height
 
@@ -27,12 +25,6 @@ log = logging.getLogger(__name__)
 
 _ELLIPSIZE_END = Pango.EllipsizeMode.END
 
-def _unread_keys(thread: dict | None) -> list[str]:
-    """Keys of the incoming messages in `thread` still marked unread."""
-    if not thread:
-        return []
-    return [m["key"] for m in thread["messages"]
-            if not m["read"] and not m["outgoing"] and m.get("key")]
 
 
 def _clear_rows(listbox: Gtk.ListBox) -> None:
@@ -52,26 +44,8 @@ def _clear_rows(listbox: Gtk.ListBox) -> None:
     listbox.remove_all()
 
 
-def _thread_key(ev: dict) -> str:
-    """Which conversation an event belongs to.
-
-    Grouped on the normalised number rather than the raw one, because the
-    two ends spell it differently: a sent message carries the recipient as
-    typed into the composer, while an incoming one carries whatever the
-    phone reports. "+1 (555) 123-4567" and "+15551234567" are one person,
-    and keying on the raw string put them in two threads.
-    """
-    return (ev.get("contact_name") or ev.get("sender_phone_norm")
-            or ev.get("sender_phone") or ev.get("sender_email")
-            or "(unknown)")
 
 
-def _thread_name(ev: dict) -> str:
-    """What to show for that conversation — the most readable form we
-    have, which is not the one it is grouped by."""
-    return (ev.get("contact_name") or ev.get("sender_phone")
-            or ev.get("sender_email") or ev.get("sender_phone_norm")
-            or "(unknown)")
 
 
 class ConversationsPage(Gtk.Box):
@@ -79,7 +53,7 @@ class ConversationsPage(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._client = client
         self._toast = toast
-        self._threads: dict[str, dict] = {}
+        self._store = ThreadStore()
         self._current: str | None = None
         self._contacts = ContactsResolver()
         self._composing_new = False
@@ -227,53 +201,20 @@ class ConversationsPage(Gtk.Box):
         self._rebuild_thread_list()
 
     def _ingest(self, ev: dict, *, outgoing: bool, refresh: bool = True) -> None:
-        key = _thread_key(ev)
-        thread = self._threads.get(key)
-        if thread is None:
-            thread = {"key": key, "name": _thread_name(ev),
-                      "phone": ev.get("sender_phone")
-                      or ev.get("sender_phone_norm")
-                      or ev.get("sender_email") or key,
-                      "messages": [], "last_ts": "",
-                      "last_at": ts_key(None)}
-            self._threads[key] = thread
-        stamp = event_ts(ev)
-        msg = {"body": ev.get("body") or "",
-               # `ts` is for display, `at` for ordering. Current logs are
-               # UTC throughout and would sort as text, but entries
-               # written before that carry a local offset, and mixing the
-               # two interleaves replies into the middle of a thread.
-               "ts": stamp, "at": ts_key(stamp), "outgoing": outgoing,
-               # Outgoing messages are read by definition; incoming carry
-               # whatever the log says, which the daemon keeps in step
-               # with the phone.
-               "read": bool(outgoing or ev.get("is_read")),
-               # `stamp` is timestamp-or-seen_at, matching event_key in
-               # the daemon: the two must agree or delete and mark-read
-               # address messages the daemon cannot find.
-               "key": message_key(
-                   stamp,
-                   ev.get("sender_phone") or ev.get("sender_email"),
-                   ev.get("body"))}
-        thread["messages"].append(msg)
-        # Newest message wins the thread's sort key and preview even if
-        # events were ingested out of chronological order (e.g. a seeded
-        # history written newest-first).
-        if msg["at"] >= thread["last_at"]:
-            thread["last_at"] = msg["at"]
-            thread["last_ts"] = msg["ts"]
-        if refresh:
-            self._rebuild_thread_list()
-            if self._current == key:
-                # Live messages are newer than everything rendered, so they
-                # append; anything out of order forces a full rebuild.
-                if self._rendered and msg["at"] >= self._rendered[-1]["at"]:
-                    self._append_message(msg)
-                else:
-                    self._render_thread(key)
-                self._scroll_to_bottom()
-            # Message traffic is itself proof the link is up.
-            self._update_link_pill(alive=True)
+        key, msg = self._store.ingest(ev, outgoing=outgoing)
+        if not refresh:
+            return
+        self._rebuild_thread_list()
+        if self._current == key:
+            # Live messages are newer than everything rendered, so they
+            # append; anything out of order forces a full rebuild.
+            if self._rendered and msg["at"] >= self._rendered[-1]["at"]:
+                self._append_message(msg)
+            else:
+                self._render_thread(key)
+            self._scroll_to_bottom()
+        # Message traffic is itself proof the link is up.
+        self._update_link_pill(alive=True)
 
     # ---- new conversation ----------------------------------------------
 
@@ -364,15 +305,13 @@ class ConversationsPage(Gtk.Box):
 
     def _rebuild_rows(self, selected: str | None) -> None:
         _clear_rows(self._thread_list)
-        order = sorted(self._threads.values(),
-                       key=lambda t: t["last_at"], reverse=True)
-        for thread in order:
+        for thread in self._store.ordered():
             row = Gtk.ListBoxRow()
             row.thread_key = thread["key"]
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
             top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            unread = _unread_keys(thread)
+            unread = unread_keys(thread)
             # A filled accent dot, the way Messages marks a conversation
             # with something waiting in it.
             dot = Gtk.Label(label="\u25cf", css_classes=["ib-unread"],
@@ -410,7 +349,7 @@ class ConversationsPage(Gtk.Box):
         """Show a conversation. Shared by picking a row and by landing in
         a thread the moment a first message to it is sent."""
         self._current = key
-        thread = self._threads.get(key)
+        thread = self._store.get(key)
         self._entry.set_sensitive(True)
         self._send_btn.set_sensitive(True)
         self._convo_title.set_label(thread["name"] if thread else "")
@@ -430,10 +369,7 @@ class ConversationsPage(Gtk.Box):
         """
         _clear_rows(self._msg_list)
         self._rendered = []
-        thread = self._threads.get(key)
-        if thread is None:
-            return
-        for msg in sorted(thread["messages"], key=lambda m: m["at"]):
+        for msg in self._store.messages(key):
             self._append_message(msg)
 
     def _append_message(self, msg: dict) -> None:
@@ -490,11 +426,11 @@ class ConversationsPage(Gtk.Box):
         Marked locally first so the dot clears immediately; the daemon
         writes back to the iPhone for any message obexd still exports.
         """
-        keys = _unread_keys(thread)
+        if thread is None:
+            return
+        keys = self._store.mark_thread_read(thread["key"])
         if not keys:
             return
-        for msg in thread["messages"]:
-            msg["read"] = True
         self._rebuild_thread_list()
         try:
             self._client.mark_read(keys)
@@ -506,13 +442,7 @@ class ConversationsPage(Gtk.Box):
         keys = set(ev.get("keys") or ())
         if not keys:
             return
-        touched = False
-        for thread in self._threads.values():
-            for msg in thread["messages"]:
-                if not msg["read"] and msg.get("key") in keys:
-                    msg["read"] = True
-                    touched = True
-        if touched:
+        if self._store.mark_read(keys):
             self._rebuild_thread_list()
 
     # ---- link state -----------------------------------------------------
@@ -567,11 +497,8 @@ class ConversationsPage(Gtk.Box):
         widget.add_controller(longpress)
 
     def _delete_thread(self, thread_key: str) -> None:
-        thread = self._threads.get(thread_key)
-        if thread is None:
-            return
-        keys = [m["key"] for m in thread["messages"] if m.get("key")]
-        self._delete_messages(keys, thread_key=thread_key)
+        self._delete_messages(self._store.message_keys(thread_key),
+                              thread_key=thread_key)
 
     def _delete_messages(self, keys: list[str], thread_key: str | None = None) -> None:
         """Delete from local history. The phone is never touched: iOS
@@ -583,24 +510,14 @@ class ConversationsPage(Gtk.Box):
         except Exception as e:
             self._toast(f"Delete failed: {dbus_error_text(e)}")
             return
-        gone = set(keys)
-        for key, thread in list(self._threads.items()):
-            thread["messages"] = [m for m in thread["messages"]
-                                  if m.get("key") not in gone]
-            if not thread["messages"]:
-                del self._threads[key]
-                if self._current == key:
-                    self._current = None
-                    self._stack.set_visible_child_name("empty")
-                    self._convo_header.set_visible(False)
-                    self._entry.set_sensitive(False)
-                    self._send_btn.set_sensitive(False)
-            else:
-                newest = max(thread["messages"], key=lambda m: m["at"])
-                thread["last_at"] = newest["at"]
-                thread["last_ts"] = newest["ts"]
+        if self._current in self._store.remove(keys):
+            self._current = None
+            self._stack.set_visible_child_name("empty")
+            self._convo_header.set_visible(False)
+            self._entry.set_sensitive(False)
+            self._send_btn.set_sensitive(False)
         self._rebuild_thread_list()
-        if self._current and self._current in self._threads:
+        if self._current and self._current in self._store:
             self._render_thread(self._current)
         noun = "message" if removed == 1 else "messages"
         self._toast(f"Deleted {removed} {noun} from this computer")
@@ -621,7 +538,7 @@ class ConversationsPage(Gtk.Box):
                 self._toast(f"No contact matches '{raw}'")
                 return
         elif self._current is not None:
-            target = self._threads[self._current]["phone"]
+            target = self._store.get(self._current)["phone"]
         else:
             return
         self._entry.set_sensitive(False)
@@ -657,7 +574,7 @@ class ConversationsPage(Gtk.Box):
         self._ingest(ev, outgoing=True)
         if self._select_next_sent:
             self._select_next_sent = False
-            key = _thread_key(ev)
+            key = thread_key(ev)
             self._rebuild_thread_list()
             # Explicit, because restoring the selection no longer opens the
             # thread on its own.

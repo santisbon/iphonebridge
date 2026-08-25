@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from html import escape
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -65,7 +66,6 @@ def daystamp(value: str | None) -> str:
     Messages prints the day in bold with the time beside it, and switches
     to relative wording for the last two days.
     """
-    from gi.repository import GLib
     dt = _parse(value)
     if dt is None:
         return ""
@@ -78,8 +78,11 @@ def daystamp(value: str | None) -> str:
         day = _fmt(dt, "%A")
     else:
         day = _fmt(dt, "%b %-d")
-    return (f"<b>{GLib.markup_escape_text(day)}</b>  "
-            f"{GLib.markup_escape_text(_fmt(dt, '%H:%M'))}")
+    # html.escape rather than GLib's: the &amp;/&lt;/&gt; entities it
+    # produces are valid in both Pango markup and Qt's StyledText, so the
+    # same string serves either front end and this stays free of gi.
+    return (f"<b>{escape(day, quote=False)}</b>  "
+            f"{escape(_fmt(dt, '%H:%M'), quote=False)}")
 
 
 def relative_stamp(value: str | None) -> str:
