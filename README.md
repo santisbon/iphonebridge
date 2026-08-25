@@ -62,13 +62,17 @@ These are Apple's Bluetooth-stack limits, not bugs:
 - **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
 - HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
 - Notification *bodies* are subject to the iPhone's "Show Previews" setting.
-- **Deleting a message on the iPhone does not remove it here.** iOS sends no
-  deletion event over MAP: the notification channel reports arrivals only, and
-  an open OBEX session keeps serving the pre-delete view. A fresh session does
-  see the shorter list, but conversation history is an append-only log with no
-  retraction, so the message stays. Measured on iOS 26.6.1; a delete also
-  renumbers every remaining message handle, which is why history is
-  deduplicated by content rather than by handle.
+- **Deletions don't sync, in either direction.** Deleting on the iPhone does
+  not remove the message here: iOS sends no deletion event over MAP, an open
+  OBEX session keeps serving the pre-delete view, and conversation history is
+  an append-only log with no retraction. Deleting from Linux does not remove
+  it there either: writing the per-message `Deleted` flag is accepted without
+  error but ignored, and the message reappears on the next reconnect after
+  BlueZ drops it from the current session's view. The `Read` flag on the same
+  interface does sync both ways, so this is an iOS choice rather than a BlueZ
+  limit. Measured on iOS 26.6.1; a delete on the phone also renumbers every
+  remaining message handle, which is why history is deduplicated by content
+  rather than by handle.
 
 ## 📋 Requirements
 
