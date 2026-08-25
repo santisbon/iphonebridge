@@ -305,80 +305,43 @@ kbuildsycoca6 --noincremental   # nudge Plasma's icon cache; a re-login also doe
 
 ## Uninstall completely
 
-Everything, in order: the package, its privileged pieces, per-user data,
-and the pairing. Skip the steps whose data you want to keep.
-
-### 1. Stop the daemon (per user)
-
 ```bash
-systemctl --user stop iphonebridge
+bash packaging/deb/uninstall.sh
 ```
 
-If you also run `disable`, systemd warns that the unit is "enabled in
-global scope"; that is expected. The global enablement comes from the
-package's maintainer scripts and is removed by the purge in step 2, not
-by per-user disable.
-
-### 2. Purge the package
+Without a clone, fetch just the script — it is deliberately not shipped
+inside the package, since a script that purges the package owning it
+would be deleting itself mid-run:
 
 ```bash
-sudo apt purge iphonebridge
-sudo apt autoremove        # drops auto-installed dependencies nobody else uses
+curl -fsSLO https://raw.githubusercontent.com/santisbon/iphonebridge/main/packaging/deb/uninstall.sh
+bash uninstall.sh
 ```
 
-`purge` (not plain `remove`) matters: the sudoers rules under
-`/etc/sudoers.d/` are conffiles, and only purge deletes them.
+Run it as your normal user, not with sudo: per-user state lives in your
+home directory and your systemd user scope, and the script calls sudo
+itself for the steps that need root. It asks before doing anything, and
+`--dry-run` prints every command without changing a thing.
 
-### 3. Remove the group
+It stops the daemon, purges the package (purge rather than remove: the
+sudoers rules are conffiles, and only purge deletes them), drops the
+`iphonebridge` group, deletes your config and state, removes the
+call-audio setup, unpairs the iPhone on the Linux side, and clears the
+desktop icon and menu caches (per-user caches outlive the package and
+otherwise leave a broken window icon behind).
 
-```bash
-sudo delgroup iphonebridge
-```
+Flags: `--keep-data` keeps message history and the contacts cache,
+`--keep-hfp` leaves the oFono and WirePlumber setup alone, `--yes` skips
+the confirmation.
 
-The package's postinst creates it; removal is left to you because group
-deletion while members exist is a policy decision, not packaging.
+The script reads your paired MAC from the config before deleting it, so
+it can unpair; the iPhone side it cannot touch. Finish there: Settings,
+Bluetooth, tap the info icon next to this computer, Forget This Device.
+Removing only the Linux side leaves a stale half-bond that breaks any
+future pairing.
 
-### 4. Per-user data
-
-```bash
-rm -rf ~/.config/iphonebridge          # iPhone MAC config
-rm -rf ~/.local/state/iphonebridge     # message history, contacts cache, backups
-```
-
-### 5. Undo the optional call-audio setup, if you ran hfp-enable
-
-```bash
-rm -f ~/.config/wireplumber/wireplumber.conf.d/51-bluez-hfp-hf.conf
-systemctl --user restart wireplumber
-sudo systemctl disable --now ofono     # if nothing else uses it
-```
-
-### 6. Remove the pairing (both ends)
-
-Linux: the Bluetooth panel's Remove/Forget, or
-`bluetoothctl remove <MAC>`. iPhone: Settings, Bluetooth, tap the info
-icon next to this computer, Forget This Device. Removing only one side
-leaves a stale half-bond that will confuse a future pairing.
-
-### 7. Adapter class
-
-The A/V Hands-Free class the daemon set reverts to the adapter default
-on the next reboot, or immediately with:
-
-```bash
-sudo systemctl restart bluetooth
-```
-
-Desktop menu and icon caches for `/usr/share` update themselves via
-package triggers. Per-user caches do not: if a from-source install ever
-put an icon under `~/.local/share/icons`, KDE's icon cache can keep
-pointing at the deleted file and windows show a broken icon. Clear it
-with:
-
-```bash
-rm -f ~/.cache/icon-cache.kcache
-kbuildsycoca6 --noincremental
-```
+oFono stays installed, since other software may use it. Remove it with
+`sudo systemctl disable --now ofono`.
 
 ## Known limits
 
