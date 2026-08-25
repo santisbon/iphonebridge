@@ -1,5 +1,73 @@
 # Changelog
 
+## [0.9.0] — 2026-08-25
+
+### Added
+- **The app now looks like the phone it bridges.** The UI is restyled
+  after Messages, Phone, and iOS Settings: rounded bubbles in iMessage
+  blue and grey, a centred day rule instead of a timestamp on every
+  bubble, runs from one sender tightened to 2px, an
+  `Adw.NavigationSplitView` conversation list with relative stamps, a
+  segmented section switcher, a pill composer with a circular send
+  button, green and red circular call buttons, and notification cards.
+  All of it in both colour schemes, driven by a token system in the new
+  `src/iphonebridge/ui/style.css`.
+- **A conversation shows the state of the Bluetooth link carrying it**, as
+  a green or amber dot beside quiet secondary text in the conversation
+  header. Driven by availability changes and message traffic rather than
+  polled: the daemon's `IsHealthy` blocks the main loop for up to 5s on a
+  bad link.
+- **Read-state syncs in both directions.** Opening a conversation marks it
+  read and writes the MAP read flag back to the phone, which iOS honours
+  (unlike the delete flag). Reading on the phone clears the unread dot in
+  the app. New `Messages1.MarkRead(keys)`, and the `MessageSeen` signal is
+  now actually emitted. Conversation rows carry an accent dot when they
+  hold something unread.
+- `screenshots/`, twelve images across six views in both schemes, plus the
+  `seed.py`/`shoot.py` pair that regenerates them from synthetic data.
+  Neither the images nor the scripts are packaged.
+
+### Changed
+- **BREAKING: every timestamp is stored in UTC.** A local offset is
+  unambiguous to a parser but wrong as storage: carry the machine across a
+  timezone mid-conversation and the offset changes under you, so lexical
+  order stops matching real order inside one log. `parse_map_timestamp`
+  now returns UTC, which changes its published contract.
+- Message keys normalise their timestamp to UTC before hashing, so a key
+  identifies an instant rather than a spelling of one, and tombstones
+  written before this release keep matching. No file rewrite: 29 of 32
+  tombstones were re-spelled on read in testing, none orphaned.
+- `parse_map_timestamp` honours an explicit `Z` or `±HHMM` suffix instead
+  of discarding it. iOS sends the bare form, which MAP defines as the
+  phone's local time.
+
+### Fixed
+- **Replies were appended in the wrong place.** An incoming message has no
+  MAP timestamp and fell back to `seen_at` in UTC, while a sent message
+  carried a local-offset `timestamp`. The UI ordered the raw ISO strings,
+  and "09:31-05:00" sorts before "14:30+00:00" despite being later, so
+  every reply sorted to the top of its thread. Ordering now compares
+  parsed instants.
+- **Every daemon restart duplicated the received messages.** BlueZ exports
+  an MNS-pushed message with no `Timestamp` property, so the pushed copy
+  keyed on an empty timestamp while the listing copy keyed on the real
+  send time, and dedupe could not match them. The guard now pairs the two
+  fidelities on sender and body prefix within a delivery window. A
+  loosely-matched message is also recorded, because `ListMessages` makes
+  obexd export the objects and the resulting `InterfacesAdded` signals
+  queue behind the sweep, so every listed message is offered to the guard
+  twice in one startup.
+- **The delete menu had invisible text in light mode.** The popover is
+  parented to its row, so the selected-conversation rule painted the
+  popover's own label white. Dark mode masked it.
+- The compose button read as a fourth window control. It sat at the end of
+  the header, which works on macOS because window controls are on the
+  left; on Linux they are on the right. Moved to the start, over the
+  sidebar.
+- The notifications empty state drew a 128px icon that dominated the pane.
+- The four tab icons stopped being drawn when the switcher moved to an
+  inline view switcher set to labels only.
+
 ## [0.8.0] — 2026-08-25
 
 ### Added
