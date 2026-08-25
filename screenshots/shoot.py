@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """Regenerate the PNGs in this directory from synthetic data.
 
-    python3 screenshots/shoot.py                     # all views, both schemes
-    python3 screenshots/shoot.py --scheme light
+    python3 screenshots/shoot.py                     # every view
     python3 screenshots/shoot.py --src /tmp/old/src --out /tmp/before
 
-Needs a graphical session: it opens the real window briefly, then renders
-it through the widget's own paintable rather than grabbing the screen, so
-the output is identical under X11 and Wayland and never captures whatever
-else is on the desktop.
+Runs the real QML, driven by a stub daemon client, and grabs the window
+with `QQuickWindow.grabWindow()`. That returns the scene graph's own
+composited output, so it captures exactly what is on screen — including
+scroll position, which the GTK version's `WidgetPaintable` could not see.
+
+Defaults to the `offscreen` platform, so nothing appears on your desktop
+and it works over SSH. Pass `--onscreen` to watch it happen.
 
 XDG_STATE_HOME and XDG_CONFIG_HOME are redirected to a temp directory that
 seed.py fills, so this reads none of your real messages, contacts, or
-config, and leaves nothing behind.
+config, and leaves nothing behind. The daemon is stubbed rather than
+called, so the images do not depend on whether it is running, and a real
+message arriving mid-capture cannot land in one.
 
-Run it with the system interpreter (/usr/bin/python3): PyGObject and
+Light only, and not by choice: the app uses the default Basic style, which
+draws a fixed light palette and ignores both the desktop theme and
+QStyleHints.setColorScheme. Light/dark pairs come back when the Qt UI gets
+a style of its own.
+
+Run it with the system interpreter (/usr/bin/python3): PyQt6 and
 dbus-python come from apt, and a conda or pyenv interpreter cannot see
 them.
 """
@@ -29,20 +38,17 @@ import tempfile
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 
-# (ViewStack child, output basename, variant)
-#   "degraded" — force the link pill to show a bad link
-#   "menu"     — open the row context menu on the selected conversation
+# (tab index, output basename, variant)
+#   "offline" — daemon off the bus, so the warning banner shows
 VIEWS = [
-    ("conversations", "messages", None),
-    ("conversations", "messages-reconnecting", "degraded"),
-    ("conversations", "delete-menu", "menu"),
-    ("notifications", "notifications", None),
-    ("calls", "calls", None),
-    ("status", "setup", None),
+    (0, "messages", None),
+    (0, "messages-daemon-down", "offline"),
+    (1, "notifications", None),
+    (2, "calls", None),
+    (3, "setup", None),
 ]
 
-SETTLE_MS = 700        # after switching view, before capturing
-SCHEME_SETTLE_MS = 900  # after switching colour scheme: a restyle is slower
+SETTLE_MS = 400   # after switching tab or scheme, before grabbing
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -51,8 +57,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                     help="package root to import from (default: ./src)")
     ap.add_argument("--out", default=str(HERE),
                     help="directory to write PNGs into (default: this one)")
-    ap.add_argument("--scheme", choices=("light", "dark", "both"),
-                    default="both")
+    ap.add_argument("--onscreen", action="store_true",
+                    help="use the real display instead of the offscreen "
+                         "platform (a window will appear briefly)")
     return ap.parse_args(argv)
 
 
@@ -60,7 +67,12 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    schemes = ["light", "dark"] if args.scheme == "both" else [args.scheme]
+
+    if not args.onscreen:
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        # The offscreen platform has no GPU surface to render into; the
+        # software rasteriser produces the same pixels without one.
+        os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
     with tempfile.TemporaryDirectory(prefix="iphonebridge-shots-") as tmp:
         state = pathlib.Path(tmp) / "state"
@@ -72,131 +84,120 @@ def main(argv: list[str]) -> int:
         sys.path.insert(0, args.src)
         from seed import seed
         seed(state)
-        return _render(out, schemes)
+        return _render(out)
 
 
-def _render(out: pathlib.Path, schemes: list[str]) -> int:
-    import gi
-    gi.require_version("Gtk", "4.0")
-    gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gio, GLib, Graphene, Gtk
+def _render(out: pathlib.Path) -> int:
+    from PyQt6 import sip
+    from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal
+    from PyQt6.QtGui import QGuiApplication
+    from PyQt6.QtQml import QQmlApplicationEngine
+    from PyQt6.QtQuick import QQuickWindow
 
-    from iphonebridge.ui import app as uiapp
-    from iphonebridge.ui.client import DaemonClient
-    from iphonebridge.ui.window import MainWindow
+    class StubClient(QObject):
+        """Everything Bridge asks of DaemonClient, answered locally.
 
-    SCHEMES = {"light": Adw.ColorScheme.FORCE_LIGHT,
-               "dark": Adw.ColorScheme.FORCE_DARK}
-
-    def _popover_child(widget):
-        child = widget.get_first_child() if widget is not None else None
-        while child is not None:
-            if isinstance(child, Gtk.Popover):
-                return child
-            child = child.get_next_sibling()
-        return None
-
-    def capture(win, path: pathlib.Path, overlay=None) -> bool:
-        w, h = win.get_width(), win.get_height()
-        if not w or not h:
-            print(f"  !! {path.name}: window not allocated", file=sys.stderr)
-            return False
-        snapshot = Gtk.Snapshot()
-        Gtk.WidgetPaintable.new(win).snapshot(snapshot, w, h)
-        # A popover is a GtkNative with its own surface, so it is absent
-        # from the window's paintable. Draw it into the same snapshot at
-        # the coordinates GTK actually placed it at.
-        if overlay is not None:
-            pos = overlay.translate_coordinates(win, 0, 0)
-            if pos is None:
-                print(f"  !! {path.name}: cannot place overlay",
-                      file=sys.stderr)
-                return False
-            snapshot.save()
-            snapshot.translate(Graphene.Point().init(pos[0], pos[1]))
-            Gtk.WidgetPaintable.new(overlay).snapshot(
-                snapshot, overlay.get_width(), overlay.get_height())
-            snapshot.restore()
-        node = snapshot.to_node()
-        if node is None:
-            print(f"  !! {path.name}: empty render node", file=sys.stderr)
-            return False
-        renderer = win.get_native().get_renderer()
-        texture = renderer.render_texture(
-            node, Graphene.Rect().init(0, 0, w, h))
-        texture.save_to_png(str(path))
-        print(f"  {path.name}  {w}x{h}")
-        return True
-
-    class Shooter(uiapp.IphonebridgeApp):
-        """The real application, minus the single-instance behaviour.
-
-        Subclassing keeps the stylesheet and icon-path setup in do_startup
-        as the only copy; a distinct id plus NON_UNIQUE stops this from
-        merely waking an already-running iphonebridge-ui and exiting.
+        Same signals and the same call shapes — every method takes the
+        callbacks the async client takes and invokes them straight away.
+        Nothing here touches D-Bus, which is what keeps the images
+        reproducible and free of real data.
         """
+
+        messageReceived = pyqtSignal(object)
+        messageSent = pyqtSignal(object)
+        messageSeen = pyqtSignal(object)
+        ancsNotification = pyqtSignal(object)
+        callStateChanged = pyqtSignal(object)
+        availabilityChanged = pyqtSignal(bool)
 
         def __init__(self) -> None:
             super().__init__()
-            self.set_application_id("me.santisbon.iphonebridge.Screenshots")
-            self.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
-            self.failures = 0
-            self._jobs = [(s, v) for s in schemes for v in VIEWS]
-            self._scheme = None
+            self.available = True
+            self.healthy = True
 
-        def do_activate(self) -> None:
-            self.win = MainWindow(application=self, client=DaemonClient())
-            self.win.present()
-            GLib.timeout_add(SETTLE_MS, self._step, 0)
+        def set_available(self, ok: bool) -> None:
+            self.available = self.healthy = ok
+            self.availabilityChanged.emit(ok)
 
-        def _step(self, i: int) -> bool:
-            if i >= len(self._jobs):
-                self.quit()
-                return False
-            scheme, (child, label, variant) = self._jobs[i]
-            delay = SETTLE_MS
-            if scheme != self._scheme:
-                Adw.StyleManager.get_default().set_color_scheme(
-                    SCHEMES[scheme])
-                self._scheme = scheme
-                delay = SCHEME_SETTLE_MS
-            self.win._stack.set_visible_child_name(child)
-            self._menu = None
-            if child == "conversations":
-                page = self.win._stack.get_child_by_name("conversations")
-                row = page._thread_list.get_row_at_index(0)
-                if row is not None:
-                    page._thread_list.select_row(row)
-                # The pre-redesign page has no link pill, so skip that
-                # variant rather than writing a duplicate of the healthy one.
-                if not hasattr(page, "_update_link_pill"):
-                    if variant == "degraded":
-                        return self._step(i + 1)
-                else:
-                    page._update_link_pill(alive=(variant != "degraded"))
-                if variant == "menu":
-                    # The delete popover is parented to the row, so it is
-                    # one of the row's children rather than its child.
-                    self._menu = _popover_child(row)
-                    if self._menu is None:
-                        return self._step(i + 1)
-                    self._menu.popup()
-            GLib.timeout_add(delay, self._shoot, (i, f"{label}-{scheme}"))
-            return False
+        @staticmethod
+        def read_events(kinds=None, limit=None):
+            from iphonebridge.ui.protocol import read_events
+            return read_events(kinds=kinds, limit=limit)
 
-        def _shoot(self, job: tuple[int, str]) -> bool:
-            i, name = job
-            if not capture(self.win, out / f"{name}.png", self._menu):
-                self.failures += 1
-            if self._menu is not None:
-                self._menu.popdown()
-                self._menu = None
-            GLib.timeout_add(150, self._step, i + 1)
-            return False
+        def refresh_availability(self) -> None:
+            pass
 
-    shooter = Shooter()
-    shooter.run([])
-    return 1 if shooter.failures else 0
+        def profile_status(self, on_ok, on_err=None) -> None:
+            on_ok({"map": self.available, "pbap": self.available,
+                   "ancs": self.available})
+
+        def list_calls(self, on_ok, on_err=None) -> None:
+            on_ok([])
+
+        def mark_read(self, keys, on_ok=None, on_err=None) -> None:
+            pass
+
+        def delete_local(self, keys, on_ok=None, on_err=None) -> None:
+            pass
+
+        def send_message(self, recipient, body, on_ok, on_err) -> None:
+            pass
+
+        def dial(self, number, on_ok, on_err) -> None:
+            pass
+
+    from iphonebridge.ui.qtapp import QML_DIR, Bridge
+
+    app = QGuiApplication([])
+    client = StubClient()
+    bridge = Bridge(client)
+
+    engine = QQmlApplicationEngine()
+    ctx = engine.rootContext()
+    ctx.setContextProperty("bridge", bridge)
+    ctx.setContextProperty("threads", bridge.threads)
+    ctx.setContextProperty("messages", bridge.messages)
+    ctx.setContextProperty("notifications", bridge.notifications)
+    engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
+    roots = engine.rootObjects()
+    if not roots:
+        print("!! QML failed to load", file=sys.stderr)
+        return 1
+    # The engine hands back a plain QWindow; grabWindow lives on
+    # QQuickWindow, which is what an ApplicationWindow actually is.
+    win = sip.cast(roots[0], QQuickWindow)
+    tabs = win.findChild(QObject, "tabs")
+
+    # Newest-first, so row 0 is the thread with the most recent message —
+    # the back-and-forth seed.py writes to show the bubble rhythm.
+    bridge.openThread(bridge.threads.key_at(0))
+
+    state = {"i": 0, "failures": 0}
+
+    def step() -> None:
+        i = state["i"]
+        if i >= len(VIEWS):
+            app.quit()
+            return
+        tab, label, variant = VIEWS[i]
+        tabs.setProperty("currentIndex", tab)
+        client.set_available(variant != "offline")
+        QTimer.singleShot(SETTLE_MS, lambda: shoot(label))
+
+    def shoot(name: str) -> None:
+        path = out / f"{name}.png"
+        image = win.grabWindow()
+        if image.isNull() or not image.save(str(path)):
+            print(f"  !! {path.name}: grab failed", file=sys.stderr)
+            state["failures"] += 1
+        else:
+            print(f"  {path.name}  {image.width()}x{image.height()}")
+        state["i"] += 1
+        QTimer.singleShot(80, step)
+
+    QTimer.singleShot(SETTLE_MS, step)
+    app.exec()
+    return 1 if state["failures"] else 0
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ ApplicationWindow {
             anchors.fill: parent
             TabBar {
                 id: tabs
+                objectName: "tabs"
                 Layout.fillWidth: true
                 TabButton { text: "Messages" }
                 TabButton { text: "Notifications" }

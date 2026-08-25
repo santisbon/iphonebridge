@@ -12,7 +12,7 @@
 
 *No Mac relay. No cloud service. No subscription. Just Bluetooth.*
 
-![](screenshots/messages-light.png)
+![](screenshots/messages.png)
 
 </div>
 
@@ -40,7 +40,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
 | 🔁 **Read-state sync** — read on either device, syncs to both | MAP read-state writes | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
-| 🖥️ **Desktop app** — conversations, notification feed, call UI | GTK4 / libadwaita | ✅ |
+| 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |
 | ⚙️ **Runs unattended** | systemd user service | ✅ |
 
 ## 🚧 Limitations
@@ -72,7 +72,7 @@ These are Apple's Bluetooth-stack limits, not bugs:
 | **Bluetooth adapter** | Intel chipset (for ANCS) | Intel AX-series · BE200 (MAP/PBAP/HFP work; ANCS doesn't — see Troubleshooting) |
 | **Python** | 3.10+ | 3.12, 3.14 |
 | **iPhone** | iOS 16.5+ | iPhone 16 Pro Max, iOS 26.5 · iPhone 17 Pro, iOS 26.6.1 |
-| **System packages** | `bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi` (+ `ofono` for calls, `wl-clipboard` for code auto-copy) | — |
+| **System packages** | `bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`, `python3-pyqt6` + its QtQuick modules (+ `ofono` for calls, `wl-clipboard` for code auto-copy) | — |
 
 > ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
@@ -250,35 +250,30 @@ HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HF
 <details>
 <summary><b>App won't open — no window, no error</b></summary>
 
-GTK apps are single-instance per application ID: one process owns the
-D-Bus name `me.santisbon.iphonebridge.UI`, and every later launch just
-asks it to present its window. If a previous instance is stuck (alive
-but not answering D-Bus), new launches delegate to it, wait 25 seconds,
-and exit silently — the journal shows `Failed to register: Timeout was
-reached`. Fix:
+The window is QML, loaded at startup from the installed package. If the
+QtQuick runtime modules are missing the process exits immediately and the
+journal shows `QML failed to load from …`. The `.deb` depends on them; a
+source checkout has to install them:
 
 ```bash
-pkill -f iphonebridge-ui
+sudo apt install python3-pyqt6 python3-pyqt6.qtqml python3-pyqt6.qtquick \
+                 python3-dbus.mainloop.pyqt6 \
+                 qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+                 qml6-module-qtquick-templates qml6-module-qtquick-window
 ```
 
-then launch again.
+Note that the app is **not** single-instance: unlike the GTK version it
+takes no D-Bus name, so running `iphonebridge-ui` twice gives you two
+windows rather than raising the first one.
 </details>
 
 <details>
-<summary><b><code>Unable to acquire the address of the accessibility bus</code></b></summary>
+<summary><b>The app is light even though my desktop is dark</b></summary>
 
-A GTK warning on every `iphonebridge-ui` launch, not a fault — the app works
-normally. It means `at-spi-dbus-bus.service` is masked on your system, so GTK
-can't reach the accessibility bus. Silence it either way:
-
-```bash
-GTK_A11Y=none iphonebridge-ui                       # skip a11y for this launch
-systemctl --user unmask at-spi-dbus-bus.service     # or turn a11y back on
-systemctl --user start at-spi-dbus-bus.service
-```
-
-The app deliberately doesn't set `GTK_A11Y=none` itself — that would silence
-the accessibility bus for everyone, including people who need it.
+Expected, for now. The UI uses QtQuick Controls' default Basic style,
+which draws a fixed light palette and follows neither the desktop theme
+nor `QStyleHints.setColorScheme`. Dark mode returns when the Qt UI gets a
+style of its own — the step after the port from GTK.
 </details>
 
 <details>
@@ -296,7 +291,7 @@ The CLI lives in the venv. Either `source .venv/bin/activate`, or create the `~/
 <details>
 <summary><b><code>ModuleNotFoundError: No module named 'dbus'</code></b></summary>
 
-The venv was created by a Python that isn't the system one. Run `head -3 .venv/pyvenv.cfg`; if `command =` names anything under `~/anaconda3`, `~/miniconda3`, or `~/.pyenv`, that's it. `--system-site-packages` inherits the site-packages of whichever interpreter created the venv, so a conda or pyenv venv never sees apt's `/usr/lib/python3/dist-packages` where `python3-dbus` and `python3-gi` live. Those apt builds are also compiled against the system interpreter specifically, so a version mismatch would break them regardless.
+The venv was created by a Python that isn't the system one. Run `head -3 .venv/pyvenv.cfg`; if `command =` names anything under `~/anaconda3`, `~/miniconda3`, or `~/.pyenv`, that's it. `--system-site-packages` inherits the site-packages of whichever interpreter created the venv, so a conda or pyenv venv never sees apt's `/usr/lib/python3/dist-packages` where `python3-dbus`, `python3-gi`, and `python3-pyqt6` live. Those apt builds are also compiled against the system interpreter specifically, so a version mismatch would break them regardless.
 
 Rebuild against the system Python:
 

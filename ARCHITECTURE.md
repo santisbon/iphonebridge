@@ -28,14 +28,15 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
         ┌────────────┼────────────┐
         ▼            ▼            ▼
   notifications   JSONL log   D-Bus service
-  + clipboard     (history)   (CLI · GTK app)
+  + clipboard     (history)   (CLI · Qt app)
 ```
 
 - **MAP** (Message Access Profile) — read SMS/iMessage, get real-time push of new ones, and send.
 - **PBAP** (Phone Book Access Profile) — pull the iPhone's contacts so messages show names, not numbers.
 - **ANCS** (Apple Notification Center Service) — every app's notifications, over a BLE GATT link.
 - **HFP** (Hands-Free Profile) — take and place calls; oFono speaks the HFP protocol, PipeWire's oFono backend carries the call audio to the laptop's mic/speakers.
-- One daemon, pluggable **sinks** (desktop popups, verification-code clipboard copy, append-only JSONL log), and a **D-Bus service** so the CLI and the GTK app can send messages, control calls, and subscribe to a live event feed.
+- One daemon, pluggable **sinks** (desktop popups, verification-code clipboard copy, append-only JSONL log), and a **D-Bus service** so the CLI and the Qt app can send messages, control calls, and subscribe to a live event feed.
+- The daemon and the desktop app are **separate processes running different main loops**: the daemon runs GLib's, the app runs Qt's. dbus-python delivers signals only under a running loop and takes one integration per process, so the app binds dbus-python to Qt (`ui/qtbus.py`) and must never import `iphonebridge.bus`, which binds it to GLib. D-Bus is the seam between them, which is why the toolkit could be swapped without touching the daemon.
 
 Design rationale and the empirical Bluetooth findings that shaped it are in [`spike/RESULTS.md`](spike/RESULTS.md).
 
