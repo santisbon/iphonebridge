@@ -29,13 +29,16 @@ import tempfile
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
 
-# (ViewStack child, output basename, force the link pill to a bad link)
+# (ViewStack child, output basename, variant)
+#   "degraded" — force the link pill to show a bad link
+#   "menu"     — open the row context menu on the selected conversation
 VIEWS = [
-    ("conversations", "messages", False),
-    ("conversations", "messages-reconnecting", True),
-    ("notifications", "notifications", False),
-    ("calls", "calls", False),
-    ("status", "setup", False),
+    ("conversations", "messages", None),
+    ("conversations", "messages-reconnecting", "degraded"),
+    ("conversations", "delete-menu", "menu"),
+    ("notifications", "notifications", None),
+    ("calls", "calls", None),
+    ("status", "setup", None),
 ]
 
 SETTLE_MS = 700        # after switching view, before capturing
@@ -85,14 +88,35 @@ def _render(out: pathlib.Path, schemes: list[str]) -> int:
     SCHEMES = {"light": Adw.ColorScheme.FORCE_LIGHT,
                "dark": Adw.ColorScheme.FORCE_DARK}
 
-    def capture(win, path: pathlib.Path) -> bool:
+    def _popover_child(widget):
+        child = widget.get_first_child() if widget is not None else None
+        while child is not None:
+            if isinstance(child, Gtk.Popover):
+                return child
+            child = child.get_next_sibling()
+        return None
+
+    def capture(win, path: pathlib.Path, overlay=None) -> bool:
         w, h = win.get_width(), win.get_height()
         if not w or not h:
             print(f"  !! {path.name}: window not allocated", file=sys.stderr)
             return False
-        paintable = Gtk.WidgetPaintable.new(win)
         snapshot = Gtk.Snapshot()
-        paintable.snapshot(snapshot, w, h)
+        Gtk.WidgetPaintable.new(win).snapshot(snapshot, w, h)
+        # A popover is a GtkNative with its own surface, so it is absent
+        # from the window's paintable. Draw it into the same snapshot at
+        # the coordinates GTK actually placed it at.
+        if overlay is not None:
+            pos = overlay.translate_coordinates(win, 0, 0)
+            if pos is None:
+                print(f"  !! {path.name}: cannot place overlay",
+                      file=sys.stderr)
+                return False
+            snapshot.save()
+            snapshot.translate(Graphene.Point().init(pos[0], pos[1]))
+            Gtk.WidgetPaintable.new(overlay).snapshot(
+                snapshot, overlay.get_width(), overlay.get_height())
+            snapshot.restore()
         node = snapshot.to_node()
         if node is None:
             print(f"  !! {path.name}: empty render node", file=sys.stderr)
@@ -129,7 +153,7 @@ def _render(out: pathlib.Path, schemes: list[str]) -> int:
             if i >= len(self._jobs):
                 self.quit()
                 return False
-            scheme, (child, label, degraded) = self._jobs[i]
+            scheme, (child, label, variant) = self._jobs[i]
             delay = SETTLE_MS
             if scheme != self._scheme:
                 Adw.StyleManager.get_default().set_color_scheme(
@@ -137,6 +161,7 @@ def _render(out: pathlib.Path, schemes: list[str]) -> int:
                 self._scheme = scheme
                 delay = SCHEME_SETTLE_MS
             self.win._stack.set_visible_child_name(child)
+            self._menu = None
             if child == "conversations":
                 page = self.win._stack.get_child_by_name("conversations")
                 row = page._thread_list.get_row_at_index(0)
@@ -145,17 +170,27 @@ def _render(out: pathlib.Path, schemes: list[str]) -> int:
                 # The pre-redesign page has no link pill, so skip that
                 # variant rather than writing a duplicate of the healthy one.
                 if not hasattr(page, "_update_link_pill"):
-                    if degraded:
+                    if variant == "degraded":
                         return self._step(i + 1)
                 else:
-                    page._update_link_pill(alive=not degraded)
+                    page._update_link_pill(alive=(variant != "degraded"))
+                if variant == "menu":
+                    # The delete popover is parented to the row, so it is
+                    # one of the row's children rather than its child.
+                    self._menu = _popover_child(row)
+                    if self._menu is None:
+                        return self._step(i + 1)
+                    self._menu.popup()
             GLib.timeout_add(delay, self._shoot, (i, f"{label}-{scheme}"))
             return False
 
         def _shoot(self, job: tuple[int, str]) -> bool:
             i, name = job
-            if not capture(self.win, out / f"{name}.png"):
+            if not capture(self.win, out / f"{name}.png", self._menu):
                 self.failures += 1
+            if self._menu is not None:
+                self._menu.popdown()
+                self._menu = None
             GLib.timeout_add(150, self._step, i + 1)
             return False
 

@@ -70,11 +70,18 @@
 }
 .ib-threads > row:hover { background: var(--ib-fill); }
 /* Selected conversation goes full accent, the way Messages does. The
- * label overrides have to out-specify .ib-preview / .ib-time above. */
+ * label overrides have to out-specify .ib-preview / .ib-time above.
+ *
+ * `> box` is load-bearing: the row's delete popover is parented to the
+ * row, so it is one of the row's children in the CSS tree. Without the
+ * child selector these rules paint the popover's own label white too,
+ * and the delete menu turns invisible on a light background. */
 .ib-threads > row:selected { background: var(--ib-blue); }
-.ib-threads > row:selected label { color: #FFFFFF; }
-.ib-threads > row:selected label.ib-preview,
-.ib-threads > row:selected label.ib-time { color: rgba(255, 255, 255, 0.72); }
+.ib-threads > row:selected > box label { color: #FFFFFF; }
+.ib-threads > row:selected > box label.ib-preview,
+.ib-threads > row:selected > box label.ib-time {
+  color: rgba(255, 255, 255, 0.72);
+}
 
 /* ---- conversation canvas ---------------------------------------------- */
 

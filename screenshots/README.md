@@ -10,6 +10,7 @@ Each view is captured in both colour schemes:
 | --- | --- |
 | `messages-{light,dark}.png` | Conversation list and thread |
 | `messages-reconnecting-{light,dark}.png` | Same, with the Bluetooth link down |
+| `delete-menu-{light,dark}.png` | Right-click menu on a conversation |
 | `notifications-{light,dark}.png` | ANCS notification feed |
 | `calls-{light,dark}.png` | Dialer and active calls |
 | `setup-{light,dark}.png` | Daemon health and the iPhone checklist |
@@ -35,6 +36,12 @@ the same under X11 and Wayland and never picks up the rest of your desktop.
 
 `seed.py` pins its timestamps to a fixed date, so re-running with no code
 changes reproduces the existing PNGs pixel for pixel.
+
+A popover is a `GtkNative` with its own surface, so it never appears in the
+window's paintable. `shoot.py` renders the open menu separately and draws
+it into the same snapshot at the coordinates GTK placed it at, which is
+why `delete-menu-*.png` shows the popup in context rather than a bare
+window.
 
 Useful flags:
 
