@@ -45,7 +45,7 @@ def resolve_recipient(contacts, raw: str) -> str | None:
     matches = contacts.find_by_name(raw)
     if not matches:
         return None
-    return "+" + matches[0][1]
+    return matches[0][1]
 
 
 def pin_popover_height(listbox, scroll, cap: int = 320) -> None:

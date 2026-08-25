@@ -449,14 +449,14 @@ def _resolve_recipient(raw: str) -> str:
         if len(phones) == 1:
             chosen = phones[0]
             typer.echo(typer.style(
-                f"→ {name}  +{chosen}", fg=typer.colors.CYAN))
-            return f"+{chosen}"
+                f"→ {name}  {chosen}", fg=typer.colors.CYAN))
+            return chosen
         # Multiple phones for one contact — list and prompt
         typer.echo(f"{name} has multiple numbers:")
         for i, p in enumerate(phones, 1):
-            typer.echo(f"  [{i}] +{p}")
+            typer.echo(f"  [{i}] {p}")
         idx = typer.prompt("Pick", type=int, default=1)
-        return f"+{phones[idx - 1]}"
+        return phones[idx - 1]
 
     # Multiple distinct contacts — show + prompt
     typer.echo(f"Multiple contacts match {raw!r}:")
@@ -465,7 +465,7 @@ def _resolve_recipient(raw: str) -> str:
         for p in phones:
             flat.append((name, p))
     for i, (name, p) in enumerate(flat, 1):
-        typer.echo(f"  [{i}] {name}  +{p}")
+        typer.echo(f"  [{i}] {name}  {p}")
     idx = typer.prompt("Pick", type=int, default=1)
     try:
         chosen_name, chosen_phone = flat[idx - 1]
@@ -473,8 +473,8 @@ def _resolve_recipient(raw: str) -> str:
         typer.echo(typer.style("Invalid choice.", fg=typer.colors.RED))
         raise typer.Exit(code=2) from None
     typer.echo(typer.style(
-        f"→ {chosen_name}  +{chosen_phone}", fg=typer.colors.CYAN))
-    return f"+{chosen_phone}"
+        f"→ {chosen_name}  {chosen_phone}", fg=typer.colors.CYAN))
+    return chosen_phone
 
 
 @app.command("sms-send")

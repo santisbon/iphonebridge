@@ -19,7 +19,7 @@ def test_single_vcard():
     assert len(cards) == 1
     name, phones, _emails = cards[0]
     assert name == "John Smith"
-    assert phones == ["15551234567"]
+    assert [n for n, _raw in phones] == ["15551234567"]
 
 
 def test_multiple_vcards():
@@ -53,7 +53,7 @@ def test_multiple_phones_per_card():
     assert len(cards) == 1
     name, phones, _emails = cards[0]
     assert name == "Multi"
-    assert sorted(phones) == ["15551111111", "15552222222", "15553333333"]
+    assert sorted(n for n, _raw in phones) == ["15551111111", "15552222222", "15553333333"]
 
 
 def test_card_with_no_phone():
@@ -79,7 +79,7 @@ def test_card_with_no_name():
     assert len(cards) == 1
     name, phones, _emails = cards[0]
     assert name is None
-    assert phones == ["15551234567"]
+    assert [n for n, _raw in phones] == ["15551234567"]
 
 
 def test_empty_blob():
@@ -151,3 +151,26 @@ def test_fold_strips_accents_and_case():
     assert _fold("María") == "maria"
     assert _fold("JOSÉ Ñuñez ") == "jose nunez"
     assert _fold("plain") == "plain"
+
+
+def test_sendable_number_never_invents_a_country_code():
+    """"+" plus a 10-digit US number is a Netherlands address; a national
+    number must go out bare so the phone applies its own region."""
+    from iphonebridge.contacts import sendable_number
+    assert sendable_number("+1 312 485 8311", "13124858311") == "+13124858311"
+    assert sendable_number("(312) 485-8311", "3124858311") == "3124858311"
+    assert sendable_number("312-485-8311", "3124858311") == "3124858311"
+    # Rows predating phone_raw fall back to a length test
+    assert sendable_number(None, "13124858311") == "+13124858311"
+    assert sendable_number(None, "3124858311") == "3124858311"
+
+
+def test_parse_keeps_raw_tel():
+    blob = textwrap.dedent("""\
+        BEGIN:VCARD
+        FN:Raw Keeper
+        TEL;TYPE=CELL:(312) 485-8311
+        END:VCARD
+        """)
+    (_name, phones, _emails), = _parse_vcards(blob)
+    assert phones == [("3124858311", "(312) 485-8311")]

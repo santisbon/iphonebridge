@@ -31,13 +31,19 @@ _VCARD_BLOCK = re.compile(
     r"BEGIN:VCARD(?P<body>.*?)END:VCARD", re.DOTALL | re.IGNORECASE
 )
 
-def _parse_vcards(blob: str) -> list[tuple[str | None, list[str], list[str]]]:
-    """Return [(full_name, [phone_norm, ...], [email_lower, ...]), ...]."""
-    out: list[tuple[str | None, list[str], list[str]]] = []
+def _parse_vcards(blob: str) -> list[tuple[str | None, list[tuple[str, str]], list[str]]]:
+    """Return [(full_name, [(phone_norm, phone_raw), ...], [email_lower, ...]), ...].
+
+    The raw TEL string is kept because it is the only record of whether
+    the contact carries an explicit country code. Prefixing "+" to a
+    national number invents a foreign one: "+" plus a 10-digit US number
+    is a Netherlands address, and the message goes to a stranger.
+    """
+    out: list[tuple[str | None, list[tuple[str, str]], list[str]]] = []
     for m in _VCARD_BLOCK.finditer(blob):
         body = m.group("body")
         fn: str | None = None
-        phones: list[str] = []
+        phones: list[tuple[str, str]] = []
         emails: list[str] = []
         for line in body.splitlines():
             line = line.strip()
@@ -50,7 +56,7 @@ def _parse_vcards(blob: str) -> list[tuple[str | None, list[str], list[str]]]:
                 _, _, val = line.partition(":")
                 norm = normalize_phone(val)
                 if norm:
-                    phones.append(norm)
+                    phones.append((norm, val.strip()))
             elif line.upper().startswith("EMAIL"):
                 # forms: EMAIL:a@b, EMAIL;TYPE=INTERNET:a@b
                 _, _, val = line.partition(":")
@@ -60,6 +66,20 @@ def _parse_vcards(blob: str) -> list[tuple[str | None, list[str], list[str]]]:
         if fn or phones or emails:
             out.append((fn, phones, emails))
     return out
+
+
+def sendable_number(raw: str | None, norm: str) -> str:
+    """The form to hand the phone: keep a country code, never invent one.
+
+    A raw TEL beginning with "+" is already international, so the
+    normalized digits get the "+" back. Anything else is national (or a
+    short code) and goes out bare, letting the iPhone apply its own
+    region. Rows predating the phone_raw column fall back to a length
+    test until the next contacts refresh.
+    """
+    if raw is not None:
+        return ("+" + norm) if raw.strip().startswith("+") else norm
+    return ("+" + norm) if len(norm) >= 11 else norm
 
 
 # ---- SQLite schema ------------------------------------------------------
@@ -72,6 +92,7 @@ CREATE TABLE IF NOT EXISTS contacts (
 );
 CREATE TABLE IF NOT EXISTS phones (
     phone_norm   TEXT NOT NULL,
+    phone_raw    TEXT,
     contact_id   INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
     UNIQUE(phone_norm, contact_id)
 );
@@ -95,6 +116,11 @@ def _open_db() -> sqlite3.Connection:
     config.ensure_dirs()
     conn = sqlite3.connect(config.CONTACTS_DB)
     conn.executescript(_SCHEMA)
+    # phone_raw was added after the first release; older caches lack it
+    # until the next refresh.
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(phones)")}
+    if "phone_raw" not in cols:
+        conn.execute("ALTER TABLE phones ADD COLUMN phone_raw TEXT")
     return conn
 
 
@@ -160,11 +186,11 @@ def pull_phonebook(sessions: SessionManager, *, max_contacts: int = 65535) -> in
                     (fn or "", now),
                 )
                 cid = cur.lastrowid
-                for p in phones:
+                for norm, raw in phones:
                     db.execute(
-                        "INSERT OR IGNORE INTO phones(phone_norm, contact_id) "
-                        "VALUES (?, ?)",
-                        (p, cid),
+                        "INSERT OR IGNORE INTO phones"
+                        "(phone_norm, phone_raw, contact_id) VALUES (?, ?, ?)",
+                        (norm, raw, cid),
                     )
                 for e in emails:
                     db.execute(
@@ -229,7 +255,10 @@ class ContactsResolver:
         return len(self._mem)
 
     def find_by_name(self, query: str) -> list[tuple[str, str]]:
-        """Reverse lookup — name substring → list of (display_name, phone).
+        """Reverse lookup — name substring → list of (display_name, number).
+
+        The number comes back ready to send: an explicit country code is
+        preserved, never fabricated (see sendable_number).
 
         Case- and accent-insensitive: "mari" matches "María" and vice
         versa. SQLite's LIKE/LOWER only fold ASCII, so the matching runs
@@ -242,12 +271,14 @@ class ContactsResolver:
         rows: list[tuple[str, str]] = []
         try:
             with closing(_open_db()) as db:
-                rows = list(db.execute(
-                    "SELECT c.full_name, p.phone_norm "
-                    "FROM contacts c JOIN phones p ON p.contact_id = c.id "
-                    "WHERE c.full_name != '' "
-                    "ORDER BY c.full_name",
-                ))
+                rows = [
+                    (name, sendable_number(raw, norm))
+                    for name, norm, raw in db.execute(
+                        "SELECT c.full_name, p.phone_norm, p.phone_raw "
+                        "FROM contacts c JOIN phones p ON p.contact_id = c.id "
+                        "WHERE c.full_name != '' "
+                        "ORDER BY c.full_name")
+                ]
         except sqlite3.Error as e:
             log.warning("contacts find_by_name failed: %s", e)
             return []

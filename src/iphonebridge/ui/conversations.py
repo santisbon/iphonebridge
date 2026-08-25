@@ -212,7 +212,7 @@ class ConversationsPage(Gtk.Box):
             box.append(Gtk.Label(label=name, xalign=0, hexpand=True,
                                  ellipsize=_ELLIPSIZE_END,
                                  max_width_chars=28))
-            box.append(Gtk.Label(label=f"+{phone}",
+            box.append(Gtk.Label(label=phone,
                                  css_classes=["dim-label", "caption"]))
             row = Gtk.ListBoxRow(child=box)
             row.contact_name = name
