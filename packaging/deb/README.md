@@ -162,15 +162,15 @@ sudo apt install ./iphonebridge_0.6.0_all.deb
 ```
 
 Dependencies (`bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`,
-GTK/Adwaita) install automatically.
+GTK/Adwaita) install automatically. `ofono` and `wl-clipboard` come in as Recommends unless apt is configured to skip those.
 
-Two apt notices are normal when installing from a local file: "selecting
-'iphonebridge' instead of <path>" is apt resolving the file to the
-package name it contains, and "Download is performed unsandboxed as
-root" appears when the file sits somewhere apt's unprivileged `_apt`
-user cannot read, such as a home directory (Ubuntu homes are mode 750).
-Both are harmless; copying the deb to `/tmp` first silences the second. `ofono` and `wl-clipboard` come in
-as Recommends unless apt is configured to skip those.
+Two `apt` notices are normal when installing from a local file: 
+- "Note, selecting 'iphonebridge' instead of *path*" is `apt` resolving the file to the
+package name it contains, and 
+- "Download is performed unsandboxed as root ... Permission denied" appears when the file sits somewhere `apt`'s unprivileged `_apt`
+user cannot read, such as a home directory (Ubuntu homes are mode 750). This can be silenced by copying the `.deb` to `/tmp` first.
+
+Both are harmless.  
 
 ### 2. Authorize and start the daemon
 
