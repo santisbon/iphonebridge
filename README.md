@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📱 iPhone Bridge
+# 📱🐧 iPhone Bridge
 
 **Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**
 
