@@ -76,20 +76,27 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 👤 **Contact-name resolution** (1000s of contacts) | PBAP → SQLite cache | ✅ |
 | 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE | ✅ |
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
-| 🔁 **Read-state sync** — read on either device, syncs to both | MAP read-state writes | ✅ |
+| 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |
 | ⚙️ **Runs unattended** | systemd user service | ✅ |
 
 ## 🚧 Limitations
 
-These are Apple's Bluetooth-stack limits, not bugs:
+These are limits of the Bluetooth stack at one end or the other, not bugs:
 
 - No iMessage **attachments, reactions, read receipts, or typing indicators** (MAP doesn't carry them).
 - No **group iMessage / MMS / RCS** — MAP is 1-to-1 only.
 - **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
 - HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
 - Notification *bodies* are subject to the iPhone's "Show Previews" setting.
+- **Read state mostly travels one way.** Opening a conversation here marks
+  those messages read on the iPhone, for any message obexd still exports;
+  older ones have no object path left to address and are marked read on this
+  computer only. Coming back the other way, a live notification popup does
+  close when you read that message on the phone, but a conversation already
+  in the app does not lose its unread mark: obexd raises no notification for
+  a read-status change, and the inbox sweep skips messages already logged.
 - **Deletions don't sync, in either direction.** Deleting on the iPhone does
   not remove the message here: iOS sends no deletion event over MAP, an open
   OBEX session keeps serving the pre-delete view, and conversation history is
