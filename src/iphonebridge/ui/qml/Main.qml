@@ -259,7 +259,7 @@ ApplicationWindow {
                     // a screen reader still says what it does.
                     Item {
                         Layout.fillWidth: true
-                        implicitHeight: 42
+                        implicitHeight: Math.round(38 * appTheme.k)
 
                         Button {
                             id: newBtn
@@ -267,8 +267,8 @@ ApplicationWindow {
                             anchors.right: parent.right
                             anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            implicitWidth: Math.round(32 * appTheme.k)
-                            implicitHeight: Math.round(32 * appTheme.k)
+                            implicitWidth: Math.round(30 * appTheme.k)
+                            implicitHeight: Math.round(30 * appTheme.k)
                             Accessible.name: "New conversation"
                             ToolTip.visible: hovered
                             ToolTip.delay: 500
@@ -290,6 +290,7 @@ ApplicationWindow {
                                     anchors.centerIn: parent
                                     color: appTheme.accent
                                     k: appTheme.k
+                                    size: 22
                                 }
                             }
                         }

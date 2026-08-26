@@ -16,19 +16,24 @@ import QtQuick
 Canvas {
     id: mark
     property color color: "black"
-    // Scales with the type, so it stays the size of a glyph.
+    // The path below is drawn in an 18-unit box, so both the type scale
+    // and any requested size have to reach the canvas transform — raising
+    // the item's width alone would only pad it.
     property real k: 1
-    implicitWidth: Math.round(18 * k)
-    implicitHeight: Math.round(18 * k)
+    property real size: 18
+    implicitWidth: Math.round(size * k)
+    implicitHeight: Math.round(size * k)
     onKChanged: requestPaint()
+    onSizeChanged: requestPaint()
     onColorChanged: requestPaint()
 
     onPaint: {
         var c = getContext("2d")
         c.reset()
-        c.scale(mark.k, mark.k)
+        var u = mark.size / 18 * mark.k
+        c.scale(u, u)
         c.strokeStyle = mark.color
-        c.lineWidth = 1.5
+        c.lineWidth = 1.6
         c.lineCap = "round"
         c.lineJoin = "round"
 
