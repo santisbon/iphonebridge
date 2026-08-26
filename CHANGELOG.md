@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.11.0] — 2026-08-26
+
+A design pass over the Qt app. 0.10.0 shipped it deliberately unstyled;
+this gives it the Apple look the GTK version had, and fixes the text being
+too small to read comfortably.
+
+Upgrading pulls in `fonts-inter` as a Recommends. Without it the interface
+falls back to the desktop's own sans and everything still works.
+
+### Changed
+- **The interface is styled after Apple's**: iOS system colours in both
+  light and dark, message bubbles, a grouped conversation list with inset
+  separators, and a segmented control in place of tabs. Every screen uses
+  one grouped-list language rather than three different ones.
+- **Sizes follow the desktop's font.** They were fixed pixels before,
+  which overrode the size chosen for every other application — on a 10pt
+  desktop this set captions at 7.5pt and message text at 9.8pt, smaller
+  than the system UI font when the message should be the largest thing on
+  screen. Row heights and fields scale with the text, so a larger desktop
+  font no longer clips its own rows.
+- **Emoji are legible.** They are drawn at the text size, which at a size
+  comfortable for a sentence left them too small to make out. Emoji inside
+  a message are now set larger than the words around them, and a message
+  that is nothing but a few emoji is drawn large and without a bubble.
+- **The Setup tab is now Status**, because nothing on it sets anything up.
+  It is a settings-style grouped list: a label and a short value per row,
+  with anything that needs explaining as a footer under its group. Only a
+  problem is coloured — a screen where everything is marked is a screen
+  nobody reads.
+- **Notifications are grouped by the app that sent them**, with the
+  headline and the message on separate lines. They were previously joined
+  with a dash, which threw away the only structure the phone gives us.
+- **Calls** are grouped cards, and Hang up all is its own action rather
+  than a control beside a heading.
+- **The compose button is an icon** at the top of the conversation list,
+  with its name in the tooltip and for screen readers.
+- Deleting a conversation or a message is offered as a red **Delete** with
+  a trash mark, and the menu no longer takes its highlight colour from the
+  desktop's Quick Controls style.
+
+### Fixed
+- **Starting a new conversation left the previous one on screen** and
+  still highlighted in the list, so the To field looked like it was about
+  to reply into that thread. Nothing was ever sent to the wrong place; the
+  screen said otherwise.
+- **Sending a composed message showed the previous conversation for a
+  frame** before the new one appeared. The view was leaving compose mode
+  on a guess that was already true of the conversation last opened, rather
+  than waiting for the new one to be open.
+
+### Known
+- **The app is not single-instance.** It takes no D-Bus name, so running
+  `iphonebridge-ui` twice gives two windows instead of raising the first.
+
 ## [0.10.0] — 2026-08-25
 
 The desktop app is rebuilt on Qt 6 / QML. The daemon is untouched, so

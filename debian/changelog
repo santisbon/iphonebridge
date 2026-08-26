@@ -1,3 +1,12 @@
+iphonebridge (0.11.0) unstable; urgency=medium
+
+  * The interface is styled after Apple's, and now follows the desktop's
+    font size instead of a fixed one. Emoji are legible. The Setup tab is
+    renamed Status and rebuilt as a settings-style list. Fixes starting a
+    new conversation leaving the previous one on screen. See CHANGELOG.md.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Wed, 26 Aug 2026 01:28:39 -0500
+
 iphonebridge (0.10.0) unstable; urgency=medium
 
   * The desktop app is rebuilt on Qt 6 / QML, replacing GTK4/libadwaita.

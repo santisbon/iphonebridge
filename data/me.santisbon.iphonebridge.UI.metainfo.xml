@@ -53,14 +53,22 @@
       <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/notifications.png</image>
     </screenshot>
     <screenshot>
-      <caption>Daemon health and the iPhone setup checklist</caption>
-      <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/setup.png</image>
+      <caption>Service health, the iPhone toggles, and what is stored here</caption>
+      <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/status.png</image>
     </screenshot>
   </screenshots>
 
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.11.0" date="2026-08-26">
+      <description>
+        <p>The interface is styled after Apple's and follows the desktop's
+        font size. Emoji are legible, the Setup tab is now Status, and
+        starting a new conversation no longer leaves the previous one on
+        screen.</p>
+      </description>
+    </release>
     <release version="0.10.0" date="2026-08-25">
       <description>
         <p>The desktop app is rebuilt on Qt 6 / QML. Message and app
