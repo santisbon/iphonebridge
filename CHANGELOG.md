@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.12.0] — 2026-08-26
+
+Per-app notifications, for real this time. Every release so far shipped
+ANCS support that could not actually be reached on current systems; this
+one closes the whole chain, and `iphonebridge doctor` now checks each
+link of it.
+
+### Fixed
+- **`ancs-enable` undid itself.** It edited `LastUsedBearer=le` in the
+  stored bond and cycled the connection — but the iPhone re-establishes
+  classic Bluetooth within seconds of any restart, and BlueZ writes that
+  bearer straight back over the edit. Measured live: the file read `le`
+  after the helper and `bredr` after the cycle, every time. As shipped in
+  every previous release, the command could not enable ANCS.
+- The CLI's help no longer claims the project is for Pop!_OS only.
+
+### Changed
+- **`ancs-enable` now steers the connection itself**: disconnect, set
+  BlueZ's `Device1.PreferredBearer` to `le`, reconnect, and wait for the
+  phone's ANCS service to appear. No sudo, no file edits, idempotent. It
+  needs BlueZ's experimental interfaces (`[General] Experimental = true`
+  in `/etc/bluetooth/main.conf`); when they are off it prints the exact
+  commands to turn them on. On the first BLE connection, iOS asks for
+  permission with an **allow-notifications prompt on the phone** —
+  current iOS grants ANCS that way, not with the third Bluetooth toggle
+  older documentation promised.
+- The compose button is drawn at a legible size, snug in its bar.
+
+### Added
+- **`doctor` checks ANCS**: a live BLE-advertising probe (register and
+  release a throwaway advert — this catches a BlueZ 5.85 packaging bug
+  that rejects every advertisement, and names the fix document), and a
+  bond check reading whether the iPhone actually exposes the ANCS
+  service.
+- **Man pages** for `iphonebridge(1)` and `iphonebridge-ui(1)`. The
+  package now builds lintian-clean.
+- `packaging/bluez-adv-fix.md`: diagnosis and a patched-package
+  walkthrough for the BlueZ 5.85 bug that rejects all LE advertising
+  registration on strict kernels, without which the ANCS solicitation
+  never reaches the air.
+
+### Known
+- ANCS needs an adapter whose firmware can form a BLE bond with the
+  iPhone: Intel chipsets (AX-series, BE200 confirmed) can; Realtek and
+  every USB dongle tested cannot. Messages, contacts and calls work on
+  any adapter.
+
 ## [0.11.0] — 2026-08-26
 
 A design pass over the Qt app. 0.10.0 shipped it deliberately unstyled;

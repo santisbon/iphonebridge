@@ -1,3 +1,12 @@
+iphonebridge (0.12.0) unstable; urgency=medium
+
+  * Per-app notifications (ANCS) are now attainable: ancs-enable steers
+    the connection over BLE instead of an approach that undid itself, and
+    doctor probes BLE advertising and the ANCS bond. Ships man pages.
+    See CHANGELOG.md.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Wed, 26 Aug 2026 13:01:29 -0500
+
 iphonebridge (0.11.0) unstable; urgency=medium
 
   * The interface is styled after Apple's, and now follows the desktop's
