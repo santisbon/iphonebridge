@@ -268,15 +268,6 @@ windows rather than raising the first one.
 </details>
 
 <details>
-<summary><b>The app is light even though my desktop is dark</b></summary>
-
-Expected, for now. The UI uses QtQuick Controls' default Basic style,
-which draws a fixed light palette and follows neither the desktop theme
-nor `QStyleHints.setColorScheme`. Dark mode returns when the Qt UI gets a
-style of its own — the step after the port from GTK.
-</details>
-
-<details>
 <summary><b><code>Unable to acquire the address of the accessibility bus</code></b></summary>
 
 Noise, not a fault — the app works normally. `iphonebridge-ui` is a

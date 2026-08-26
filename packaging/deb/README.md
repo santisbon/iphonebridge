@@ -15,7 +15,7 @@ does the rest.
 
 | Repo source | Installed path |
 |---|---|
-| `src/iphonebridge/` (incl. `ui/icons/` and `ui/qml/`) | `/usr/lib/python3/dist-packages/iphonebridge/` |
+| `src/iphonebridge/` (incl. `ui/qml/`) | `/usr/lib/python3/dist-packages/iphonebridge/` |
 | entry points from `pyproject.toml` | `/usr/bin/iphonebridge`, `/usr/bin/iphonebridge-ui` |
 | `systemd/iphonebridge.service` (placeholder substituted) | `/usr/lib/systemd/user/iphonebridge.service` |
 | `data/me.santisbon.iphonebridge.UI.desktop` (as-is: `Exec=iphonebridge-ui` is on PATH now) | `/usr/share/applications/` |
@@ -54,8 +54,7 @@ record of why:
 
    ```toml
    [tool.setuptools.package-data]
-   "iphonebridge.ui" = ["icons/*.svg", "icons/README.md", "style.css",
-                        "qml/*.qml"]
+   "iphonebridge.ui" = ["qml/*.qml"]
    ```
 
    Check it landed in a built package with

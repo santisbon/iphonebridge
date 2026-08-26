@@ -18,10 +18,11 @@ config, and leaves nothing behind. The daemon is stubbed rather than
 called, so the images do not depend on whether it is running, and a real
 message arriving mid-capture cannot land in one.
 
-Light only, and not by choice: the app uses the default Basic style, which
-draws a fixed light palette and ignores both the desktop theme and
-QStyleHints.setColorScheme. Light/dark pairs come back when the Qt UI gets
-a style of its own.
+Captures are light because the offscreen platform loads no platform theme,
+so the default light palette applies. The app itself does follow the
+desktop's light/dark setting when run normally; there is no way to force
+the other scheme offscreen (setColorScheme and setPalette both make no
+difference to what is drawn). Use --onscreen to capture in your own scheme.
 
 Run it with the system interpreter (/usr/bin/python3): PyQt6 and
 dbus-python come from apt, and a conda or pyenv interpreter cannot see
@@ -132,9 +133,25 @@ def _render(out: pathlib.Path) -> int:
                    "ancs": self.available})
 
         def list_calls(self, on_ok, on_err=None) -> None:
-            on_ok([])
+            # A ringing call and a connected one, so the capture shows
+            # both Answer and Hang up rather than an empty pane.
+            on_ok([
+                {"contact_name": "Dana Whitfield", "call_path": "/call/1",
+                 "direction": "incoming", "state": "incoming"},
+                {"peer_phone": "+1 (555) 010-0172", "call_path": "/call/2",
+                 "direction": "outgoing", "state": "active"},
+            ])
 
         def mark_read(self, keys, on_ok=None, on_err=None) -> None:
+            pass
+
+        def answer_call(self, call_path, on_err=None) -> None:
+            pass
+
+        def hangup_call(self, call_path, on_err=None) -> None:
+            pass
+
+        def hangup_all(self, on_err=None) -> None:
             pass
 
         def delete_local(self, keys, on_ok=None, on_err=None) -> None:
@@ -158,6 +175,7 @@ def _render(out: pathlib.Path) -> int:
     ctx.setContextProperty("threads", bridge.threads)
     ctx.setContextProperty("messages", bridge.messages)
     ctx.setContextProperty("notifications", bridge.notifications)
+    ctx.setContextProperty("calls", bridge.calls)
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     roots = engine.rootObjects()
     if not roots:

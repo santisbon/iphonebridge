@@ -6,20 +6,28 @@ lists every shipped file by name, and pybuild only packages what is under
 
 | File | View |
 | --- | --- |
-| `messages.png` | Conversation list and thread |
+| `messages.png` | Conversation list and thread, with the link indicator |
 | `messages-daemon-down.png` | Same, with the daemon off the bus |
 | `notifications.png` | ANCS notification feed |
-| `calls.png` | Dialer and active calls |
-| `setup.png` | Daemon health and the iPhone checklist |
+| `calls.png` | Dialer, and an active call with Answer / Hang up |
+| `setup.png` | Daemon health, the iPhone checklist, data counts |
 
-## Light only, for now
+## Why these are light
 
-The Qt UI uses QtQuick Controls' default Basic style, which draws a fixed
-light palette: it follows neither the desktop theme nor
-`QStyleHints.setColorScheme`, so a "dark" capture came out byte-identical
-to the light one. There is no dark mode to photograph yet. The light/dark
-pairs come back when the UI gets a style of its own, which is the step
-after the port.
+The app does follow your desktop's light/dark setting — the palette comes
+from Qt's platform theme. These captures are light because `shoot.py`
+renders on Qt's `offscreen` platform, which loads no platform theme at
+all, so the default light palette applies.
+
+That is deliberate: offscreen is the reproducible one. It renders at 1x on
+any machine, while an on-screen capture follows the display's device pixel
+ratio, and it does not depend on whatever scheme the desktop happens to be
+in that day.
+
+There is no way to force the other scheme offscreen. Neither
+`QStyleHints.setColorScheme` nor `QGuiApplication.setPalette` changes what
+gets drawn — both were tried, and the render is byte-identical either way.
+To see the app in your own scheme, use `--onscreen`.
 
 ## The data is fake
 

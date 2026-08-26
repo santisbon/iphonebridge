@@ -218,7 +218,9 @@ sed "s|^Exec=iphonebridge-ui$|Exec=$HOME/.local/bin/iphonebridge-ui|" \
 
 update-desktop-database "$APPS"
 # Freedesktop's hicolor icon cache, not a GTK-app thing — every toolkit
-# resolves themed icons through it. The tool just ships in a GTK package.
+# resolves themed icons through it, and this is the app's desktop icon,
+# which has nothing to do with the retired GTK UI. The tool just happens
+# to ship in a GTK package.
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
 kbuildsycoca6 --noincremental   # KDE only; GNOME picks it up on its own
 ```
@@ -273,13 +275,21 @@ integration can be default per process, so `ui/qtbus.py` raises on import if
 | `systemd/sudoers-*`, `set-le-bearer.sh`, or an installer | Re-run the matching installer — `install-cod-sudoers.sh` for the CoD rule, `install-ancs-sudoers.sh` for the ANCS rule + helper |
 | `data/*.desktop` or the icon | Re-run the install snippet under *Adding it to your app launcher* — a plain copy loses the `Exec` rewrite |
 
-`ui/` still holds the retired GTK front end — `app.py`, `window.py`,
-`conversations.py`, `calls.py`, `notifications.py`, `status.py`, `client.py`,
-`style.css`. Nothing runs them: `iphonebridge-ui` points at
-`ui/qtapp.py:main`, and they are the only files under `ui/` that import `gi`.
-They are kept for reference while the Qt UI catches up on what they did
-(conversation delete, autocomplete, the link-health pill, dark mode) and
-should be deleted once it has.
+`ui/` is Qt only. The GTK front end it replaced was deleted once the Qt UI
+had caught up on everything it did — conversation and message delete,
+recipient autocomplete, the link-health pill, call answer/hang-up, toasts,
+empty states, and light/dark. It is in the history if a detail needs
+looking up; `ui/style.css` there is where the old Apple palette lives.
+
+The app follows the desktop's light/dark setting through Qt's platform
+theme, which supplies the palette. Nothing in the app asks for a scheme:
+`QStyleHints.setColorScheme` is ignored here, and so is setting a palette
+on the application object. That matters when rendering screenshots — see
+`screenshots/README.md`.
+
+Nothing under `src/` imports GTK or libadwaita any more. `bus.py` and
+`daemon.py` still import `gi.repository.GLib` — that is the daemon's main
+loop, and it stays whatever toolkit the app uses.
 
 Only two changes actually need a reinstall:
 
