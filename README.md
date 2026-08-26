@@ -2,7 +2,8 @@
 
 # 📱🐧 iPhone Bridge
 
-**Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**
+**Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**  
+*No Mac relay. No cloud service. No subscription. Just Bluetooth.*
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/santisbon/iphonebridge?color=brightgreen)](https://github.com/santisbon/iphonebridge/releases/latest)
@@ -10,15 +11,13 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
 
-*No Mac relay. No cloud service. No subscription. Just Bluetooth.*
-
 ![](screenshots/messages.png)
 
 </div>
 
 ---
 
-## 🚀 Install
+## Install
 
 Any apt-based distro: Debian, Ubuntu and its flavours, Pop!_OS, Mint.
 
@@ -54,7 +53,7 @@ Removing a stale pairing, calls over HFP, per-app notifications, building
 the package and uninstalling are all in
 [`packaging/deb/README.md`](packaging/deb/README.md).
 
-## ❔ Why
+## Why
 
 Windows and macOS users can get their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent:
 
@@ -66,7 +65,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 
 **This is that missing piece.** [How it works](ARCHITECTURE.md).
 
-## ✨ What it does
+## What it does
 
 | Feature | How | Status |
 |---|---|---|
@@ -81,7 +80,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |
 | ⚙️ **Runs unattended** | systemd user service | ✅ |
 
-## 🚧 Limitations
+## Limitations
 
 These are limits of the Bluetooth stack at one end or the other, not bugs:
 
@@ -109,19 +108,11 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
   remaining message handle, which is why history is deduplicated by content
   rather than by handle.
 
-## 📋 Requirements
+## Requirements
 
-| | Minimum | Tested with |
-|---|---|---|
-| **OS** | Linux (GNOME or KDE Plasma), BlueZ 5.72+ | Pop!_OS 24.04 (GNOME) · Kubuntu 26.04 (Plasma 6) |
-| **Bluetooth adapter** | Intel chipset (for ANCS) | Intel AX-series · BE200 (MAP/PBAP/HFP work; ANCS doesn't — see Troubleshooting) |
-| **Python** | 3.10+ | 3.12, 3.14 |
-| **iPhone** | iOS 16.5+ | iPhone 16 Pro Max, iOS 26.5 · iPhone 17 Pro, iOS 26.6.1 |
-| **System packages** | `bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`, `python3-pyqt6` + its QtQuick modules, `qt6-wayland` (+ `ofono` for calls, `wl-clipboard` for code auto-copy, `qt6-gtk-platformtheme` to match a GNOME desktop) | — |
+> ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters like the AX-series do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
-> ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
-
-## 💻 CLI
+## CLI
 
 The `iphonebridge` command covers sending, history, calls, setup and
 diagnostics. Deleting from local history is the app's job:
@@ -161,7 +152,7 @@ journalctl --user -u iphonebridge -f
 systemctl --user {start,stop,restart} iphonebridge
 ```
 
-## 🩺 Troubleshooting
+## Troubleshooting
 
 <details>
 <summary><b>Messages stopped arriving</b></summary>
@@ -331,11 +322,11 @@ rm -rf .venv
 The `~/.local/bin` symlinks point at paths inside `.venv`, so they keep working without relinking.
 </details>
 
-## 🙏 Credits
+## Credits
 
-This repository is a fork of
-[gabrielmeir53/iphonebridge](https://github.com/gabrielmeir53/iphonebridge),
-forked at v0.4.2 and maintained independently by
+This repository is forked from
+[gabrielmeir53/iphonebridge](https://github.com/gabrielmeir53/iphonebridge)
+at v0.4.2 and maintained independently by
 [santisbon](https://github.com/santisbon).
 
 iphonebridge stands on the shoulders of two prior projects, both GPL-2.0:
@@ -343,6 +334,6 @@ iphonebridge stands on the shoulders of two prior projects, both GPL-2.0:
 - **[bmh129/ancs4linux](https://github.com/bmh129/ancs4linux)** — an archived (2026-05-31) fork whose empirical work on BR/EDR-vs-BLE coexistence, the `LastUsedBearer=le` unlock, and adapter compatibility made iphonebridge's ANCS support possible. The ANCS wire-format code in [`src/iphonebridge/ancs/`](src/iphonebridge/ancs/) is derived from their `observer/ancs/` modules.
 - **[pzmarzly/ancs4linux](https://github.com/pzmarzly/ancs4linux)** — the original 2022 reference implementation of ANCS on Linux.
 
-## 📄 License
+## License
 
 [GPL-2.0-or-later](LICENSE) · © 2026 Gabe Shatunovsky · fork modifications © 2026 santisbon
