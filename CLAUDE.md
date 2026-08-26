@@ -31,6 +31,35 @@ systemd **user** service.
    app does not reload QML.
 7. **State what is built, what is deployed, and what is left to run.**
 
+## Tagging a release
+
+`packaging/deb/README.md` has the commands. What is easy to get wrong:
+
+- **Five files carry the version**, and they have to agree:
+  `pyproject.toml`, `src/iphonebridge/__init__.py`, `debian/changelog`,
+  the `## [X.Y.Z]` heading in `CHANGELOG.md`, and the `<releases>` list in
+  `data/me.santisbon.iphonebridge.UI.metainfo.xml`. The metainfo one is
+  the one that gets forgotten: nothing in the build reads it, so it goes
+  stale silently, and it is what a software centre shows as the app's
+  latest version and changes.
+- **Bump the version, commit, then build.** The `.deb` attached to a
+  release has to come from the release commit, or its contents disagree
+  with the tag it is published under.
+- **The version must actually change.** Two builds sharing a version are
+  indistinguishable to apt, so an upgrade silently does nothing for
+  anyone who already has that version.
+- **Size the bump by what a user meets**, not by the diff. New or removed
+  dependencies, a toolkit change, or a change in existing behaviour are a
+  minor bump, not a patch.
+- **Take the release notes from the `CHANGELOG.md` section itself** so the
+  two cannot drift.
+- **Only list what a released version did.** A bug that existed solely on
+  a branch was never shipped, and listing it under Fixed tells users of
+  the previous release they were affected when they were not.
+- **Put user-visible limitations under a Known heading.** Something people
+  will notice and might otherwise file as a bug belongs in the notes.
+- **A pushed tag stays as it is.** Correct it with a follow-up release.
+
 ## Test harnesses
 
 - **Set `QML_DISABLE_DISK_CACHE=1`** in anything that loads `Main.qml`
