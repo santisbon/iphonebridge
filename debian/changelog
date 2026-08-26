@@ -1,3 +1,10 @@
+iphonebridge (0.12.1) unstable; urgency=medium
+
+  * The man pages now carry the package version, substituted from this
+    changelog at build time; 0.12.0's still said 0.11.0.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Wed, 26 Aug 2026 13:10:54 -0500
+
 iphonebridge (0.12.0) unstable; urgency=medium
 
   * Per-app notifications (ANCS) are now attainable: ancs-enable steers

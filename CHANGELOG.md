@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.1] — 2026-08-26
+
+### Fixed
+- **The man pages said 0.11.0.** Their `.TH` lines hardcoded a version,
+  making them an extra place the version lived, and the 0.12.0 bump
+  missed it. The version and date are now substituted from
+  `debian/changelog` at build time, so the pages can no longer drift.
+
 ## [0.12.0] — 2026-08-26
 
 Per-app notifications, for real this time. Every release so far shipped
