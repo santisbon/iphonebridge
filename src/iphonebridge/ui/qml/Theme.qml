@@ -27,8 +27,16 @@ QtObject {
                                             : Qt.rgba(60 / 255, 60 / 255, 67 / 255, 0.13)
     readonly property color fill: dark ? Qt.rgba(120 / 255, 120 / 255, 128 / 255, 0.24)
                                        : Qt.rgba(120 / 255, 120 / 255, 128 / 255, 0.12)
-    readonly property color selected: dark ? Qt.rgba(120 / 255, 120 / 255, 128 / 255, 0.32)
-                                           : Qt.rgba(120 / 255, 120 / 255, 128 / 255, 0.16)
+    // Transient states — hover, a highlighted menu row, a press — are the
+    // surface made lighter or darker, never a colour laid over it. `fill`
+    // above is Apple's systemFill, rgb(120,120,128), which carries +8 blue
+    // of its own: right for a surface, wrong for a highlight, where it
+    // tints whatever it sits on. Plain white and black shift lightness
+    // and leave the hue exactly where it was.
+    readonly property color hover:   dark ? Qt.rgba(1, 1, 1, 0.09)
+                                          : Qt.rgba(0, 0, 0, 0.055)
+    readonly property color pressed: dark ? Qt.rgba(1, 1, 1, 0.15)
+                                          : Qt.rgba(0, 0, 0, 0.10)
 
     // ---- type -----------------------------------------------------------
     // One family across every role. Apple's interface does not pair a

@@ -92,7 +92,7 @@ ApplicationWindow {
                     }
                     background: Rectangle {
                         radius: 6
-                        color: sug.hovered ? appTheme.fill : "transparent"
+                        color: sug.hovered ? appTheme.hover : "transparent"
                     }
                     contentItem: RowLayout {
                         spacing: 12
@@ -281,8 +281,8 @@ ApplicationWindow {
                             }
                             background: Rectangle {
                                 radius: 7
-                                color: newBtn.down ? appTheme.selected
-                                     : newBtn.hovered ? appTheme.fill
+                                color: newBtn.down ? appTheme.pressed
+                                     : newBtn.hovered ? appTheme.hover
                                      : "transparent"
                             }
                             contentItem: Item {
@@ -324,12 +324,14 @@ ApplicationWindow {
                             // MAP deletes, so the menu and the toast both
                             // say "this computer".
                             TapHandler {
+                                id: threadRightTap
                                 acceptedButtons: Qt.RightButton
-                                onSingleTapped: threadMenu.popup()
+                                onSingleTapped: threadMenu.popupAt(point.position)
                             }
                             TapHandler {
+                                id: threadLongTap
                                 acceptedButtons: Qt.LeftButton
-                                onLongPressed: threadMenu.popup()
+                                onLongPressed: threadMenu.popupAt(point.position)
                             }
                             ActionMenu {
                                 id: threadMenu
@@ -341,7 +343,7 @@ ApplicationWindow {
                             background: Rectangle {
                                 color: threadRow.ListView.isCurrentItem
                                        ? appTheme.accent
-                                       : threadRow.hovered ? appTheme.fill
+                                       : threadRow.hovered ? appTheme.hover
                                                            : "transparent"
                                 radius: threadRow.ListView.isCurrentItem ? 8 : 0
                                 anchors.fill: parent
@@ -625,12 +627,16 @@ ApplicationWindow {
                             topPadding: model.newRun ? 8 : 2
 
                             TapHandler {
+                                id: msgRightTap
                                 acceptedButtons: Qt.RightButton
-                                onSingleTapped: if (model.msgKey) msgMenu.popup()
+                                onSingleTapped: if (model.msgKey)
+                                                    msgMenu.popupAt(point.position)
                             }
                             TapHandler {
+                                id: msgLongTap
                                 acceptedButtons: Qt.LeftButton
-                                onLongPressed: if (model.msgKey) msgMenu.popup()
+                                onLongPressed: if (model.msgKey)
+                                                   msgMenu.popupAt(point.position)
                             }
                             ActionMenu {
                                 id: msgMenu
@@ -1018,7 +1024,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         implicitHeight: Math.round(40 * appTheme.k)
                         radius: Math.round(10 * appTheme.k)
-                        color: hangAllArea.pressed ? appTheme.selected : appTheme.canvas
+                        color: hangAllArea.pressed ? appTheme.pressed : appTheme.canvas
                         opacity: calls.count > 0 ? 1 : 0.45
                         Label {
                             anchors.centerIn: parent
@@ -1096,7 +1102,7 @@ ApplicationWindow {
                         Layout.topMargin: Math.round(4 * appTheme.k)
                         implicitHeight: Math.round(40 * appTheme.k)
                         radius: Math.round(10 * appTheme.k)
-                        color: recheckArea.pressed ? appTheme.selected : appTheme.canvas
+                        color: recheckArea.pressed ? appTheme.pressed : appTheme.canvas
                         Label {
                             anchors.centerIn: parent
                             text: "Check again"
