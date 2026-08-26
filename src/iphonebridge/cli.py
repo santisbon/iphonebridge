@@ -84,6 +84,40 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
         log.error("State dir not writable: %s", e)
         ok = False
 
+    # ANCS — two independent facts. The advert probe exercises the same
+    # BlueZ path the daemon needs at startup, so it catches a broken
+    # advertising stack (notably BlueZ 5.85's oversized
+    # MGMT_OP_ADD_EXT_ADV_DATA, rejected by strict kernels) without the
+    # daemon running. The bond check reads whether iOS actually granted
+    # ANCS to this pairing — the part only a re-pair can change.
+    if cod is not None:
+        advert_ok, why = bluez_setup.probe_advert()
+        if advert_ok:
+            log.info("BLE advertising works (probe registered and released)")
+        else:
+            log.error("BLE advertising broken: RegisterAdvertisement → %s",
+                      why)
+            log.error("    Without it iOS never offers 'Show System "
+                      "Notifications', so ANCS cannot work.")
+            if why == "org.bluez.Error.Failed":
+                log.error("    On BlueZ 5.85 this is a known packaging bug — "
+                          "see packaging/bluez-adv-fix.md in the repo "
+                          "(https://github.com/santisbon/iphonebridge).")
+            ok = False
+
+        bond = bluez_setup.device_has_ancs_bond()
+        if bond:
+            log.info("iPhone bond exposes ANCS — per-app notifications "
+                     "available")
+        elif bond is None:
+            log.warning("iPhone not found on the adapter — pair it, then "
+                        "re-run doctor")
+        else:
+            log.warning("Paired, but the bond does not expose ANCS. "
+                        "Messages and contacts are unaffected.")
+            log.warning("    → iphonebridge ancs-enable, then forget + "
+                        "re-pair (see README, Troubleshooting)")
+
     if ok:
         typer.echo(typer.style("All checks passed.", fg=typer.colors.GREEN))
     else:

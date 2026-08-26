@@ -120,7 +120,7 @@ diagnostics. Deleting from local history is the app's job:
 | Command | What it does |
 |---|---|
 | `iphonebridge run` | Run the daemon in the foreground (the systemd service uses this) |
-| `iphonebridge doctor` | Check prerequisites — config, adapter class, obexd, state dir |
+| `iphonebridge doctor` | Check prerequisites — config, adapter class, obexd, state dir, BLE advertising, ANCS bond |
 | `iphonebridge pair-setup` | First-run wizard — find the paired iPhone, write config |
 | `iphonebridge sms-list` | Recent messages — `-n N`, `--from <contact>`, `--source iphone\|local` |
 | `iphonebridge sms-send <to> <body>` | Send an SMS / iMessage (`<to>` = number or contact name) |
@@ -246,9 +246,10 @@ systemctl --user restart iphonebridge
 > `add_client_complete() Failed to add advertisement: Invalid Parameters`).
 > Fixed upstream in bluez commit `2a6968b40` ("advertising: Fix sending
 > extra bytes with MGMT_OP_ADD_EXT_ADV_DATA"); until your distro ships it,
-> a bluez rebuilt with that one-line patch restores ANCS. The adapter is
-> not at fault. MAP and PBAP are unaffected, so messages and contacts keep
-> working; only ANCS is lost.
+> a bluez rebuilt with that one-line patch restores ANCS —
+> [`packaging/bluez-adv-fix.md`](packaging/bluez-adv-fix.md) is the
+> walkthrough. The adapter is not at fault. MAP and PBAP are unaffected,
+> so messages and contacts keep working; only ANCS is lost.
 </details>
 
 <details>

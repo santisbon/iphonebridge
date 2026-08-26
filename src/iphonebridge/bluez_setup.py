@@ -195,6 +195,72 @@ def unregister_advert() -> None:
     _advert_registered = False
 
 
+def probe_advert(timeout_s: int = 10) -> tuple[bool, str]:
+    """Register a throwaway advertisement and report BlueZ's verdict.
+
+    Diagnostic (doctor), not part of daemon startup. Registration is
+    asynchronous for the same reason register_advert's docstring gives —
+    BlueZ calls back into the advertisement object to read its properties,
+    so a blocking call deadlocks — hence the private main loop here.
+
+    Returns (ok, detail). detail carries the D-Bus error name on failure,
+    or "timeout" if BlueZ never answered.
+    """
+    from gi.repository import GLib
+
+    path = config.BLE_ADVERT_DBUS_PATH + "_probe"
+    ad = _AncsAdvert(system_bus, path)
+    loop = GLib.MainLoop()
+    outcome: dict[str, str] = {}
+
+    def done() -> None:
+        outcome["result"] = "ok"
+        loop.quit()
+
+    def failed(e: dbus.exceptions.DBusException) -> None:
+        outcome["result"] = e.get_dbus_name() or "unknown"
+        loop.quit()
+
+    ad_mgr = bluez(f"/org/bluez/{config.ADAPTER}",
+                   "org.bluez.LEAdvertisingManager1")
+    try:
+        ad_mgr.RegisterAdvertisement(path, {}, reply_handler=done,
+                                     error_handler=failed)
+    except dbus.exceptions.DBusException as e:
+        ad.remove_from_connection()
+        return False, e.get_dbus_name() or "dispatch failed"
+
+    GLib.timeout_add_seconds(timeout_s, loop.quit)
+    loop.run()
+
+    result = outcome.get("result", "timeout")
+    if result == "ok":
+        try:
+            ad_mgr.UnregisterAdvertisement(path)
+        except dbus.exceptions.DBusException:
+            pass
+    ad.remove_from_connection()
+    return result == "ok", "" if result == "ok" else result
+
+
+def device_has_ancs_bond() -> bool | None:
+    """Whether the paired iPhone's device object carries the ANCS GATT
+    service UUID — the sign the BLE bond formed and iOS granted ANCS.
+
+    None means the device object was not found (not paired, or a
+    different MAC is configured).
+    """
+    dev = "dev_" + config.IPHONE_MAC.upper().replace(":", "_")
+    try:
+        props = bluez(f"/org/bluez/{config.ADAPTER}/{dev}",
+                      "org.freedesktop.DBus.Properties")
+        uuids = props.Get("org.bluez.Device1", "UUIDs")
+    except dbus.exceptions.DBusException:
+        return None
+    wanted = config.ANCS_SOLICIT_UUID.lower()
+    return any(str(u).lower() == wanted for u in uuids)
+
+
 # ---- one-shot startup ---------------------------------------------------
 
 def prepare(*, allow_sudo: bool = True) -> bool:
