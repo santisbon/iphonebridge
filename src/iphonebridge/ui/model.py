@@ -19,6 +19,8 @@ The subtle parts are load-bearing and each has a test:
 """
 from __future__ import annotations
 
+from html import escape
+
 from iphonebridge.events import message_key
 from iphonebridge.ui.util import event_ts, ts_key
 
@@ -197,6 +199,46 @@ def emoji_only(body: str | None, limit: int = 3) -> bool:
             continue
         return False
     return 0 < pictures <= limit
+
+
+def _is_emoji(ch: str) -> bool:
+    cp = ord(ch)
+    return cp in _EMOJI_GLUE or any(lo <= cp <= hi for lo, hi in _EMOJI_RANGES)
+
+
+def emoji_markup(body: str | None, point_size: float) -> str:
+    """`body` as Qt rich text, with its emoji set larger than the words.
+
+    Colour emoji are drawn at the text size, and at a size comfortable for
+    reading a sentence they come out too small to make out. Qt honours an
+    absolute font-size on a rich-text run — percentages it ignores — so
+    each run of emoji carries its own, and the sentence around it keeps
+    the size the reader chose.
+
+    Returns escaped text with no markup at all when there is nothing to
+    enlarge, which is almost every message.
+    """
+    text = body or ""
+    if not any(_is_emoji(ch) for ch in text):
+        return escape(text, quote=False).replace("\n", "<br>")
+
+    out: list[str] = []
+    run: list[str] = []
+
+    def flush() -> None:
+        if run:
+            out.append(f'<span style="font-size:{point_size:.1f}pt">'
+                       + escape("".join(run), quote=False) + "</span>")
+            run.clear()
+
+    for ch in text:
+        if _is_emoji(ch):
+            run.append(ch)
+        else:
+            flush()
+            out.append("<br>" if ch == "\n" else escape(ch, quote=False))
+    flush()
+    return "".join(out)
 
 
 def unread_keys(thread: dict | None) -> list[str]:

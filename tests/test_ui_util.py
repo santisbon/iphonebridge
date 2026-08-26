@@ -474,3 +474,44 @@ class TestEmojiOnlyMessages:
     def test_a_verification_code_is_not_emoji(self):
         from iphonebridge.ui.model import emoji_only
         assert not emoji_only("Your verification code is 481502.")
+
+
+class TestEmojiMarkup:
+    """Emoji inside a sentence are set larger than the words around them.
+    The markup is text work, so it is checked here rather than by eye."""
+
+    PT = 17.5
+
+    def test_a_message_without_emoji_gets_no_markup(self):
+        from iphonebridge.ui.model import emoji_markup
+        assert emoji_markup("see you there", self.PT) == "see you there"
+
+    def test_emoji_carry_their_own_size(self):
+        from iphonebridge.ui.model import emoji_markup
+        out = emoji_markup("thanks 🥰", self.PT)
+        assert out == 'thanks <span style="font-size:17.5pt">🥰</span>'
+
+    def test_a_run_shares_one_span(self):
+        """Two emoji side by side are one run, not two spans."""
+        from iphonebridge.ui.model import emoji_markup
+        assert emoji_markup("🥰😘", self.PT).count("<span") == 1
+
+    def test_separated_emoji_get_their_own_spans(self):
+        from iphonebridge.ui.model import emoji_markup
+        assert emoji_markup("🥰 and 😘", self.PT).count("<span") == 2
+
+    def test_the_message_is_escaped(self):
+        """Rich text means a message could otherwise inject markup."""
+        from iphonebridge.ui.model import emoji_markup
+        assert emoji_markup("a & b <b>bold</b>", self.PT) == \
+            "a &amp; b &lt;b&gt;bold&lt;/b&gt;"
+        assert "&lt;script&gt;" in emoji_markup("<script> 🎉", self.PT)
+
+    def test_newlines_survive_as_breaks(self):
+        from iphonebridge.ui.model import emoji_markup
+        assert emoji_markup("one\ntwo", self.PT) == "one<br>two"
+        assert "<br>" in emoji_markup("one\ntwo 🎉", self.PT)
+
+    def test_the_size_is_the_one_given(self):
+        from iphonebridge.ui.model import emoji_markup
+        assert "font-size:22.0pt" in emoji_markup("🎉", 22.0)

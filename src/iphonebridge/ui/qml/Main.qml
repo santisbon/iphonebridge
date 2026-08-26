@@ -557,6 +557,12 @@ ApplicationWindow {
                         clip: true
                         model: messages
                         spacing: 2
+                        // Emoji are drawn at the text size and come out
+                        // too small to read at a size comfortable for a
+                        // sentence. The model needs the number; only the
+                        // view knows it.
+                        Component.onCompleted: messages.emojiPointSize =
+                                               theme.bodySize * 1.4
 
                         // Following the end of a growing list takes two
                         // steps, not one. On countChanged the new delegate
@@ -665,7 +671,13 @@ ApplicationWindow {
                                     anchors.centerIn: parent
                                     width: parent.width - (parent.bare ? 0 : 24)
                                     wrapMode: Text.Wrap
-                                    text: model.body
+                                    // Rich text only where it buys the
+                                    // larger emoji. An emoji-only message
+                                    // is already scaled whole, and a span
+                                    // inside it would shrink it back.
+                                    textFormat: parent.bare ? Text.PlainText
+                                                            : Text.RichText
+                                    text: parent.bare ? model.body : model.bodyHtml
                                     color: parent.bare ? theme.label
                                          : model.outgoing ? "white"
                                                           : theme.bubbleInText
