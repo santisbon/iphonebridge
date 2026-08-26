@@ -11,7 +11,7 @@ from iphonebridge import bluez_setup, config
 
 app = typer.Typer(
     add_completion=False,
-    help="iPhone ↔ Linux Bluetooth bridge for Pop!_OS.",
+    help="iPhone ↔ Linux Bluetooth bridge.",
 )
 
 
