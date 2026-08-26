@@ -58,11 +58,13 @@ def events() -> list[dict]:
         _sms("sms_sent", "Dana Whitfield", "+15550138",
              "no rush, the table is held until 8", -1435),
         _sms("sms_received", "Dana Whitfield", "+15550138",
-             "you are a saint", -1430),
+             "you are a saint 😇", -1430),
         _sms("sms_received", "Dana Whitfield", "+15550138",
              "ok moving now", 0),
         _sms("sms_sent", "Dana Whitfield", "+15550138",
              "see you there", 3),
+        _sms("sms_sent", "Dana Whitfield", "+15550138",
+                     "🥘😋", 4),
         # Left unread, so the conversation list shows both states: this
         # one and the number below carry the accent dot.
         _sms("sms_received", "Margaret Ellison", "+15550172",
