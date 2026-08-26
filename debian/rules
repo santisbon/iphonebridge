@@ -11,6 +11,18 @@ override_dh_auto_build:
 	visudo -cf debian/sudoers-ancs
 	dh_auto_build
 
+# The man sources carry @VERSION@/@DATE@ rather than a literal version:
+# a hardcoded one is an extra version location the release bump can miss
+# (and did — 0.12.0 shipped man pages saying 0.11.0). The changelog is
+# the single source here.
+execute_before_dh_installman:
+	mkdir -p debian/man-gen
+	set -e; V=$$(dpkg-parsechangelog -S Version); \
+	D=$$(date -u -d "$$(dpkg-parsechangelog -S Date)" +%Y-%m-%d); \
+	for m in man/*.1; do \
+	  sed "s/@VERSION@/$$V/; s/@DATE@/$$D/" $$m > debian/man-gen/$$(basename $$m); \
+	done
+
 override_dh_install:
 	dh_install
 	mkdir -p debian/iphonebridge/usr/lib/systemd/user

@@ -36,3 +36,4 @@ debian/files
 debian/*.substvars
 debian/debhelper-build-stamp
 debian/*.debhelper
+debian/man-gen/

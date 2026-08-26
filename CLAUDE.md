@@ -34,7 +34,9 @@ systemd **user** service.
 
 `packaging/deb/README.md` has the commands. What is easy to get wrong:
 
-- **Five files carry the version**, and they have to agree:
+- **Five files carry the version**, and they have to agree (the man
+  pages do not — their `.TH` version is substituted from
+  `debian/changelog` at build time, precisely so no sixth copy exists):
   `pyproject.toml`, `src/iphonebridge/__init__.py`, `debian/changelog`,
   the `## [X.Y.Z]` heading in `CHANGELOG.md`, and the `<releases>` list in
   `data/me.santisbon.iphonebridge.UI.metainfo.xml`. The metainfo one is
