@@ -28,6 +28,10 @@
     <category>InstantMessaging</category>
   </categories>
 
+  <developer id="me.santisbon">
+    <name>santisbon</name>
+  </developer>
+
   <url type="homepage">https://github.com/santisbon/iphonebridge</url>
   <url type="bugtracker">https://github.com/santisbon/iphonebridge/issues</url>
 
@@ -35,13 +39,51 @@
     <binary>iphonebridge-ui</binary>
   </provides>
 
+  <screenshots>
+    <screenshot type="default">
+      <caption>Conversations, with the state of the Bluetooth link</caption>
+      <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/messages.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Place a call, answer or hang up an active one</caption>
+      <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/calls.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Every app's notifications, mirrored over ANCS</caption>
+      <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/notifications.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Daemon health and the iPhone setup checklist</caption>
+      <image>https://raw.githubusercontent.com/santisbon/iphonebridge/main/screenshots/setup.png</image>
+    </screenshot>
+  </screenshots>
+
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.10.0" date="2026-08-25">
+      <description>
+        <p>The desktop app is rebuilt on Qt 6 / QML. Message and app
+        notifications now clear themselves after ten seconds, and a
+        conversation with your own number no longer splits in two.</p>
+      </description>
+    </release>
+    <release version="0.9.1" date="2026-08-25">
+      <description>
+        <p>Fixes repeated confirmation codes being dropped, duplicated and
+        truncated messages, and verification codes reaching the journal.</p>
+      </description>
+    </release>
+    <release version="0.9.0" date="2026-08-25">
+      <description>
+        <p>Read-state syncs both ways, timestamps are stored in UTC, and the
+        interface was restyled.</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-05-20">
       <description>
-        <p>First GTK4 / libadwaita desktop app — conversations, a notification
-        feed, call UI, and a setup/status page.</p>
+        <p>First desktop app — conversations, a notification feed, call UI,
+        and a setup/status page.</p>
       </description>
     </release>
   </releases>
