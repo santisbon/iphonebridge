@@ -373,9 +373,28 @@ sudo apt install ./iphonebridge_<version>_all.deb
 systemctl --user restart iphonebridge
 ```
 
+**Rebuilding the same version needs `--reinstall`.** During development
+`debian/changelog` usually does not get a new entry between builds, so the
+freshly built `.deb` carries the version that is already installed. apt
+compares versions, sees no upgrade, and does nothing — silently, with a
+zero exit status. The result is a build that never reaches the system and
+a daemon that keeps running the old code:
+
+```bash
+sudo apt install --reinstall ./iphonebridge_<version>_all.deb
+systemctl --user restart iphonebridge
+```
+
 The restart is required and is not optional politeness: dpkg cannot
 restart per-user services, so the running daemon keeps executing the old
 code until you restart it. Reopen the app too if it is running.
+
+Confirm the running daemon is the one you just built, rather than assuming
+the install landed:
+
+```bash
+journalctl --user -u iphonebridge -n 20 | grep "sink ready"
+```
 
 No `daemon-reload` is needed: dpkg rewrites the unit file and systemd
 would otherwise keep its cached copy, so `postinst` reloads each

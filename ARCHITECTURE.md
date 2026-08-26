@@ -5,7 +5,7 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
 
 ### Feature details
 
-- **Incoming messages** appear as **persistent notifications** — they stay until you dismiss them on the desktop *or* read the message on your iPhone. **Read-state syncs both ways.**
+- **Incoming messages** appear as desktop notifications that clear themselves after ten seconds. Dismissing one instead means "I read this", and marks the message read on the iPhone; letting it expire means nobody looked, so it stays unread. Reading it on the iPhone closes the popup here. **Read-state syncs both ways.** Set `IPHONEBRIDGE_NOTIFY_EXPIRE_MS=0` in `~/.config/iphonebridge/local.env` for popups that sit there until dealt with.
 - **Verification codes** — when a text carries a one-time / 2FA code, iphonebridge detects it and copies it to your clipboard automatically; press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste. Detection needs both a verification keyword and a 4–8 digit number, so ordinary texts don't trigger it.
 - **Incoming calls** raise a notification with **Answer / Decline** buttons that act on the call directly.
 - **Sent messages** — replies you send from the desktop are recorded into conversation history, so a thread shows both sides.

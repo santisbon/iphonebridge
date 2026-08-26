@@ -277,6 +277,27 @@ style of its own — the step after the port from GTK.
 </details>
 
 <details>
+<summary><b><code>Unable to acquire the address of the accessibility bus</code></b></summary>
+
+Noise, not a fault — the app works normally. `iphonebridge-ui` is a
+Qt/QML process, but Qt loads a *platform theme plugin* on startup to pick
+up your desktop's fonts, colours and dialogs, and on a GTK desktop that
+plugin initialises GTK inside the app's process. The warning is GTK's,
+about `at-spi-dbus-bus.service` being masked on your system, and the app
+itself never imports GTK. Silence it either way:
+
+```bash
+GTK_A11Y=none iphonebridge-ui                       # skip a11y for this launch
+systemctl --user unmask at-spi-dbus-bus.service     # or turn a11y back on
+systemctl --user start at-spi-dbus-bus.service
+```
+
+The app deliberately doesn't set `GTK_A11Y=none` itself — that would
+silence the accessibility bus for every GTK program the session starts
+afterwards, including for people who need it.
+</details>
+
+<details>
 <summary><b>Verification codes aren't being copied</b></summary>
 
 Install a clipboard tool: `sudo apt install wl-clipboard` (Wayland) or `xclip` (X11). The daemon log shows `no clipboard tool worked` when none is present.

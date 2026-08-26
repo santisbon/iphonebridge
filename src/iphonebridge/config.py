@@ -57,6 +57,28 @@ COD_MAJOR: int = 4   # Audio/Video
 COD_MINOR: int = 8   # = bits 7-2 → 0x02 = Hands-Free Device
 
 ANCS_SOLICIT_UUID: str = "7905F431-B5CE-4E99-A40F-4B1E122D00D0"
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
+
+NOTIFY_EXPIRE_MS: int = _int_env("IPHONEBRIDGE_NOTIFY_EXPIRE_MS", 10_000)
+"""How long a message or app notification stays on screen, in ms.
+
+0 means never expire, which is what this used to do unconditionally: a
+popup sat there until dismissed. Dismissing is also what tells the iPhone
+you read the message, so the two were deliberately tied together — and
+that is why an expiring popup does *not* mark anything read. Expiry
+arrives as reason 1 and dismissal as reason 2, and only reason 2
+propagates.
+
+Incoming-call popups ignore this and never expire: they are closed when
+the call is answered or ends.
+"""
 """Apple Notification Center Service UUID. Used in the BLE advert's
 SolicitUUIDs field; required for the iOS toggles to surface, even though
 we're not actually consuming ANCS in Phase 1."""

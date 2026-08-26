@@ -10,6 +10,7 @@ which need an application object — see `iphonebridge.ui.qtbus`.
 from __future__ import annotations
 
 import logging
+import os
 import pathlib
 import sys
 
@@ -23,6 +24,20 @@ from iphonebridge.ui.qtmodels import MessageListModel, NotificationListModel, Th
 from iphonebridge.ui.util import resolve_recipient
 
 log = logging.getLogger(__name__)
+
+#: Set IPHONEBRIDGE_UI_DIAG=1 to log which conversation is open, where it
+#: sits in the list, which rows would draw an unread dot, and whether an
+#: arriving message keys to the open thread. Thread keys are logged as
+#: SHA-256 prefixes, never as names, numbers, or message text, so the
+#: output is safe to hand to anyone. Off by default and free when off.
+DIAG = bool(os.environ.get("IPHONEBRIDGE_UI_DIAG"))
+
+
+def _key_digest(value) -> str:
+    if not value:
+        return "-"
+    import hashlib
+    return "id:" + hashlib.sha256(str(value).encode()).hexdigest()[:6]
 
 QML_DIR = pathlib.Path(__file__).parent / "qml"
 
@@ -87,6 +102,34 @@ class Bridge(QObject):
     def callSummary(self) -> str:
         return self._calls
 
+    def _refresh_threads(self) -> None:
+        """Re-read the conversation list, then tell QML.
+
+        `currentIndex` is derived from the open thread's key rather than
+        stored, so a refresh alone is not enough: refreshing re-sorts the
+        rows, and the binding has no other way to learn its row moved.
+        Every refresh goes through here for that reason.
+        """
+        self.threads.refresh()
+        self.changed.emit()
+
+    def _diag(self, tag: str, arriving: str | None = None) -> None:
+        """Log the selection/unread state. See DIAG above."""
+        if not DIAG:
+            return
+        from iphonebridge.ui.model import unread_keys
+        rows = []
+        for i in range(self.threads.rowCount()):
+            k = self.threads.key_at(i)
+            rows.append(_key_digest(k)
+                        + ("*" if unread_keys(self.store.get(k)) else ""))
+        log.info("DIAG %-9s open=%s idx=%d rows=%s%s", tag,
+                 _key_digest(self._current_key),
+                 self.threads.index_of(self._current_key), rows,
+                 "" if arriving is None else
+                 f" arriving={_key_digest(arriving)}"
+                 f" match={arriving == self._current_key}")
+
     # ---- what QML calls -------------------------------------------------
 
     @pyqtSlot(str)
@@ -97,8 +140,9 @@ class Bridge(QObject):
         self.changed.emit()
         keys = self.store.mark_thread_read(key)
         if keys:
-            self.threads.refresh()
+            self._refresh_threads()
             self._client.mark_read(keys)
+        self._diag("opened")
 
     @pyqtSlot(str)
     def send(self, body: str) -> None:
@@ -135,15 +179,24 @@ class Bridge(QObject):
 
     def _ingest(self, ev: dict, outgoing: bool) -> None:
         key, _msg = self.store.ingest(ev, outgoing=outgoing)
-        self.threads.refresh()
-        # The list just re-sorted; currentIndex is derived, so tell QML.
-        self.changed.emit()
+        # Arriving into the conversation already on screen counts as read:
+        # otherwise the unread dot lights up on the thread you are sitting
+        # in and never clears, because nothing opens it again — and the
+        # phone is never told you saw it either.
+        self._diag("arrived", key)
+        if key == self._current_key:
+            seen = self.store.mark_thread_read(key)
+            if seen:
+                self._client.mark_read(seen)
+        self._refresh_threads()
         if key == self.messages.thread_key:
             self.messages.reload()
+        self._diag("settled")
 
     def _on_seen(self, ev: dict) -> None:
         if self.store.mark_read(ev.get("keys") or ()):
-            self.threads.refresh()
+            self._refresh_threads()
+            self._diag("seen")
 
     def _on_ancs(self, ev: dict) -> None:
         if not ev.get("is_preexisting"):
@@ -183,11 +236,40 @@ class Bridge(QObject):
         self._client.profile_status(show, lambda _e: None)
 
 
+def _diag_to_file() -> None:
+    """Mirror the DIAG lines to a file as well as stderr, so a session can
+    be read back after the fact instead of scrolled away."""
+    from iphonebridge import config
+    path = config.STATE_DIR / "ui-diag.log"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(path, mode="w")
+    except OSError as e:
+        log.warning("could not open %s: %s", path, e)
+        return
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)-5s %(name)s: %(message)s"))
+    logging.getLogger().addHandler(handler)
+    log.info("DIAG writing to %s", path)
+
+
 def main() -> int:
+    # Qt caches compiled QML under ~/.cache/qmlcache and decides a cache
+    # entry is still good from the source file's path and timestamp. dpkg
+    # installs with a build-normalised mtime, so every rebuild of the same
+    # version lands Main.qml with an identical timestamp and the stale
+    # entry keeps winning: the package ships new QML and the app runs the
+    # previous version's. That cost a long evening of chasing a selection
+    # bug that had already been fixed. Compiling ~200 lines at startup is
+    # not worth a cache that can lie.
+    os.environ.setdefault("QML_DISABLE_DISK_CACHE", "1")
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)-5s %(name)s: %(message)s",
         stream=sys.stderr)
+    if DIAG:
+        _diag_to_file()
 
     app = QGuiApplication(sys.argv)
     app.setApplicationName("iphonebridge")
