@@ -23,6 +23,7 @@ does the rest.
 | `data/me.santisbon.iphonebridge.UI.metainfo.xml` | `/usr/share/metainfo/` |
 | CoD sudoers rule, group-based (see below) | `/etc/sudoers.d/iphonebridge-cod` |
 | ANCS sudoers rule + `systemd/set-le-bearer.sh` | `/etc/sudoers.d/iphonebridge-ancs`, `/usr/libexec/iphonebridge/set-le-bearer` |
+| `man/*.1` via `debian/iphonebridge.manpages` | `/usr/share/man/man1/` |
 
 ## Code changes required first (done)
 

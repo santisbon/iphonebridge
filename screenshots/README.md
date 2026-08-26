@@ -1,8 +1,8 @@
 # Screenshots
 
-Documentation only. Nothing in this directory is packaged: `debian/install`
-lists every shipped file by name, and pybuild only packages what is under
-`src/`, so neither the images nor the scripts reach the `.deb`.
+Documentation only. Nothing in this directory is packaged: `debian/install` and
+`debian/iphonebridge.manpages` list every shipped file by name, and
+pybuild only packages what is under `src/`, so neither the images nor the scripts reach the `.deb`.
 
 | File | View |
 | --- | --- |

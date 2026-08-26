@@ -30,6 +30,9 @@ sudo apt install python3-pyqt6 python3-pyqt6.qtqml python3-pyqt6.qtquick \
                  python3-dbus.mainloop.pyqt6 \
                  qml6-module-qtquick-controls qml6-module-qtquick-layouts \
                  qml6-module-qtquick-templates qml6-module-qtquick-window
+# Native Wayland (otherwise Qt falls back to XWayland and renders
+# blurry under fractional scaling) and the interface's preferred face:
+sudo apt install qt6-wayland fonts-inter
 # For auto-copying verification codes (Wayland):
 sudo apt install wl-clipboard
 ```
@@ -122,7 +125,9 @@ On the iPhone: **Settings → Bluetooth → tap the ⓘ next to your computer �
 
 - **Show Message Notifications** — gates SMS/iMessage (MAP)
 - **Sync Contacts** — gates contacts (PBAP)
-- **Show System Notifications** — gates per-app notifications (ANCS)
+
+(Per-app notifications are granted separately: current iOS asks through an
+allow-notifications prompt during step 7, not a toggle here.)
 
 > The toggles need both halves of the setup above: the A/V Hands-Free class from step 4, and the ANCS-soliciting BLE advertisement the daemon registers at startup. If they aren't there, confirm `iphonebridge doctor` reports the class as OK, then forget + re-pair — iOS reads the class at pairing time and caches it.
 
@@ -131,22 +136,33 @@ Two behaviours that look like faults but aren't:
 - **The toggles disappear whenever the daemon is stopped.** They depend on that BLE advertisement, which goes away with the process. Start the daemon and they come back.
 - **A forget + re-pair resets all the toggles to off.** They stay visible, so it's easy to miss. Re-enable them after every re-pair, then give the daemon 60s to retry.
 
-Only two toggles appear until ANCS is working: *Show Message Notifications* and *Sync Contacts*. *Show System Notifications* shows up once the BLE bond from step 7 exists.
 
 
 #### 7 · (Optional) Enable per-app notifications — ANCS
 
-ANCS needs a true BLE bond, which only forms during a fresh pairing while the adapter is correctly configured. One-time setup:
+ANCS needs three things: a bond with LE keys (cross-transport key
+derivation during pairing provides them on a capable adapter — Intel;
+Realtek and USB dongles cannot), an LE connection, and iOS's permission.
+One-time setup:
 
 ```bash
-# Install the privileged helper (writes one specific BlueZ setting)
-sudo bash systemd/install-ancs-sudoers.sh
+# BlueZ's experimental interfaces, for the bearer control this uses
+sudo sed -i '/^\[General\]/a Experimental = true' /etc/bluetooth/main.conf
+sudo systemctl restart bluetooth
+systemctl --user restart iphonebridge
 
-# Apply it and re-pair
+# Steer the next connection over BLE
 iphonebridge ancs-enable
 ```
 
-Then **forget + re-pair** the iPhone one more time (the wizard walks you through it). After the fresh pair, iOS performs cross-transport key derivation and the BLE bond sticks — ANCS notifications start flowing automatically. You only do this once.
+`ancs-enable` disconnects, sets BlueZ's `Device1.PreferredBearer` to
+`le`, reconnects, and waits for the phone's ANCS service to appear. The
+iPhone then shows an **allow-notifications prompt** — answer Allow, and
+notifications start flowing. You only do this once.
+
+If `ancs-enable` reports the ANCS service never appeared, the bond
+likely predates a capable setup: **forget + re-pair** first (both ends),
+then re-run it.
 
 *Forget* means dropping the bond on **both** ends; one-sided forgetting leaves a
 stale half-bond that breaks the re-pair. On the iPhone: **Settings → Bluetooth →
@@ -156,8 +172,8 @@ stale half-bond that breaks the re-pair. On the iPhone: **Settings → Bluetooth
 - **KDE Plasma** — System Settings → Bluetooth → the device → *Remove* (trash icon)
 - **CLI** — `bluetoothctl remove <MAC>`
 
-After the re-pair, re-enable the step 6 toggles on the iPhone, which the
-re-pair switched off.
+After any re-pair, re-enable the step 6 toggles on the iPhone, which a
+re-pair switches off.
 
 The re-pair also kills the daemon's MAP and PBAP sessions, but you don't have to
 do anything about that: a health check notices within 60s, drops to DEGRADED, and

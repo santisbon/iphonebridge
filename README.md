@@ -3,7 +3,7 @@
 # 📱🐧 iPhone Bridge
 
 **iPhone messages, notifications, contacts and calls on Linux**  
-*No Mac relay. No cloud service. No subscription. Just Bluetooth.*
+*No Mac relay. No cloud service. No subscription. Just Bluetooth*
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/santisbon/iphonebridge?color=brightgreen)](https://github.com/santisbon/iphonebridge/releases/latest)
@@ -102,15 +102,15 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
   an append-only log with no retraction. Deleting from Linux does not remove
   it there either: writing the per-message `Deleted` flag is accepted without
   error but ignored, and the message reappears on the next reconnect after
-  BlueZ drops it from the current session's view. The `Read` flag on the same
-  interface does sync both ways, so this is an iOS choice rather than a BlueZ
-  limit. Measured on iOS 26.6.1; a delete on the phone also renumbers every
+  BlueZ drops it from the current session's view. The per-message `Read` flag on the
+  same interface *is* honoured by iOS (within the bounds of the read-state
+  note above), so this is an iOS choice rather than a BlueZ limit. Measured on iOS 26.6.1; a delete on the phone also renumbers every
   remaining message handle, which is why history is deduplicated by content
   rather than by handle.
 
 ## Requirements
 
-> ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters like the AX-series do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
+> ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably (AX-series, and BE200 confirmed with this project). **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
 ## CLI
 
@@ -150,7 +150,10 @@ into `Forbidden`.
 <details>
 <summary><b><code>Forbidden</code> errors in the log</b></summary>
 
-An iPhone toggle is off. Check **Settings → Bluetooth → ⓘ → Show Message Notifications / Sync Contacts / Show System Notifications**.
+An iPhone toggle is off. Check **Settings → Bluetooth → ⓘ → Show Message
+Notifications / Sync Contacts**. (ANCS permission is separate: current iOS
+grants it through an allow-notifications prompt, re-triggered by
+`iphonebridge ancs-enable`, not through a toggle there.)
 </details>
 
 <details>
@@ -175,7 +178,9 @@ ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental int
 
 Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
 
-Check whether the bond actually formed — if ANCS worked, the iPhone's device object carries the ANCS GATT service UUID:
+`iphonebridge doctor` runs both checks below for you. Manually: if ANCS is
+granted and an LE connection has happened, the iPhone's device object
+carries the ANCS GATT service UUID:
 
 ```bash
 busctl --system tree org.bluez | grep dev_          # find your device path
@@ -183,15 +188,18 @@ busctl --system get-property org.bluez <path> org.bluez.Device1 UUIDs \
   | grep -i 7905f431-b5ce-4e99-a40f-4b1e122d00d0
 ```
 
-No match means the bond is still BR/EDR-only, and iOS won't offer the *Show System Notifications* toggle at all. An Intel adapter is necessary but not sufficient; `spike/RESULTS.md` §5 has the BR/EDR-vs-BLE mutex this runs into. Confirm the chipset with:
+No match means either no LE connection has occurred yet (run
+`iphonebridge ancs-enable`) or the bond never got LE keys — the latter is
+adapter-dependent. An Intel adapter is necessary but not sufficient; `spike/RESULTS.md` §5 has the BR/EDR-vs-BLE mutex this runs into. Confirm the chipset with:
 
 ```bash
 lsusb | grep -i bluetooth        # Intel Corp. = supported; Realtek / dongles = not
 ```
 
-**Check the advertisement registered at all.** The toggle also needs the
+**Check the advertisement registered at all.** The grant also needs the
 ANCS-soliciting BLE advertisement the daemon registers at startup
-(`spike/RESULTS.md` §1). A failure is logged plainly:
+(`spike/RESULTS.md` §1; `doctor` probes this path directly). A failure is
+logged plainly:
 
 ```bash
 journalctl --user -u iphonebridge | grep -i advert

@@ -1,5 +1,16 @@
 # Phase 0 — Results & Plan Revisions
 
+> **2026-08-26 — the open ANCS questions below are resolved.** The
+> solicitation advert was being rejected by a BlueZ 5.85 packaging bug
+> ([`packaging/bluez-adv-fix.md`](../packaging/bluez-adv-fix.md)), and the
+> BR/EDR-vs-BLE mutex in §5 is crossed at runtime by steering the bearer
+> with BlueZ's experimental `Device1.PreferredBearer` (what
+> `iphonebridge ancs-enable` now does). On current iOS the grant arrives
+> as an allow-notifications prompt on the phone rather than a third
+> toggle. Confirmed end to end on an Intel BE200, iOS 26.6.1. Everything
+> below stands as the Phase 0 record.
+
+
 **Date:** 2026-05-19  •  **Target:** iPhone 16 Pro Max, iOS 26.5, MAC `AA:BB:CC:DD:EE:FF`
 **Linux:** Pop!_OS 24.04, BlueZ 5.72, PipeWire 1.5.85, WirePlumber 1.5.85
 **Plan reference:** `~/.claude/plans/steady-crunching-lynx.md`
