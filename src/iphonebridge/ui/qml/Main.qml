@@ -4,6 +4,77 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: win
+
+    // True while a new conversation is being addressed but not yet sent.
+    property bool composing: false
+
+    // A recipient box that suggests contacts as you type. Used by the
+    // new-conversation form and by the dialer, which want exactly the
+    // same behaviour and drifted apart when they were separate widgets.
+    component RecipientField: Item {
+        id: rf
+        property alias text: field.text
+        property string placeholder: ""
+        signal submitted()
+
+        implicitHeight: field.implicitHeight
+        implicitWidth: field.implicitWidth
+
+        TextField {
+            id: field
+            anchors.fill: parent
+            placeholderText: rf.placeholder
+            // onTextEdited, never onTextChanged: picking a suggestion
+            // sets the text, and reacting to that would reopen the popup
+            // over the choice just made. The GTK version needed an
+            // explicit guard flag for the same reason.
+            onTextEdited: {
+                popup.rows = bridge.suggest(text)
+                if (popup.rows.length > 0) popup.open(); else popup.close()
+            }
+            onAccepted: { popup.close(); rf.submitted() }
+            Keys.onEscapePressed: popup.close()
+        }
+
+        Popup {
+            id: popup
+            property var rows: []
+            y: field.height
+            width: field.width
+            padding: 1
+            // Never takes focus: the field has to keep it so typing
+            // continues to narrow the list.
+            closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+            implicitHeight: Math.min(contentItem.contentHeight + 2, 220)
+
+            contentItem: ListView {
+                clip: true
+                model: popup.rows
+                implicitHeight: contentHeight
+                delegate: ItemDelegate {
+                    width: ListView.view.width
+                    onClicked: {
+                        field.text = modelData.name
+                        popup.close()
+                        rf.submitted()
+                    }
+                    contentItem: RowLayout {
+                        spacing: 12
+                        Label {
+                            text: modelData.name
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Label {
+                            text: modelData.phone
+                            opacity: 0.6
+                            font.pointSize: 8
+                        }
+                    }
+                }
+            }
+        }
+    }
     width: 940; height: 720; visible: true
     title: "iphonebridge"
 
@@ -44,11 +115,44 @@ ApplicationWindow {
         SplitView {
             orientation: Qt.Horizontal
 
+            // Compose mode: a recipient still being chosen, so the thread
+            // header and the conversation give way to a "To:" row.
+            Connections {
+                target: bridge
+                function onChanged() {
+                    if (composing && bridge.threadName.length > 0
+                        && bridge.composeError.length === 0)
+                        composing = false
+                }
+            }
+
+            ColumnLayout {
+                SplitView.preferredWidth: 300
+                SplitView.minimumWidth: 240
+                spacing: 0
+
+                // Over the conversation list, where a new conversation is
+                // plainly what it starts. In the GTK version this sat in
+                // the window's header bar, next to the close button, and
+                // read as a fourth window control.
+                Button {
+                    objectName: "newConversation"
+                    Layout.fillWidth: true
+                    Layout.margins: 6
+                    text: "New Conversation"
+                    onClicked: {
+                        bridge.clearCompose()
+                        composing = true
+                        toField.text = ""
+                        toField.forceActiveFocus()
+                    }
+                }
+
             ListView {
                 id: threadList
                 objectName: "threadList"
-                SplitView.preferredWidth: 300
-                SplitView.minimumWidth: 240
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 clip: true
                 model: threads
                 // Bound, never assigned: writing to currentIndex
@@ -79,6 +183,7 @@ ApplicationWindow {
                     }
                 }
             }
+            }
 
             ColumnLayout {
                 SplitView.fillWidth: true
@@ -90,7 +195,34 @@ ApplicationWindow {
                     horizontalAlignment: Text.AlignHCenter
                     text: bridge.threadName
                     font.bold: true
-                    visible: text.length > 0
+                    visible: text.length > 0 && !composing
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.margins: 8
+                    visible: composing
+                    Label { text: "To:" }
+                    RecipientField {
+                        id: toField
+                        objectName: "toField"
+                        Layout.fillWidth: true
+                        placeholder: "Contact name or number"
+                        onSubmitted: composer.forceActiveFocus()
+                    }
+                    Button {
+                        text: "Cancel"
+                        onClicked: { composing = false; bridge.clearCompose() }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 8
+                    text: bridge.composeError
+                    visible: composing && text.length > 0
+                    color: "#C0392B"
+                    wrapMode: Text.Wrap
                 }
 
                 ListView {
@@ -187,16 +319,25 @@ ApplicationWindow {
                         id: composer
                         Layout.fillWidth: true
                         placeholderText: "Message"
-                        enabled: bridge.threadName.length > 0
+                        enabled: composing || bridge.threadName.length > 0
                         onAccepted: sendButton.send()
                     }
                     Button {
                         id: sendButton
                         text: "Send"
                         enabled: composer.enabled && composer.text.length > 0
+                                 && (!composing || toField.text.length > 0)
                         function send() {
                             if (!enabled) return
-                            bridge.send(composer.text)
+                            if (composing) {
+                                // Stays in compose until the daemon
+                                // confirms; the thread it lands in is
+                                // opened then, which is also what clears
+                                // this form.
+                                bridge.sendTo(toField.text, composer.text)
+                            } else {
+                                bridge.send(composer.text)
+                            }
                             composer.text = ""
                         }
                         onClicked: send()
@@ -226,11 +367,12 @@ ApplicationWindow {
             spacing: 8
             RowLayout {
                 Layout.margins: 12
-                TextField {
+                RecipientField {
                     id: dialEntry
+                    objectName: "dialEntry"
                     Layout.fillWidth: true
-                    placeholderText: "Contact name or number e.g. 1 (800) MYAPPLE"
-                    onAccepted: bridge.dial(text)
+                    placeholder: "Contact name or number e.g. 1 (800) MYAPPLE"
+                    onSubmitted: bridge.dial(text)
                 }
                 Button { text: "Call"; onClicked: bridge.dial(dialEntry.text) }
             }

@@ -1,8 +1,11 @@
 """Small shared helpers for the UI pages."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from html import escape
+
+log = logging.getLogger(__name__)
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -141,6 +144,41 @@ def resolve_recipient(contacts, raw: str) -> str | None:
     if not matches:
         return None
     return matches[0][1]
+
+
+def contact_suggestions(contacts, text: str, *,
+                        limit: int = 10) -> list[tuple[str, str]]:
+    """Contacts to offer while a recipient is being typed.
+
+    Two characters minimum, and nothing at all once a digit appears: a
+    number being entered is not a name being searched for, and offering
+    names over a half-typed number is noise. One row per name, so a
+    contact with several numbers cannot crowd everyone else out of a
+    short list, and capped so the list stays a glance rather than a
+    scroll.
+
+    Returns (name, number) pairs, with the number ready to send —
+    `find_by_name` preserves an explicit country code and never invents
+    one.
+    """
+    text = (text or "").strip()
+    if len(text) < 2 or any(ch.isdigit() for ch in text):
+        return []
+    try:
+        matches = contacts.find_by_name(text)
+    except Exception:
+        log.exception("suggestion lookup failed for %d chars", len(text))
+        return []
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for name, phone in matches:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append((name, phone))
+        if len(out) >= limit:
+            break
+    return out
 
 
 def pin_popover_height(listbox, scroll, cap: int = 320) -> None:

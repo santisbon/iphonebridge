@@ -21,7 +21,7 @@ from PyQt6.QtQml import QQmlApplicationEngine
 from iphonebridge.contacts import ContactsResolver
 from iphonebridge.ui.model import ThreadStore
 from iphonebridge.ui.qtmodels import MessageListModel, NotificationListModel, ThreadListModel
-from iphonebridge.ui.util import resolve_recipient
+from iphonebridge.ui.util import contact_suggestions, resolve_recipient
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +57,10 @@ class Bridge(QObject):
         self.notifications = NotificationListModel()
         self._thread_name = ""
         self._current_key: str | None = None
+        # Set while a composed message is in flight, so the thread it
+        # lands in can be opened once the daemon confirms the send.
+        self._pending_open: str | None = None
+        self._compose_error = ""
         self._status = "Checking…"
         self._calls = "No active calls"
 
@@ -102,6 +106,10 @@ class Bridge(QObject):
     def callSummary(self) -> str:
         return self._calls
 
+    @pyqtProperty(str, notify=changed)
+    def composeError(self) -> str:
+        return self._compose_error
+
     def _refresh_threads(self) -> None:
         """Re-read the conversation list, then tell QML.
 
@@ -143,6 +151,44 @@ class Bridge(QObject):
             self._refresh_threads()
             self._client.mark_read(keys)
         self._diag("opened")
+
+    @pyqtSlot(str, result=list)
+    def suggest(self, text: str) -> list:
+        """Contacts to offer for `text`, as rows QML can bind to."""
+        return [{"name": name, "phone": phone}
+                for name, phone in contact_suggestions(self._contacts, text)]
+
+    @pyqtSlot(str, str)
+    def sendTo(self, recipient: str, body: str) -> None:
+        """Start a conversation: resolve who `recipient` means, then send.
+
+        Takes a contact name, a number, or a vanity number, the same three
+        the dialer takes.
+        """
+        recipient, body = recipient.strip(), body.strip()
+        if not recipient or not body:
+            return
+        number = resolve_recipient(self._contacts, recipient)
+        if number is None:
+            self._compose_error = f"No contact matches {recipient!r}"
+            self.changed.emit()
+            return
+        self._compose_error = ""
+        self._pending_open = number
+        self.changed.emit()
+        self._client.send_message(
+            number, body, lambda _t: None,
+            lambda err: self._set_compose_error(f"Send failed: {err}"))
+
+    def _set_compose_error(self, text: str) -> None:
+        self._pending_open = None
+        self._compose_error = text
+        self.changed.emit()
+
+    @pyqtSlot()
+    def clearCompose(self) -> None:
+        self._compose_error = ""
+        self.changed.emit()
 
     @pyqtSlot(str)
     def send(self, body: str) -> None:
@@ -191,6 +237,12 @@ class Bridge(QObject):
         self._refresh_threads()
         if key == self.messages.thread_key:
             self.messages.reload()
+        # A message composed to a new recipient has just been confirmed:
+        # open the thread it created rather than leaving the compose form
+        # up with no sign of where it went.
+        if outgoing and self._pending_open is not None:
+            self._pending_open = None
+            self.openThread(key)
         self._diag("settled")
 
     def _on_seen(self, ev: dict) -> None:

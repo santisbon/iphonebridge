@@ -321,3 +321,61 @@ class TestTwoPeopleOneName:
                              "sender_phone": "+15553330003"}, outgoing=True)
         assert a == b
         assert len(store.threads) == 1
+
+
+class TestContactSuggestions:
+    """What to offer while a recipient is being typed. The rules exist so
+    the list stays useful: a half-typed number is not a name search, and
+    one contact with several numbers must not crowd out everyone else."""
+
+    class Contacts:
+        ROWS: ClassVar[list] = [
+            ("Dana Whitfield", "+15551234567"),
+            ("Dana Whitfield", "+15559999999"),   # same person, second number
+            ("Danielle Cruz", "+15557654321"),
+            ("Marcus Webb", "+15550000001"),
+        ]
+
+        def find_by_name(self, query):
+            q = query.lower()
+            return [r for r in self.ROWS if q in r[0].lower()]
+
+    def test_matches_by_substring(self):
+        from iphonebridge.ui.util import contact_suggestions
+        names = [n for n, _ in contact_suggestions(self.Contacts(), "dan")]
+        assert names == ["Dana Whitfield", "Danielle Cruz"]
+
+    def test_one_row_per_name(self):
+        from iphonebridge.ui.util import contact_suggestions
+        out = contact_suggestions(self.Contacts(), "dana")
+        assert out == [("Dana Whitfield", "+15551234567")]
+
+    def test_too_short_to_be_worth_offering(self):
+        from iphonebridge.ui.util import contact_suggestions
+        assert contact_suggestions(self.Contacts(), "d") == []
+        assert contact_suggestions(self.Contacts(), "") == []
+        assert contact_suggestions(self.Contacts(), None) == []
+
+    def test_a_digit_means_a_number_is_being_typed(self):
+        from iphonebridge.ui.util import contact_suggestions
+        assert contact_suggestions(self.Contacts(), "555") == []
+        assert contact_suggestions(self.Contacts(), "dana1") == []
+
+    def test_capped(self):
+        from iphonebridge.ui.util import contact_suggestions
+
+        class Many:
+            def find_by_name(self, q):
+                return [(f"Person {i}", f"+1555000{i:04d}") for i in range(50)]
+
+        assert len(contact_suggestions(Many(), "person", limit=10)) == 10
+
+    def test_a_broken_lookup_is_not_fatal(self):
+        """Typing must not blow up because the contact cache is unreadable."""
+        from iphonebridge.ui.util import contact_suggestions
+
+        class Broken:
+            def find_by_name(self, q):
+                raise RuntimeError("database is locked")
+
+        assert contact_suggestions(Broken(), "dana") == []
