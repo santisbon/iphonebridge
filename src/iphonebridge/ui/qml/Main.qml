@@ -331,12 +331,12 @@ ApplicationWindow {
                                 acceptedButtons: Qt.LeftButton
                                 onLongPressed: threadMenu.popup()
                             }
-                            Menu {
+                            ActionMenu {
                                 id: threadMenu
-                                MenuItem {
-                                    text: "Delete conversation"
-                                    onTriggered: bridge.deleteThread(model.key)
-                                }
+                                theme: appTheme
+                                label: "Delete"
+                                destructive: true
+                                onActivated: bridge.deleteThread(model.key)
                             }
                             background: Rectangle {
                                 color: threadRow.ListView.isCurrentItem
@@ -632,12 +632,12 @@ ApplicationWindow {
                                 acceptedButtons: Qt.LeftButton
                                 onLongPressed: if (model.msgKey) msgMenu.popup()
                             }
-                            Menu {
+                            ActionMenu {
                                 id: msgMenu
-                                MenuItem {
-                                    text: "Delete message"
-                                    onTriggered: bridge.deleteMessage(model.msgKey)
-                                }
+                                theme: appTheme
+                                label: "Delete"
+                                destructive: true
+                                onActivated: bridge.deleteMessage(model.msgKey)
                             }
 
                             Label {
