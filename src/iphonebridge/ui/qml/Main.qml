@@ -27,7 +27,7 @@ ApplicationWindow {
         signal submitted()
         signal picked()
 
-        implicitHeight: 30
+        implicitHeight: theme.fieldHeight
         implicitWidth: field.implicitWidth
 
         TextField {
@@ -37,7 +37,7 @@ ApplicationWindow {
             color: theme.label
             placeholderTextColor: theme.label2
             font.family: theme.ui
-            font.pixelSize: theme.bodySize
+            font.pointSize: theme.bodySize
             leftPadding: 12
             rightPadding: 12
             background: Rectangle {
@@ -97,7 +97,7 @@ ApplicationWindow {
                             text: modelData.name
                             color: theme.label
                             font.family: theme.ui
-                            font.pixelSize: theme.bodySize
+                            font.pointSize: theme.bodySize
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -105,7 +105,7 @@ ApplicationWindow {
                             text: modelData.phone
                             color: theme.label2
                             font.family: theme.ui
-                            font.pixelSize: theme.captionSize
+                            font.pointSize: theme.captionSize
                         }
                     }
                 }
@@ -136,7 +136,7 @@ ApplicationWindow {
             horizontalAlignment: Text.AlignHCenter
             color: "white"
             font.family: theme.ui
-            font.pixelSize: theme.bodySize
+            font.pointSize: theme.bodySize
         }
         Behavior on opacity { NumberAnimation { duration: 160 } }
         Timer { id: toastHide; interval: 4000; onTriggered: toast.opacity = 0 }
@@ -172,7 +172,7 @@ ApplicationWindow {
             id: tabs
             objectName: "tabs"
             anchors.centerIn: parent
-            implicitWidth: 420
+            implicitWidth: Math.round(440 * theme.k)
             spacing: 2
             background: Rectangle {
                 radius: 8
@@ -183,7 +183,7 @@ ApplicationWindow {
                 TabButton {
                     id: tabBtn
                     text: modelData
-                    height: 28
+                    height: Math.round(30 * theme.k)
                     background: Rectangle {
                         radius: 7
                         color: tabBtn.checked ? theme.canvas : "transparent"
@@ -194,7 +194,7 @@ ApplicationWindow {
                         text: tabBtn.text
                         color: theme.label
                         font.family: theme.ui
-                        font.pixelSize: theme.rowSize
+                        font.pointSize: theme.rowSize
                         font.weight: tabBtn.checked ? Font.DemiBold : Font.Normal
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -216,7 +216,7 @@ ApplicationWindow {
             text: "Daemon not reachable — systemctl --user start iphonebridge"
             color: "#000000"
             font.family: theme.ui
-            font.pixelSize: theme.captionSize
+            font.pointSize: theme.captionSize
         }
     }
 
@@ -264,8 +264,8 @@ ApplicationWindow {
                             anchors.right: parent.right
                             anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            implicitWidth: 30
-                            implicitHeight: 30
+                            implicitWidth: Math.round(32 * theme.k)
+                            implicitHeight: Math.round(32 * theme.k)
                             Accessible.name: "New conversation"
                             ToolTip.visible: hovered
                             ToolTip.delay: 500
@@ -286,6 +286,7 @@ ApplicationWindow {
                                 ComposeMark {
                                     anchors.centerIn: parent
                                     color: theme.accent
+                                    k: theme.k
                                 }
                             }
                         }
@@ -313,7 +314,7 @@ ApplicationWindow {
                         delegate: ItemDelegate {
                             id: threadRow
                             width: threadList.width
-                            height: 62
+                            height: theme.rowHeight
                             onClicked: bridge.openThread(model.key)
                             // Right-click or long-press, as in the GTK
                             // version. Deleting is local only: iOS ignores
@@ -379,7 +380,7 @@ ApplicationWindow {
                                             color: threadRow.ListView.isCurrentItem
                                                    ? "white" : theme.label
                                             font.family: theme.ui
-                                            font.pixelSize: theme.titleSize
+                                            font.pointSize: theme.titleSize
                                             font.weight: Font.DemiBold
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
@@ -390,7 +391,7 @@ ApplicationWindow {
                                                    ? Qt.rgba(1, 1, 1, 0.75)
                                                    : theme.label2
                                             font.family: theme.ui
-                                            font.pixelSize: theme.captionSize
+                                            font.pointSize: theme.captionSize
                                         }
                                     }
                                     Label {
@@ -399,7 +400,7 @@ ApplicationWindow {
                                                ? Qt.rgba(1, 1, 1, 0.85)
                                                : theme.label2
                                         font.family: theme.ui
-                                        font.pixelSize: theme.bodySize
+                                        font.pointSize: theme.subSize
                                         elide: Text.ElideRight
                                         maximumLineCount: 1
                                         Layout.fillWidth: true
@@ -434,7 +435,7 @@ ApplicationWindow {
                             text: bridge.threadName
                             color: theme.label
                             font.family: theme.ui
-                            font.pixelSize: theme.titleSize
+                            font.pointSize: theme.titleSize
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
@@ -457,7 +458,7 @@ ApplicationWindow {
                                     text: bridge.linkText
                                     color: theme.label2
                                     font.family: theme.ui
-                                    font.pixelSize: theme.captionSize
+                                    font.pointSize: theme.captionSize
                                     font.letterSpacing: 0.3
                                 }
                             }
@@ -473,7 +474,7 @@ ApplicationWindow {
                             text: "To:"
                             color: theme.label2
                             font.family: theme.ui
-                            font.pixelSize: theme.bodySize
+                            font.pointSize: theme.bodySize
                         }
                         RecipientField {
                             id: toField
@@ -492,7 +493,7 @@ ApplicationWindow {
                                 text: cancelBtn.text
                                 color: theme.accent
                                 font.family: theme.ui
-                                font.pixelSize: theme.bodySize
+                                font.pointSize: theme.bodySize
                                 verticalAlignment: Text.AlignVCenter
                             }
                             background: Item {}
@@ -507,7 +508,7 @@ ApplicationWindow {
                         visible: composing && text.length > 0
                         color: theme.destructive
                         font.family: theme.ui
-                        font.pixelSize: theme.bodySize
+                        font.pointSize: theme.bodySize
                         wrapMode: Text.Wrap
                     }
 
@@ -521,7 +522,7 @@ ApplicationWindow {
                         wrapMode: Text.Wrap
                         color: theme.label2
                         font.family: theme.ui
-                        font.pixelSize: theme.bodySize
+                        font.pointSize: theme.bodySize
                         visible: !composing && bridge.threadName.length === 0
                         text: "No conversation selected\n\n"
                               + "Pick a thread on the left, or start a new one."
@@ -537,7 +538,7 @@ ApplicationWindow {
                         wrapMode: Text.Wrap
                         color: theme.label2
                         font.family: theme.ui
-                        font.pixelSize: theme.bodySize
+                        font.pointSize: theme.bodySize
                         visible: composing
                         text: "New message\n\n"
                               + "Enter a name or number above, then write "
@@ -638,7 +639,7 @@ ApplicationWindow {
                                 text: model.dayText
                                 color: theme.label2
                                 font.family: theme.ui
-                                font.pixelSize: theme.captionSize
+                                font.pointSize: theme.captionSize
                                 font.letterSpacing: 0.3
                                 topPadding: 6
                                 bottomPadding: 6
@@ -647,20 +648,30 @@ ApplicationWindow {
                                 anchors.right: model.outgoing ? parent.right : undefined
                                 anchors.rightMargin: theme.gutter
                                 x: model.outgoing ? 0 : theme.gutter
-                                width: Math.min(bubbleText.implicitWidth + 24,
+                                // A message that is nothing but a couple of
+                                // emoji is drawn large and bare, the way
+                                // Messages does it: there the picture is
+                                // the message, and a bubble around it is
+                                // decoration on a decoration.
+                                readonly property bool bare: model.emojiOnly
+                                width: Math.min(bubbleText.implicitWidth + (bare ? 0 : 24),
                                                 messageList.width * theme.bubbleMax)
-                                height: bubbleText.implicitHeight + 14
+                                height: bubbleText.implicitHeight + (bare ? 2 : 14)
                                 radius: theme.bubbleRadius
-                                color: model.outgoing ? theme.accent : theme.bubbleIn
+                                color: bare ? "transparent"
+                                     : model.outgoing ? theme.accent : theme.bubbleIn
                                 TextEdit {
                                     id: bubbleText
                                     anchors.centerIn: parent
-                                    width: parent.width - 24
+                                    width: parent.width - (parent.bare ? 0 : 24)
                                     wrapMode: Text.Wrap
                                     text: model.body
-                                    color: model.outgoing ? "white" : theme.bubbleInText
+                                    color: parent.bare ? theme.label
+                                         : model.outgoing ? "white"
+                                                          : theme.bubbleInText
                                     font.family: theme.ui
-                                    font.pixelSize: theme.bodySize
+                                    font.pointSize: parent.bare ? theme.bodySize * 2.6
+                                                                : theme.bodySize
                                     // Selectable but not editable: copying
                                     // a verification code out of a message
                                     // was possible before and is worth
@@ -687,7 +698,7 @@ ApplicationWindow {
                         TextField {
                             id: composer
                             Layout.fillWidth: true
-                            implicitHeight: 32
+                            implicitHeight: theme.fieldHeight
                             placeholderText: bridge.linkOk ? "Message"
                                                            : "Waiting for the iPhone"
                             enabled: (composing || bridge.threadName.length > 0)
@@ -695,7 +706,7 @@ ApplicationWindow {
                             color: theme.label
                             placeholderTextColor: theme.label2
                             font.family: theme.ui
-                            font.pixelSize: theme.bodySize
+                            font.pointSize: theme.bodySize
                             leftPadding: 14
                             rightPadding: 14
                             background: Rectangle {
@@ -709,7 +720,8 @@ ApplicationWindow {
                         }
                         Button {
                             id: sendButton
-                            implicitWidth: 32; implicitHeight: 32
+                            implicitWidth: theme.fieldHeight
+                            implicitHeight: theme.fieldHeight
                             enabled: composer.enabled && composer.text.length > 0
                                      && (!composing || toField.text.length > 0)
                             opacity: enabled ? 1 : 0
@@ -773,7 +785,7 @@ ApplicationWindow {
                 wrapMode: Text.Wrap
                 color: theme.label2
                 font.family: theme.ui
-                font.pixelSize: theme.bodySize
+                font.pointSize: theme.bodySize
                 visible: notifications.count === 0
                 text: "No notifications yet\n\n"
                       + "Per-app notifications from your iPhone — Slack, Mail, "
@@ -800,7 +812,7 @@ ApplicationWindow {
                                 text: model.app
                                 color: theme.label
                                 font.family: theme.ui
-                                font.pixelSize: theme.rowSize
+                                font.pointSize: theme.rowSize
                                 font.weight: Font.DemiBold
                                 Layout.fillWidth: true
                                 elide: Text.ElideRight
@@ -809,14 +821,14 @@ ApplicationWindow {
                                 text: model.stamp
                                 color: theme.label2
                                 font.family: theme.ui
-                                font.pixelSize: theme.captionSize
+                                font.pointSize: theme.captionSize
                             }
                         }
                         Label {
                             text: model.preview
                             color: theme.label2
                             font.family: theme.ui
-                            font.pixelSize: theme.bodySize
+                            font.pointSize: theme.bodySize
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -837,7 +849,7 @@ ApplicationWindow {
                     text: "Call audio routes through this computer's mic and speakers."
                     color: theme.label2
                     font.family: theme.ui
-                    font.pixelSize: theme.bodySize
+                    font.pointSize: theme.bodySize
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
@@ -863,7 +875,7 @@ ApplicationWindow {
                             text: "Call"
                             color: "white"
                             font.family: theme.ui
-                            font.pixelSize: theme.rowSize
+                            font.pointSize: theme.rowSize
                             font.weight: Font.DemiBold
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -878,7 +890,7 @@ ApplicationWindow {
                         text: "Active calls"
                         color: theme.label2
                         font.family: theme.ui
-                        font.pixelSize: theme.captionSize
+                        font.pointSize: theme.captionSize
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.6
                         Layout.fillWidth: true
@@ -902,7 +914,7 @@ ApplicationWindow {
                             text: "Hang up all"
                             color: hangAll.enabled ? theme.destructive : theme.label2
                             font.family: theme.ui
-                            font.pixelSize: theme.captionSize
+                            font.pointSize: theme.captionSize
                             leftPadding: 12; rightPadding: 12
                             verticalAlignment: Text.AlignVCenter
                         }
@@ -912,7 +924,7 @@ ApplicationWindow {
                     text: bridge.callSummary
                     color: theme.label2
                     font.family: theme.ui
-                    font.pixelSize: theme.bodySize
+                    font.pointSize: theme.bodySize
                     visible: text.length > 0
                 }
                 ListView {
@@ -924,7 +936,7 @@ ApplicationWindow {
                     model: calls
                     delegate: Rectangle {
                         width: ListView.view.width
-                        height: 56
+                        height: theme.cardHeight
                         radius: 12
                         color: theme.fill
                         RowLayout {
@@ -939,7 +951,7 @@ ApplicationWindow {
                                     text: model.peer
                                     color: theme.label
                                     font.family: theme.ui
-                                    font.pixelSize: theme.titleSize
+                                    font.pointSize: theme.titleSize
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -948,7 +960,7 @@ ApplicationWindow {
                                     text: model.detail
                                     color: theme.label2
                                     font.family: theme.ui
-                                    font.pixelSize: theme.captionSize
+                                    font.pointSize: theme.captionSize
                                 }
                             }
                             // Named, not glyphed. A circle with an arrow
@@ -969,7 +981,7 @@ ApplicationWindow {
                                     text: "Answer"
                                     color: "white"
                                     font.family: theme.ui
-                                    font.pixelSize: theme.rowSize
+                                    font.pointSize: theme.rowSize
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -990,7 +1002,7 @@ ApplicationWindow {
                                     text: "Hang up"
                                     color: "white"
                                     font.family: theme.ui
-                                    font.pixelSize: theme.rowSize
+                                    font.pointSize: theme.rowSize
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -1022,7 +1034,7 @@ ApplicationWindow {
                         wrapMode: Text.Wrap
                         color: theme.label2
                         font.family: theme.ui
-                        font.pixelSize: theme.bodySize
+                        font.pointSize: theme.bodySize
                         text: "On the iPhone: Settings → Bluetooth → tap ⓘ next "
                               + "to this computer, then enable each toggle."
                     }
@@ -1044,7 +1056,7 @@ ApplicationWindow {
                                 text: modelData.label
                                 color: theme.label
                                 font.family: theme.ui
-                                font.pixelSize: theme.rowSize
+                                font.pointSize: theme.rowSize
                                 font.weight: Font.DemiBold
                             }
                             Label {
@@ -1053,7 +1065,7 @@ ApplicationWindow {
                                 // The one place a monospaced face earns
                                 // itself: this tab is a readout.
                                 font.family: theme.mono
-                                font.pixelSize: theme.captionSize
+                                font.pointSize: theme.captionSize
                                 wrapMode: Text.Wrap
                                 Layout.fillWidth: true
                             }
@@ -1073,7 +1085,7 @@ ApplicationWindow {
                         text: "Recheck"
                         color: theme.accent
                         font.family: theme.ui
-                        font.pixelSize: theme.rowSize
+                        font.pointSize: theme.rowSize
                         font.weight: Font.DemiBold
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter

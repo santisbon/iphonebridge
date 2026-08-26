@@ -159,6 +159,46 @@ def _better_phone(current: str | None, candidate: str | None) -> bool:
     return candidate.strip().startswith("+") and not current.strip().startswith("+")
 
 
+#: Codepoint ranges that count as emoji for the purposes below. Not a
+#: complete Unicode emoji definition and does not need to be: the question
+#: is only "is this message nothing but a couple of pictures", and anything
+#: it misses simply renders as ordinary text.
+_EMOJI_RANGES = (
+    (0x1F000, 0x1FAFF),   # the pictographic planes
+    (0x2600, 0x27BF),     # misc symbols and dingbats
+    (0x2B00, 0x2BFF),     # arrows and stars
+    (0x1F1E6, 0x1F1FF),   # regional indicators (flags)
+)
+#: Joiners and modifiers that glue a sequence together without being a
+#: picture of their own — skin tones, the zero-width joiner, the
+#: variation selectors.
+_EMOJI_GLUE = frozenset(
+    [0x200D, 0xFE0E, 0xFE0F] + list(range(0x1F3FB, 0x1F400))
+)
+
+
+def emoji_only(body: str | None, limit: int = 3) -> bool:
+    """True when a message is nothing but a few emoji.
+
+    Messages draws those large and without a bubble, which is the one
+    place the picture is the message rather than decoration on it. Capped,
+    because a wall of emoji is a paragraph and should be set like one.
+    """
+    text = (body or "").strip()
+    if not text:
+        return False
+    pictures = 0
+    for ch in text:
+        cp = ord(ch)
+        if ch.isspace() or cp in _EMOJI_GLUE:
+            continue
+        if any(lo <= cp <= hi for lo, hi in _EMOJI_RANGES):
+            pictures += 1
+            continue
+        return False
+    return 0 < pictures <= limit
+
+
 def unread_keys(thread: dict | None) -> list[str]:
     """Keys of the incoming messages in `thread` still marked unread."""
     if not thread:

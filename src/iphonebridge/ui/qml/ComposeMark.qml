@@ -16,13 +16,17 @@ import QtQuick
 Canvas {
     id: mark
     property color color: "black"
-    implicitWidth: 18
-    implicitHeight: 18
+    // Scales with the type, so it stays the size of a glyph.
+    property real k: 1
+    implicitWidth: Math.round(18 * k)
+    implicitHeight: Math.round(18 * k)
+    onKChanged: requestPaint()
     onColorChanged: requestPaint()
 
     onPaint: {
         var c = getContext("2d")
         c.reset()
+        c.scale(mark.k, mark.k)
         c.strokeStyle = mark.color
         c.lineWidth = 1.5
         c.lineCap = "round"

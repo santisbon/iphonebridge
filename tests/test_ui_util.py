@@ -433,3 +433,44 @@ class TestQmlContext:
         from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
         assert "calls" in QML_CONTEXT_NAMES
         assert "model: calls" in self._qml()
+
+
+class TestEmojiOnlyMessages:
+    """Messages draws an emoji-only message large and without a bubble.
+    Deciding which messages those are is plain text work, so it is tested
+    here rather than by eye."""
+
+    def test_a_lone_emoji_counts(self):
+        from iphonebridge.ui.model import emoji_only
+        assert emoji_only("👍")
+        assert emoji_only("  🎉  ")
+
+    def test_a_few_count(self):
+        from iphonebridge.ui.model import emoji_only
+        assert emoji_only("🥰😘")
+        assert emoji_only("🎉 🎂 🥳")
+
+    def test_too_many_is_a_paragraph(self):
+        from iphonebridge.ui.model import emoji_only
+        assert not emoji_only("🎉🎉🎉🎉")
+
+    def test_emoji_with_words_does_not(self):
+        from iphonebridge.ui.model import emoji_only
+        assert not emoji_only("you are a saint 🥰")
+        assert not emoji_only("🥰 thanks")
+
+    def test_plain_text_does_not(self):
+        from iphonebridge.ui.model import emoji_only
+        assert not emoji_only("see you there")
+        assert not emoji_only("")
+        assert not emoji_only(None)
+
+    def test_modifiers_do_not_count_as_pictures(self):
+        """A skin tone or a joiner is part of one emoji, not another one."""
+        from iphonebridge.ui.model import emoji_only
+        assert emoji_only("👍🏽")
+        assert emoji_only("👨‍👩‍👧")
+
+    def test_a_verification_code_is_not_emoji(self):
+        from iphonebridge.ui.model import emoji_only
+        assert not emoji_only("Your verification code is 481502.")

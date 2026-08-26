@@ -52,14 +52,33 @@ QtObject {
     readonly property string mono: pick(["SF Mono", "Noto Sans Mono",
                                          "DejaVu Sans Mono"])
 
-    readonly property int titleSize:   15   // conversation name
-    readonly property int rowSize:     13   // sender in the list
-    readonly property int bodySize:    13   // message text, previews
-    readonly property int captionSize: 10   // timestamps, day rules, the ribbon
+    // Sizes are points, derived from whatever the desktop asks for, never
+    // fixed pixels. Pinning pixels overrode the font size the user chose
+    // for every other application: on a 10pt desktop this interface was
+    // setting captions at 7.5pt and message text at 9.8pt — smaller than
+    // the system UI font, when in Messages the message is the largest
+    // text on screen. Emoji inherit the text size, so they were the first
+    // thing to become unreadable.
+    readonly property real base: Qt.application.font.pointSize > 0
+                                 ? Qt.application.font.pointSize : 10
+
+    readonly property real bodySize:    base * 1.25   // the message itself
+    readonly property real titleSize:   base * 1.15   // conversation name
+    readonly property real rowSize:     base * 1.05   // sender in the list
+    readonly property real subSize:     base          // previews, secondary
+    readonly property real captionSize: base * 0.9    // stamps, day rules
 
     // ---- geometry -------------------------------------------------------
-    readonly property int bubbleRadius: 15
-    readonly property int pillRadius:   16
-    readonly property int gutter:       14
+    // Anything sized around text scales with it, so a larger desktop font
+    // does not clip its own rows.
+    readonly property real k: base / 10
+
+    readonly property int bubbleRadius: Math.round(15 * k)
+    readonly property int pillRadius:   Math.round(16 * k)
+    readonly property int gutter:       Math.round(14 * k)
+    readonly property int rowHeight:    Math.round(66 * k)
+    readonly property int fieldHeight:  Math.round(34 * k)
+    readonly property int cardHeight:   Math.round(60 * k)
+    readonly property int markSize:     Math.round(19 * k)
     readonly property real bubbleMax:   0.66  // share of the canvas width
 }

@@ -17,7 +17,7 @@ from PyQt6.QtCore import (
     pyqtSignal,
 )
 
-from iphonebridge.ui.model import ThreadStore, unread_keys
+from iphonebridge.ui.model import ThreadStore, emoji_only, unread_keys
 from iphonebridge.ui.util import daystamp, event_ts, format_ts, relative_stamp, same_group
 
 
@@ -94,7 +94,8 @@ class MessageListModel(QAbstractListModel):
     a run from one sender than across a change of speaker.
     """
 
-    ROLES = _roles("body", "outgoing", "dayText", "newRun", "msgKey")
+    ROLES = _roles("body", "outgoing", "dayText", "newRun", "msgKey",
+                   "emojiOnly")
     countChanged = pyqtSignal()
 
     def __init__(self, store: ThreadStore) -> None:
@@ -129,6 +130,7 @@ class MessageListModel(QAbstractListModel):
                 "newRun": starts_group or prev is None
                           or prev["outgoing"] != msg["outgoing"],
                 "msgKey": msg.get("key") or "",
+                "emojiOnly": emoji_only(msg["body"]),
             })
             prev = msg
         return rows
