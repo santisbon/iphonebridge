@@ -20,7 +20,12 @@ from PyQt6.QtQml import QQmlApplicationEngine
 
 from iphonebridge.contacts import ContactsResolver
 from iphonebridge.ui.model import ThreadStore
-from iphonebridge.ui.qtmodels import MessageListModel, NotificationListModel, ThreadListModel
+from iphonebridge.ui.qtmodels import (
+    CallListModel,
+    MessageListModel,
+    NotificationListModel,
+    ThreadListModel,
+)
 from iphonebridge.ui.util import contact_suggestions, resolve_recipient
 
 log = logging.getLogger(__name__)
@@ -46,6 +51,11 @@ class Bridge(QObject):
     """What QML can call, and what it watches."""
 
     changed = pyqtSignal()
+    #: Transient feedback for the user — the Qt equivalent of the GTK
+    #: toast overlay. Every action that can fail says so through this.
+    toast = pyqtSignal(str)
+    #: An incoming call wants the window in front, on the Calls tab.
+    callArrived = pyqtSignal()
 
     def __init__(self, client) -> None:
         super().__init__()
@@ -55,12 +65,15 @@ class Bridge(QObject):
         self.threads = ThreadListModel(self.store)
         self.messages = MessageListModel(self.store)
         self.notifications = NotificationListModel()
+        self.calls = CallListModel()
         self._thread_name = ""
         self._current_key: str | None = None
         # Set while a composed message is in flight, so the thread it
         # lands in can be opened once the daemon confirms the send.
         self._pending_open: str | None = None
         self._compose_error = ""
+        self._link_ok = False
+        self._status_rows: list = []
         self._status = "Checking…"
         self._calls = "No active calls"
 
@@ -75,7 +88,7 @@ class Bridge(QObject):
         client.messageSeen.connect(self._on_seen)
         client.ancsNotification.connect(self._on_ancs)
         client.availabilityChanged.connect(lambda _ok: self._refresh_status())
-        client.callStateChanged.connect(lambda _ev: self.recheck())
+        client.callStateChanged.connect(self._on_call_state)
         self.recheck()
 
     # ---- properties QML binds to ---------------------------------------
@@ -109,6 +122,35 @@ class Bridge(QObject):
     @pyqtProperty(str, notify=changed)
     def composeError(self) -> str:
         return self._compose_error
+
+    @pyqtProperty(bool, notify=changed)
+    def linkOk(self) -> bool:
+        return self._link_ok
+
+    @pyqtProperty(str, notify=changed)
+    def linkText(self) -> str:
+        """The Bluetooth link, stated where a conversation can see it.
+
+        Driven by availability changes and by message traffic, which
+        proves the link — never polled, because the daemon's IsHealthy
+        call can block for five seconds on a bad link.
+        """
+        return "iPhone connected" if self._link_ok else "Reconnecting…"
+
+    @pyqtProperty(int, notify=changed)
+    def eventsLogged(self) -> int:
+        return len(self._client.read_events())
+
+    @pyqtProperty(list, notify=changed)
+    def statusRows(self) -> list:
+        """The Setup tab as data, so the view can mark each line.
+
+        States are "ok", "warn" or "idle", mirroring what the GTK page
+        showed as tinted icons. Checklist marks are inferred from what is
+        actually working rather than read from the phone: a live session
+        proves its toggle is on.
+        """
+        return self._status_rows
 
     def _refresh_threads(self) -> None:
         """Re-read the conversation list, then tell QML.
@@ -215,6 +257,53 @@ class Bridge(QObject):
         self._client.dial(number, lambda _p: self.recheck(),
                           lambda err: self._set_calls(f"Call failed: {err}"))
 
+    @pyqtSlot(str)
+    def answer(self, path: str) -> None:
+        self._client.answer_call(
+            path, lambda err: self.toast.emit(f"Answer failed: {err}"))
+
+    @pyqtSlot(str)
+    def hangup(self, path: str) -> None:
+        self._client.hangup_call(
+            path, lambda err: self.toast.emit(f"Hang up failed: {err}"))
+
+    @pyqtSlot()
+    def hangupAll(self) -> None:
+        self._client.hangup_all(
+            lambda err: self.toast.emit(f"Hang up failed: {err}"))
+
+    @pyqtSlot(str)
+    def deleteThread(self, key: str) -> None:
+        """Delete a whole conversation from local history.
+
+        The phone is never touched: iOS ignores MAP deletes, so this is
+        explicitly a local-history operation and the toast says so.
+        """
+        self._delete(self.store.message_keys(key))
+
+    @pyqtSlot(str)
+    def deleteMessage(self, msg_key: str) -> None:
+        self._delete([msg_key] if msg_key else [])
+
+    def _delete(self, keys: list) -> None:
+        if not keys:
+            return
+
+        def done(removed) -> None:
+            emptied = self.store.remove(keys)
+            if self._current_key in emptied:
+                self._current_key = None
+                self._thread_name = ""
+                self.messages.show(None)
+            self._refresh_threads()
+            if self._current_key:
+                self.messages.reload()
+            noun = "message" if removed == 1 else "messages"
+            self.toast.emit(f"Deleted {removed} {noun} from this computer")
+
+        self._client.delete_local(
+            keys, done, lambda err: self.toast.emit(f"Delete failed: {err}"))
+
     @pyqtSlot()
     def recheck(self) -> None:
         self._client.refresh_availability()
@@ -224,6 +313,9 @@ class Bridge(QObject):
     # ---- daemon events --------------------------------------------------
 
     def _ingest(self, ev: dict, outgoing: bool) -> None:
+        # Traffic proves the link is up, which is cheaper and more honest
+        # than asking: IsHealthy can block for five seconds on a bad one.
+        self._set_link(True)
         key, _msg = self.store.ingest(ev, outgoing=outgoing)
         # Arriving into the conversation already on screen counts as read:
         # otherwise the unread dot lights up on the thread you are sitting
@@ -250,42 +342,81 @@ class Bridge(QObject):
             self._refresh_threads()
             self._diag("seen")
 
+    def _on_call_state(self, ev: dict) -> None:
+        self.recheck()
+        if (ev or {}).get("kind") == "call_incoming":
+            peer = (ev.get("contact_name") or ev.get("peer_phone")
+                    or "someone")
+            self.toast.emit(f"Incoming call from {peer}")
+            # The GTK window switched to Calls and presented itself; a
+            # ringing phone is the one event worth interrupting for.
+            self.callArrived.emit()
+
     def _on_ancs(self, ev: dict) -> None:
         if not ev.get("is_preexisting"):
             self.notifications.add(ev)
 
     def _on_calls(self, calls: list) -> None:
-        if not calls:
-            self._set_calls("No active calls")
-            return
-        self._set_calls("; ".join(
-            f"{c.get('contact_name') or c.get('peer_phone') or '(unknown)'} "
-            f"— {c.get('direction', '')} {c.get('state', '?')}" for c in calls))
+        self.calls.show(calls)
+        self._set_calls("No active calls" if not calls else "")
 
     def _set_calls(self, text: str) -> None:
         self._calls = text
         self.changed.emit()
 
+    def _set_link(self, ok: bool) -> None:
+        if ok != self._link_ok:
+            self._link_ok = ok
+            self.changed.emit()
+
     def _refresh_status(self) -> None:
+        reachable = self._client.available
+        healthy = reachable and self._client.healthy
+        self._set_link(healthy)
+
         def show(profiles: dict) -> None:
-            reachable = self._client.available
-            rows = [f"<b>Daemon</b>: {'running' if reachable else 'not reachable'}",
-                    f"<b>Messages (MAP)</b>: "
-                    f"{'connected' if self._client.healthy else 'unavailable'}"]
-            for label, code in (("Show Message Notifications", "map"),
-                                ("Sync Contacts", "pbap"),
-                                ("Show System Notifications", "ancs")):
-                state = profiles.get(code)
-                rows.append(f"<b>{label}</b>: " + (
-                    "working" if state else
-                    "not detected" if state is not None else "unknown"))
+            rows = [
+                {"label": "iphonebridge daemon",
+                 "detail": "Running" if reachable else
+                           "Not reachable — start it with "
+                           "systemctl --user start iphonebridge",
+                 "state": "ok" if reachable else "warn"},
+                {"label": "Messages — MAP session",
+                 "detail": "Connected" if healthy else
+                           "Unavailable — check the iPhone toggles below",
+                 "state": "ok" if healthy else "warn"},
+            ]
+            for label, base, code in (
+                ("Show Message Notifications", "SMS & iMessage (MAP)", "map"),
+                ("Sync Contacts", "contact-name resolution (PBAP)", "pbap"),
+                ("Show System Notifications",
+                 "per-app notifications (ANCS)", "ancs"),
+            ):
+                if not reachable or code not in profiles:
+                    rows.append({"label": label, "state": "idle",
+                                 "detail": base + " — state unknown "
+                                                  "(daemon unreachable)"})
+                elif profiles[code]:
+                    rows.append({"label": label, "state": "ok",
+                                 "detail": base + " — working now"})
+                else:
+                    rows.append({"label": label, "state": "warn",
+                                 "detail": base + " — not detected; "
+                                                  "check this toggle"})
             try:
-                rows.append(f"<b>Contacts cached</b>: {ContactsResolver().count()}")
+                cached = ContactsResolver().count()
             except Exception:
                 log.exception("contact count failed")
-            self._status = "<br>".join(rows)
+                cached = 0
+            rows.append({"label": "Contacts cached", "detail": str(cached),
+                         "state": "ok" if cached else "idle"})
+            rows.append({"label": "Events logged",
+                         "detail": str(len(self._client.read_events())),
+                         "state": "ok"})
+            self._status_rows = rows
+            self._status = ""
             self.changed.emit()
-        self._client.profile_status(show, lambda _e: None)
+        self._client.profile_status(show, lambda _e: show({}))
 
 
 def _diag_to_file() -> None:

@@ -7,7 +7,13 @@ without a display.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QAbstractListModel, QModelIndex, Qt, pyqtSignal
+from PyQt6.QtCore import (
+    QAbstractListModel,
+    QModelIndex,
+    Qt,
+    pyqtProperty,
+    pyqtSignal,
+)
 
 from iphonebridge.ui.model import ThreadStore, unread_keys
 from iphonebridge.ui.util import daystamp, event_ts, format_ts, relative_stamp, same_group
@@ -140,14 +146,74 @@ class MessageListModel(QAbstractListModel):
         return self._key
 
 
-class NotificationListModel(QAbstractListModel):
-    """Per-app ANCS notifications, newest first."""
+class CallListModel(QAbstractListModel):
+    """Active HFP calls, with what can be done to each.
 
-    ROLES = _roles("app", "preview", "stamp")
+    `canAnswer` is decided here rather than in QML so the rule — only a
+    call that is still ringing can be answered — lives with the rest of
+    the call state instead of in a view binding.
+    """
+
+    ROLES = _roles("peer", "detail", "path", "canAnswer")
+    countChanged = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__()
         self._rows: list[dict] = []
+
+    @pyqtProperty(int, notify=countChanged)
+    def count(self) -> int:
+        """Row count as a *bindable* property.
+
+        QML cannot track rowCount(): it is a method, so a binding that
+        calls it is evaluated once and never again. That is why a control
+        gated on "are there any calls" stayed enabled after the last call
+        ended.
+        """
+        return len(self._rows)
+
+    def roleNames(self) -> dict[int, bytes]:
+        return self.ROLES
+
+    def rowCount(self, parent=QModelIndex()) -> int:      # noqa: B008
+        return len(self._rows)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        if not index.isValid():
+            return None
+        return self._rows[index.row()].get(self.ROLES.get(role, b"").decode())
+
+    def show(self, calls: list) -> None:
+        self.beginResetModel()
+        self._rows = []
+        for c in calls or []:
+            state = str(c.get("state") or "?")
+            direction = str(c.get("direction") or "")
+            self._rows.append({
+                "peer": (c.get("contact_name") or c.get("peer_phone")
+                         or "(unknown)"),
+                "detail": " · ".join(p for p in (direction, state) if p),
+                "path": str(c.get("call_path") or ""),
+                "canAnswer": state in ("incoming", "waiting"),
+            })
+        self.endResetModel()
+        self.countChanged.emit()
+
+
+class NotificationListModel(QAbstractListModel):
+    """Per-app ANCS notifications, newest first."""
+
+    ROLES = _roles("app", "preview", "stamp")
+    countChanged = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._rows: list[dict] = []
+
+    @pyqtProperty(int, notify=countChanged)
+    def count(self) -> int:
+        """Bindable row count — see CallListModel.count."""
+        return len(self._rows)
 
     def roleNames(self) -> dict[int, bytes]:
         return self.ROLES
@@ -170,3 +236,4 @@ class NotificationListModel(QAbstractListModel):
             "stamp": format_ts(event_ts(ev), fmt="%H:%M"),
         })
         self.endInsertRows()
+        self.countChanged.emit()

@@ -15,7 +15,12 @@ ApplicationWindow {
         id: rf
         property alias text: field.text
         property string placeholder: ""
+        // Two different things, and conflating them dialled a contact
+        // the moment you picked them out of the list. `submitted` means
+        // "go" — Enter in the field. `picked` means a name was chosen and
+        // the field is now filled; the GTK version only moved focus.
         signal submitted()
+        signal picked()
 
         implicitHeight: field.implicitHeight
         implicitWidth: field.implicitWidth
@@ -56,7 +61,8 @@ ApplicationWindow {
                     onClicked: {
                         field.text = modelData.name
                         popup.close()
-                        rf.submitted()
+                        field.forceActiveFocus()
+                        rf.picked()
                     }
                     contentItem: RowLayout {
                         spacing: 12
@@ -90,6 +96,49 @@ ApplicationWindow {
                 TabButton { text: "Calls" }
                 TabButton { text: "Status" }
             }
+        }
+    }
+
+    // Transient feedback, the way the GTK window's toast overlay worked.
+    // Anything that can fail says so here rather than only in a log.
+    Rectangle {
+        id: toast
+        objectName: "toast"
+        z: 100
+        visible: opacity > 0
+        opacity: 0
+        radius: 8
+        color: "#323232"
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+        width: Math.min(toastText.implicitWidth + 32, parent.width - 48)
+        height: toastText.implicitHeight + 20
+        Text {
+            id: toastText
+            anchors.centerIn: parent
+            width: parent.width - 32
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+            color: "white"
+        }
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+        Timer { id: toastHide; interval: 4000; onTriggered: toast.opacity = 0 }
+        function show(text) {
+            toastText.text = text
+            opacity = 0.95
+            toastHide.restart()
+        }
+    }
+
+    Connections {
+        target: bridge
+        function onToast(text) { toast.show(text) }
+        function onCallArrived() {
+            tabs.currentIndex = 2      // Calls
+            win.show()
+            win.raise()
+            win.requestActivate()
         }
     }
 
@@ -160,9 +209,28 @@ ApplicationWindow {
                 // freeze the highlight on a stale row.
                 currentIndex: bridge.currentIndex
                 delegate: ItemDelegate {
+                    id: threadRow
                     width: threadList.width
                     highlighted: ListView.isCurrentItem
                     onClicked: bridge.openThread(model.key)
+                    // Right-click or long-press, as in the GTK version.
+                    // Deleting is local only: iOS ignores MAP deletes, so
+                    // the menu and the toast both say "this computer".
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        onSingleTapped: threadMenu.popup()
+                    }
+                    TapHandler {
+                        acceptedButtons: Qt.LeftButton
+                        onLongPressed: threadMenu.popup()
+                    }
+                    Menu {
+                        id: threadMenu
+                        MenuItem {
+                            text: "Delete conversation"
+                            onTriggered: bridge.deleteThread(model.key)
+                        }
+                    }
                     contentItem: ColumnLayout {
                         spacing: 1
                         RowLayout {
@@ -189,13 +257,33 @@ ApplicationWindow {
                 SplitView.fillWidth: true
                 spacing: 0
 
-                Label {
+                ColumnLayout {
                     Layout.fillWidth: true
                     Layout.margins: 8
-                    horizontalAlignment: Text.AlignHCenter
-                    text: bridge.threadName
-                    font.bold: true
-                    visible: text.length > 0 && !composing
+                    spacing: 2
+                    visible: bridge.threadName.length > 0 && !composing
+                    Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        text: bridge.threadName
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+                    // The Bluetooth link, stated where it matters — in the
+                    // conversation you are about to reply in.
+                    RowLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 5
+                        Rectangle {
+                            width: 8; height: 8; radius: 4
+                            color: bridge.linkOk ? "#34C759" : "#FF9500"
+                        }
+                        Label {
+                            text: bridge.linkText
+                            font.pointSize: 8
+                            opacity: 0.7
+                        }
+                    }
                 }
 
                 RowLayout {
@@ -209,6 +297,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         placeholder: "Contact name or number"
                         onSubmitted: composer.forceActiveFocus()
+                        onPicked: composer.forceActiveFocus()
                     }
                     Button {
                         text: "Cancel"
@@ -225,9 +314,23 @@ ApplicationWindow {
                     wrapMode: Text.Wrap
                 }
 
+                Label {
+                    objectName: "noConversation"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    wrapMode: Text.Wrap
+                    opacity: 0.6
+                    visible: !composing && bridge.threadName.length === 0
+                    text: "No conversation selected\n\n"
+                          + "Pick a thread on the left, or start a new one."
+                }
+
                 ListView {
                     id: messageList
                     objectName: "messageList"
+                    visible: composing || bridge.threadName.length > 0
                     Layout.fillWidth: true; Layout.fillHeight: true
                     clip: true
                     model: messages
@@ -278,8 +381,25 @@ ApplicationWindow {
                     onMovementEnded: follow = atYEnd
 
                     delegate: Column {
+                        id: msgRow
                         width: messageList.width
                         topPadding: model.newRun ? 8 : 2
+
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onSingleTapped: if (model.msgKey) msgMenu.popup()
+                        }
+                        TapHandler {
+                            acceptedButtons: Qt.LeftButton
+                            onLongPressed: if (model.msgKey) msgMenu.popup()
+                        }
+                        Menu {
+                            id: msgMenu
+                            MenuItem {
+                                text: "Delete message"
+                                onTriggered: bridge.deleteMessage(model.msgKey)
+                            }
+                        }
 
                         Label {
                             visible: model.dayText.length > 0
@@ -300,13 +420,23 @@ ApplicationWindow {
                             height: bubbleText.implicitHeight + 14
                             radius: 18
                             color: model.outgoing ? "#007AFF" : "#E9E9EB"
-                            Text {
+                            TextEdit {
                                 id: bubbleText
                                 anchors.centerIn: parent
                                 width: parent.width - 26
                                 wrapMode: Text.Wrap
                                 text: model.body
                                 color: model.outgoing ? "white" : "black"
+                                // Selectable but not editable: copying a
+                                // verification code out of a message was
+                                // possible in the GTK version and is worth
+                                // keeping.
+                                readOnly: true
+                                selectByMouse: true
+                                selectionColor: model.outgoing ? "white"
+                                                               : "#007AFF"
+                                selectedTextColor: model.outgoing ? "#007AFF"
+                                                                  : "white"
                             }
                         }
                     }
@@ -347,7 +477,22 @@ ApplicationWindow {
         }
 
         // ---- the other three, plain for now -------------------------
+        Item {
+        Label {
+            objectName: "noNotifications"
+            anchors.fill: parent
+            anchors.margins: 24
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.Wrap
+            opacity: 0.6
+            visible: notifications.count === 0
+            text: "No notifications yet\n\n"
+                  + "Per-app notifications from your iPhone — Slack, Mail, "
+                  + "WhatsApp and the rest — show up here as they arrive."
+        }
         ListView {
+            anchors.fill: parent
             clip: true
             model: notifications
             delegate: ItemDelegate {
@@ -362,11 +507,21 @@ ApplicationWindow {
                 }
             }
         }
+        }
 
         ColumnLayout {
             spacing: 8
+            Label {
+                Layout.margins: 12
+                Layout.bottomMargin: 0
+                text: "Call audio routes through this computer's mic and speakers."
+                opacity: 0.7
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
             RowLayout {
                 Layout.margins: 12
+                Layout.topMargin: 0
                 RecipientField {
                     id: dialEntry
                     objectName: "dialEntry"
@@ -376,15 +531,127 @@ ApplicationWindow {
                 }
                 Button { text: "Call"; onClicked: bridge.dial(dialEntry.text) }
             }
-            Label { Layout.margins: 12; text: bridge.callSummary }
-            Item { Layout.fillHeight: true }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 12
+                Layout.rightMargin: 12
+                Label {
+                    text: "Active calls"
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+                // Per-call Hang up buttons only exist while a call does,
+                // which left no sign the app could end one at all. This
+                // stays visible and goes live when there is something to
+                // hang up — the daemon has had HangupAll all along.
+                Button {
+                    objectName: "hangUpAll"
+                    text: "Hang up all"
+                    enabled: calls.count > 0
+                    onClicked: bridge.hangupAll()
+                }
+            }
+            Label {
+                Layout.leftMargin: 12
+                text: bridge.callSummary
+                opacity: 0.6
+                visible: text.length > 0
+            }
+            ListView {
+                objectName: "callList"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.margins: 12
+                Layout.topMargin: 0
+                clip: true
+                spacing: 4
+                model: calls
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    height: 52
+                    radius: 8
+                    color: "transparent"
+                    border.width: 1
+                    border.color: "#D0D0D0"
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 10
+                        ColumnLayout {
+                            spacing: 0
+                            Layout.fillWidth: true
+                            Label { text: model.peer; font.bold: true
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true }
+                            Label { text: model.detail; opacity: 0.6
+                                    font.pointSize: 8 }
+                        }
+                        Button {
+                            objectName: "answerCall"
+                            text: "Answer"
+                            visible: model.canAnswer
+                            onClicked: bridge.answer(model.path)
+                        }
+                        Button {
+                            objectName: "hangUpCall"
+                            text: "Hang up"
+                            onClicked: bridge.hangup(model.path)
+                        }
+                    }
+                }
+            }
         }
 
         ColumnLayout {
             spacing: 6
-            Label { Layout.margins: 12; text: bridge.statusText; textFormat: Text.StyledText }
-            Button { Layout.leftMargin: 12; text: "Recheck"; onClicked: bridge.recheck() }
-            Item { Layout.fillHeight: true }
+            ListView {
+                objectName: "statusList"
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.margins: 12
+                clip: true
+                spacing: 6
+                model: bridge.statusRows
+                header: Label {
+                    width: ListView.view ? ListView.view.width : 0
+                    bottomPadding: 8
+                    wrapMode: Text.Wrap
+                    opacity: 0.7
+                    text: "On the iPhone: Settings → Bluetooth → tap ⓘ next "
+                          + "to this computer, then enable each toggle."
+                }
+                delegate: RowLayout {
+                    width: ListView.view ? ListView.view.width : 0
+                    spacing: 8
+                    // The three states the GTK page drew as tinted icons.
+                    Rectangle {
+                        width: 10; height: 10; radius: 5
+                        Layout.alignment: Qt.AlignTop
+                        Layout.topMargin: 4
+                        color: modelData.state === "ok" ? "#34C759"
+                             : modelData.state === "warn" ? "#FF3B30"
+                             : "#8E8E93"
+                    }
+                    ColumnLayout {
+                        spacing: 0
+                        Layout.fillWidth: true
+                        Label { text: modelData.label; font.bold: true }
+                        Label {
+                            text: modelData.detail
+                            opacity: 0.7
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
+                        }
+                    }
+                }
+            }
+            Button {
+                Layout.leftMargin: 12
+                Layout.bottomMargin: 12
+                text: "Recheck"
+                onClicked: bridge.recheck()
+            }
         }
     }
 }
