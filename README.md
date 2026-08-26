@@ -197,7 +197,7 @@ own sessions and closes them again.
 <details>
 <summary><b>ANCS notifications never arrive</b></summary>
 
-ANCS needs a BLE bond, which needs a fresh pair done with the adapter correctly set up. Run `iphonebridge ancs-enable`, then forget + re-pair the iPhone, then restart the daemon.
+ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, forget the iPhone on both ends and re-pair. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone shows an **allow-notifications prompt** (on current iOS this replaces the third Bluetooth toggle) — answer Allow there.
 
 Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
 

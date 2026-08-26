@@ -115,8 +115,9 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
         else:
             log.warning("Paired, but the bond does not expose ANCS. "
                         "Messages and contacts are unaffected.")
-            log.warning("    → iphonebridge ancs-enable, then forget + "
-                        "re-pair (see README, Troubleshooting)")
+            log.warning("    → iphonebridge ancs-enable  (and if that "
+                        "reports no ANCS service, forget + re-pair first "
+                        "— see README, Troubleshooting)")
 
     if ok:
         typer.echo(typer.style("All checks passed.", fg=typer.colors.GREEN))
@@ -354,19 +355,19 @@ def ancs_enable(
 ):
     """Enable ANCS (per-app notifications) for the paired iPhone.
 
-    Requires the sudoers helper installed via
-        sudo bash systemd/install-ancs-sudoers.sh
+    Steers the next connection to the iPhone over BLE by setting BlueZ's
+    Device1.PreferredBearer to "le", then reconnects. Over that LE link
+    iOS meets the daemon's ANCS solicitation and asks, on the phone,
+    whether to allow notifications — answer Allow there. The property is
+    experimental in BlueZ, so bluetoothd must run with
+    [General] Experimental = true in /etc/bluetooth/main.conf.
 
-    What this does:
-      1. Looks up the local adapter MAC.
-      2. Calls the sudoers-gated helper, which writes LastUsedBearer=le
-         into BlueZ's pairing record for the iPhone.
-      3. Disconnects + reconnects the iPhone so BlueZ uses BLE this
-         time. The running iphonebridge daemon's AncsClient will pick
-         up the ANCS characteristics as they appear.
+    Editing the stored bond's LastUsedBearer (this command's previous
+    approach) does not survive contact with a live iPhone: the phone
+    auto-reconnects over BR/EDR within seconds of any Bluetooth restart,
+    and BlueZ writes that bearer straight back over the edit.
     """
     _setup_logging(verbose)
-    import subprocess
     import time
 
     import dbus
@@ -374,50 +375,77 @@ def ancs_enable(
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     sysbus = dbus.SystemBus()
 
-    # Adapter MAC via BlueZ DBus
+    dev_path = (f"/org/bluez/{config.ADAPTER}/dev_"
+                + config.IPHONE_MAC.upper().replace(":", "_"))
+
+    def iface(name: str) -> dbus.Interface:
+        return dbus.Interface(sysbus.get_object("org.bluez", dev_path), name)
+
+    props = iface("org.freedesktop.DBus.Properties")
     try:
-        adapter_mac = str(
-            dbus.Interface(
-                sysbus.get_object("org.bluez", f"/org/bluez/{config.ADAPTER}"),
-                "org.freedesktop.DBus.Properties",
-            ).Get("org.bluez.Adapter1", "Address")
-        )
-    except dbus.exceptions.DBusException as e:
+        props.Get("org.bluez.Device1", "Address")
+    except dbus.exceptions.DBusException:
         typer.echo(typer.style(
-            f"Couldn't read adapter MAC: {e.get_dbus_message()}",
-            fg=typer.colors.RED))
+            f"iPhone {config.IPHONE_MAC} not found on {config.ADAPTER} — "
+            "pair it first (see README).", fg=typer.colors.RED))
         raise typer.Exit(code=2) from None
 
-    device_mac = config.IPHONE_MAC
-    typer.echo(f"adapter: {adapter_mac}  device: {device_mac}")
+    try:
+        was = str(props.Get("org.bluez.Device1", "PreferredBearer"))
+    except dbus.exceptions.DBusException:
+        typer.echo(typer.style(
+            "BlueZ is hiding the PreferredBearer control (it is an "
+            "experimental interface).", fg=typer.colors.RED))
+        typer.echo("Enable it, then re-run this command:")
+        typer.echo("  sudo sed -i '/^\\[General\\]/a Experimental = true' "
+                   "/etc/bluetooth/main.conf")
+        typer.echo("  sudo systemctl restart bluetooth")
+        typer.echo("  systemctl --user restart iphonebridge")
+        raise typer.Exit(code=3) from None
 
-    # Run the sudoers-gated helper (deb path first, then from-source path)
-    helper = next((h for h in config.ANCS_HELPER_PATHS if os.path.exists(h)),
-                  config.ANCS_HELPER_PATHS[-1])
-    r = subprocess.run(
-        ["sudo", "-n", helper, adapter_mac, device_mac],
-        capture_output=True, text=True,
-    )
-    if r.returncode != 0:
-        msg = r.stderr.strip() or r.stdout.strip() or "(no output)"
-        typer.echo(typer.style(f"helper failed: {msg}", fg=typer.colors.RED))
-        if "password is required" in msg or "may not run" in msg.lower():
-            typer.echo("Authorize the helper first:")
-            typer.echo("  package install:  sudo adduser $USER iphonebridge  (then reboot)")
-            typer.echo("  from source:      sudo bash systemd/install-ancs-sudoers.sh")
-        raise typer.Exit(code=3)
-    typer.echo(typer.style(r.stdout.strip(), fg=typer.colors.GREEN))
+    device = iface("org.bluez.Device1")
 
-    # Cycle the BT connection so BlueZ honors the new bearer pref
-    typer.echo("cycling Bluetooth connection ...")
-    subprocess.run(["bluetoothctl", "disconnect", device_mac],
-                   capture_output=True)
-    time.sleep(2)
-    r = subprocess.run(["bluetoothctl", "connect", device_mac],
-                       capture_output=True, text=True)
-    typer.echo(r.stdout.strip().splitlines()[-1] if r.stdout else "(reconnected)")
+    # The property only takes effect while disconnected.
+    try:
+        device.Disconnect(timeout=20)
+    except dbus.exceptions.DBusException:
+        pass
+    for _ in range(10):
+        if not props.Get("org.bluez.Device1", "Connected"):
+            break
+        time.sleep(1)
 
-    typer.echo("\nWatch the daemon log for ANCS chars appearing:")
+    props.Set("org.bluez.Device1", "PreferredBearer", "le")
+    typer.echo(f"PreferredBearer: {was} → le")
+
+    typer.echo("reconnecting over BLE ...")
+    try:
+        device.Connect(timeout=60)
+    except dbus.exceptions.DBusException as e:
+        typer.echo(typer.style(
+            f"reconnect failed: {e.get_dbus_message()}", fg=typer.colors.RED))
+        typer.echo("Bring the iPhone close and awake, then re-run.")
+        raise typer.Exit(code=4) from None
+
+    # The proof is the phone's ANCS GATT service appearing on the device.
+    wanted = config.ANCS_SOLICIT_UUID.lower()
+    for _ in range(30):
+        uuids = props.Get("org.bluez.Device1", "UUIDs")
+        if any(str(u).lower() == wanted for u in uuids):
+            typer.echo(typer.style(
+                "ANCS service visible — answer the allow-notifications "
+                "prompt on the iPhone if it is showing.",
+                fg=typer.colors.GREEN))
+            break
+        time.sleep(1)
+    else:
+        typer.echo(typer.style(
+            "Connected, but the ANCS service has not appeared yet.",
+            fg=typer.colors.YELLOW))
+        typer.echo("If the pairing predates BLE bonding, forget the device "
+                   "on both ends, re-pair, and re-run this command.")
+
+    typer.echo("\nWatch the daemon pick it up:")
     typer.echo("  journalctl --user -u iphonebridge -f | grep -i ancs")
 
 

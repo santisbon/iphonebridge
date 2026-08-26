@@ -343,13 +343,28 @@ Observed as a one-off; it does not recur once the chain is up.
 
 ### 8. Optional: per-app notifications (ANCS)
 
-Works only on some adapters (Intel required, and not sufficient; known
-not to work on BE200). 
+Adapter-dependent: Intel chipsets (AX-series, BE200) can form the BLE
+bond this needs; Realtek and USB dongles cannot. Two prerequisites, in
+order:
+
+1. BlueZ's experimental interfaces, for the bearer control this uses:
+   `[General] Experimental = true` in `/etc/bluetooth/main.conf`, then
+   `sudo systemctl restart bluetooth` and
+   `systemctl --user restart iphonebridge`.
+2. A bond with LE keys. A pairing made per step 3 on a capable adapter
+   already has them; if in doubt, forget on both ends and re-pair (then
+   re-enable the step 5 toggles).
+
+Then:
+
 ```sh
 iphonebridge ancs-enable
 ```
-then forget and re-pair (both ends, as in step 3), re-enable the step 5
-toggles, and look for a third toggle, Show System Notifications.
+
+reconnects the iPhone over BLE; the phone then shows an
+**allow-notifications prompt** (on current iOS this appears instead of a
+third Bluetooth toggle) — answer Allow, and `iphonebridge doctor` should
+report the bond exposing ANCS.
 
 The connection cycling in this step can crash bystander BlueZ user
 daemons; `mpris-proxy` (media keys for Bluetooth audio) has segfaulted

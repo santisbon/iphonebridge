@@ -124,20 +124,22 @@ busctl --system get-property org.bluez /org/bluez/hci0 \
 
 ## After the fix: the phone side is still ahead of you
 
-The rebuild only lets the advertisement register — that is what makes
-iOS *offer* the *Show System Notifications* toggle. Nothing about your
+The rebuild only lets the advertisement register. Nothing about your
 existing pairing changes, so the app's Status tab (and
 `iphonebridge doctor`'s bond check) will keep showing ANCS as not
-working until you finish the phone side:
+working until you finish the phone side. In order: re-pair first if the
+bond predates a capable setup (forget on **both** ends, then pair), and
+then:
 
 ```bash
 iphonebridge ancs-enable
 ```
 
-then forget the pairing on **both** ends, re-pair, and enable
-**Show System Notifications** on the iPhone (Settings → Bluetooth → ⓘ).
-Seeing ANCS still down immediately after the rebuild is expected, not a
-sign the fix failed — the two checks above are what prove the fix took.
+which reconnects the iPhone over BLE — answer the
+**allow-notifications prompt** that appears on the phone (current iOS
+asks this way rather than showing a third Bluetooth toggle). Seeing ANCS
+still down immediately after the rebuild is expected, not a sign the fix
+failed — the two checks above are what prove the fix took.
 
 ## Undoing / afterwards
 
