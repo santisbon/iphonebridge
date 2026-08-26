@@ -44,6 +44,7 @@ class DaemonClient(QObject):
     messageSent = pyqtSignal(object)
     messageSeen = pyqtSignal(object)
     ancsNotification = pyqtSignal(object)
+    ancsDismissed = pyqtSignal(object)
     callStateChanged = pyqtSignal(object)
     availabilityChanged = pyqtSignal(bool)
 
@@ -69,6 +70,7 @@ class DaemonClient(QObject):
             "message-sent": self.messageSent,
             "message-seen": self.messageSeen,
             "ancs-notification": self.ancsNotification,
+            "ancs-dismissed": self.ancsDismissed,
         }
         # add_signal_receiver works even before the daemon is up — delivery
         # just starts once it claims the bus name.
@@ -132,6 +134,13 @@ class DaemonClient(QObject):
         """Mark messages read here and, where possible, on the iPhone."""
         self._call(MESSAGES_IFACE, "MarkRead", keys,
                    on_ok=on_ok, on_err=on_err, timeout=20)
+
+    def dismiss_notification(self, eid: str, on_ok=None, on_err=None) -> None:
+        """Dismiss one notification. on_ok("phone"|"local"): whether the
+        iPhone was told as well, or only local history changed."""
+        self._call(MESSAGES_IFACE, "DismissNotification", eid,
+                   on_ok=(lambda r: on_ok(str(r))) if on_ok else None,
+                   on_err=on_err, timeout=20)
 
     def profile_status(self, on_ok, on_err=None) -> None:
         """Per-profile liveness: {"map","pbap","ancs"} -> bool."""

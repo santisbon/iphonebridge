@@ -341,6 +341,50 @@ class SeenMessages(set):
         return None
 
 
+def drop_ancs_by_seen_at(path, eids: set[str]) -> int:
+    """Rewrite the event log without the given notifications. Returns the
+    count removed.
+
+    Notifications are addressed by their `seen_at` stamp rather than a
+    content key: the ANCS uid is only unique within one BLE connection,
+    so it cannot name a logged event, while `seen_at` is written once at
+    arrival and never changes. Same atomic carry-over rewrite as
+    drop_events_by_key.
+    """
+    import json
+    import os
+    if not eids:
+        return 0
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except OSError:
+        return 0
+    kept, removed = [], 0
+    for line in lines:
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            kept.append(line)
+            continue
+        if e.get("kind") == "ancs_notification" and e.get("seen_at") in eids:
+            removed += 1
+            continue
+        kept.append(line)
+    if not removed:
+        return 0
+    tmp = str(path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(kept)
+    with open(path, encoding="utf-8") as f:
+        now = f.readlines()
+    if len(now) > len(lines):          # appended mid-rewrite
+        with open(tmp, "a", encoding="utf-8") as f:
+            f.writelines(now[len(lines):])
+    os.replace(tmp, path)
+    return removed
+
+
 def mark_logged_read(path, keys) -> int:
     """Set is_read on logged messages. Returns how many changed.
 

@@ -3,7 +3,7 @@
 # 📱🐧 iPhone Bridge
 
 **iPhone messages, notifications, contacts and calls on Linux**  
-*No Mac relay. No cloud service. No subscription. Just Bluetooth*
+*No Mac relay. No cloud service. No subscription. Just Bluetooth*.
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/santisbon/iphonebridge?color=brightgreen)](https://github.com/santisbon/iphonebridge/releases/latest)
@@ -21,30 +21,32 @@
 
 Any apt-based distro: Debian, Ubuntu and its flavours, Pop!_OS, Mint.
 
-```bash
-curl -LO "$(curl -s https://api.github.com/repos/santisbon/iphonebridge/releases/latest \
-  | grep -o 'https://[^"]*_all\.deb')"
+1. Download, install, reboot:
+    ```bash
+    curl -LO "$(curl -s https://api.github.com/repos/santisbon/iphonebridge/releases/latest \
+      | grep -o 'https://[^"]*_all\.deb')"
 
-sudo apt install ./iphonebridge_*_all.deb
-sudo adduser $USER iphonebridge
-sudo reboot   # a re-login is not enough: user services keep old groups
-```
+    sudo apt install ./iphonebridge_*_all.deb
+    sudo adduser $USER iphonebridge
+    sudo reboot   # a re-login is not enough: user services keep old groups
+    ```
 
-Pair the iPhone from your desktop's Bluetooth settings. Keep it on its
+2. Pair the iPhone from your desktop's Bluetooth settings. Keep it on its
 **Settings → Bluetooth** screen while you do — iOS is only discoverable
 while that screen is open — and confirm the 6-digit code on both sides.
 
-```bash
-iphonebridge pair-setup
-```
+3. Run
+    ```bash
+    iphonebridge pair-setup
+    ```
 
-On the iPhone, tap ⓘ next to this computer, give it a moment to show the
+4. On the iPhone, tap ⓘ next to this computer, give it a minute to show the
 toggles, and enable **Show Message Notifications** and **Sync Contacts**.
 Then open the app:
 
-```bash
-iphonebridge-ui # or through your app launcher
-```
+    ```bash
+    iphonebridge-ui # or through your app launcher
+    ```
 
 The app is a separate process from the daemon, so closing it leaves
 messages, notifications and calls still arriving.
@@ -74,6 +76,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 📋 **Verification codes auto-copied** to the clipboard | OTP detection | ✅ |
 | 👤 **Contact-name resolution** (1000s of contacts) | PBAP → SQLite cache | ✅ |
 | 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE | ✅ |
+| 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions | ✅ |
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
 | 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
@@ -89,6 +92,10 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
 - **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
 - HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
 - Notification *bodies* are subject to the iPhone's "Show Previews" setting.
+- **Dismissing an app notification reaches the phone only while it is
+  current.** ANCS addresses notifications per connection, so one from before
+  the last BLE reconnect can't be cleared remotely — dismissing it removes it
+  from this computer only. Either way it always leaves the app.
 - **Read state mostly travels one way.** Opening a conversation here marks
   those messages read on the iPhone, for any message obexd still exports;
   older ones have no object path left to address and are marked read on this
@@ -96,7 +103,7 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
   close when you read that message on the phone, but a conversation already
   in the app does not lose its unread mark: obexd raises no notification for
   a read-status change, and the inbox sweep skips messages already logged.
-- **Deletions don't sync, in either direction.** Deleting on the iPhone does
+- **Message deletions don't sync, in either direction.** Deleting on the iPhone does
   not remove the message here: iOS sends no deletion event over MAP, an open
   OBEX session keeps serving the pre-delete view, and conversation history is
   an append-only log with no retraction. Deleting from Linux does not remove

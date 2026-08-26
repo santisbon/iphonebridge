@@ -45,6 +45,7 @@ from iphonebridge.ancs.parsers import (
     NotificationAttributes,
     build_get_app_attributes,
     build_get_notification_attributes,
+    build_perform_action,
 )
 from iphonebridge.bus import system_bus
 
@@ -68,9 +69,17 @@ class AncsClient:
         self,
         device_path: str,
         on_event: Callable[[AncsEvent], None],
+        on_removed: Callable[[int], None] | None = None,
+        on_session_reset: Callable[[], None] | None = None,
     ) -> None:
         self.device_path = device_path
         self.on_event = on_event
+        self.on_removed = on_removed
+        self.on_session_reset = on_session_reset
+        # uid -> whether iOS declared a negative action for it. ANCS uids
+        # are only unique within one connection, so this and everything
+        # keyed on it resets with the session (see _try_subscribe).
+        self._live_negative: dict[int, bool] = {}
 
         # Char path slots — set as InterfacesAdded fires
         self._ns_path: str | None = None
@@ -87,9 +96,23 @@ class AncsClient:
 
     @property
     def active(self) -> bool:
-        """True while the ANCS notification subscription is live — the only
-        signal that per-app notifications are actually flowing."""
-        return self._notify_started
+        """True while per-app notifications can actually flow.
+
+        The subscription alone is not enough: BlueZ keeps a bonded
+        device's characteristic objects, and accepts StartNotify on
+        them, while the device is disconnected. Probe the connection
+        too, or this reads "working" with the phone gone.
+        """
+        if not self._notify_started:
+            return False
+        try:
+            props = dbus.Interface(
+                system_bus.get_object("org.bluez", self.device_path),
+                "org.freedesktop.DBus.Properties",
+            )
+            return bool(props.Get("org.bluez.Device1", "Connected"))
+        except dbus.exceptions.DBusException:
+            return False
 
     # ---- lifecycle ------------------------------------------------------
 
@@ -201,6 +224,13 @@ class AncsClient:
             )
         )
         self._notify_started = True
+        # A fresh subscription is a fresh uid namespace: iOS numbers
+        # notifications per connection, so anything keyed on old uids is
+        # not just stale but dangerous — a new notification can reuse an
+        # old number.
+        self._live_negative.clear()
+        if self.on_session_reset is not None:
+            self.on_session_reset()
         log.info("ANCS subscription active for %s", self.device_path)
 
     # ---- Notification Source: new/modified/removed events --------------
@@ -216,16 +246,23 @@ class AncsClient:
         except Exception as e:
             log.error("NS parse failed: %s", e)
             return
+        # Removals first, before the preexisting skip: dismissing on the
+        # phone must reach the app regardless of how the notification
+        # first arrived.
+        if n.type == EventID.NotificationRemoved:
+            log.debug("ANCS removed uid=%d", n.id)
+            self._live_negative.pop(n.id, None)
+            if self.on_removed is not None:
+                self.on_removed(n.id)
+            return
         # Skip pre-existing (notifications that already existed on the
         # iPhone at our connect time — too noisy on initial subscribe).
         if n.is_preexisting:
             log.debug("ANCS preexisting event uid=%d cat=%d — skipping",
                       n.id, n.category)
             return
-        if n.type == EventID.NotificationRemoved:
-            log.debug("ANCS removed uid=%d", n.id)
-            return
         # Added or Modified → request full attrs
+        self._live_negative[n.id] = n.has_negative_action
         self._request_attrs(n)
 
     def _request_attrs(self, n: Notification) -> None:
@@ -243,6 +280,29 @@ class AncsClient:
             ).WriteValue([dbus.Byte(b) for b in pkt], {})
         except dbus.exceptions.DBusException as e:
             log.warning("CP WriteValue failed: %s", e.get_dbus_name())
+
+    def dismiss(self, uid: int) -> bool:
+        """Perform the notification's negative action on the iPhone.
+
+        For an ordinary notification the negative action is Clear, so this
+        dismisses it there; what it means is ultimately the source app's
+        choice (for an incoming call it declines). Returns whether the
+        command was dispatched: False when the uid is not from the live
+        session, iOS declared no negative action for it, or the Control
+        Point is gone — callers fall back to removing locally only.
+        """
+        if not self._cp_path or not self._live_negative.get(uid, False):
+            return False
+        pkt = build_perform_action(uid, is_positive=False)
+        try:
+            dbus.Interface(
+                system_bus.get_object("org.bluez", self._cp_path),
+                "org.bluez.GattCharacteristic1",
+            ).WriteValue([dbus.Byte(b) for b in pkt], {})
+        except dbus.exceptions.DBusException as e:
+            log.warning("CP dismiss failed: %s", e.get_dbus_name())
+            return False
+        return True
 
     # ---- Data Source: responses to our CP writes ------------------------
 

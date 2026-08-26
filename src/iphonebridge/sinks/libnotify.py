@@ -69,6 +69,9 @@ class LibnotifySink:
         self._pending: dict[int, str] = {}
         # notification_id -> SignalMatch for the per-Message1 PropertiesChanged sub
         self._msg_subs: dict[int, object] = {}
+        # ANCS popups: the event's seen_at stamp -> desktop popup id, so a
+        # dismissal from either end can close the popup still on screen.
+        self._ancs_notifs: dict[str, int] = {}
         # Incoming-call popups: call_path <-> notification_id
         self._call_notifs: dict[str, int] = {}
         self._notif_calls: dict[int, str] = {}
@@ -138,10 +141,8 @@ class LibnotifySink:
         if len(body) > _BODY_LIMIT:
             body = body[:_BODY_LIMIT - 1] + "…"
         try:
-            # Same expiry as a message popup. No mark-read sync for ANCS:
-            # the iPhone exposes no write-back path for app notification
-            # state, so there is nothing a dismissal could propagate.
-            self._notif.Notify(
+            # Same expiry as a message popup.
+            nid = self._notif.Notify(
                 _APP_NAME,
                 dbus.UInt32(0),
                 "phone-symbolic",
@@ -153,6 +154,19 @@ class LibnotifySink:
             )
         except dbus.exceptions.DBusException as e:
             log.error("libnotify Notify (ANCS) failed: %s", e.get_dbus_name())
+            return
+        self._ancs_notifs[event.seen_at.isoformat()] = int(nid)
+
+    def handle_ancs_dismissed(self, eid: str, _uid) -> None:
+        """A notification was dismissed (from either end) — take its
+        popup off the screen if it is still showing."""
+        nid = self._ancs_notifs.pop(eid, None)
+        if nid is None:
+            return
+        try:
+            self._notif.CloseNotification(dbus.UInt32(nid))
+        except dbus.exceptions.DBusException:
+            pass
 
     # ---- HFP call events (incoming-call popups with actions) ------------
 

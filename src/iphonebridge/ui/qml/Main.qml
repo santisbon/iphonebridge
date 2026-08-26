@@ -849,10 +849,53 @@ ApplicationWindow {
                 }
 
                 delegate: Rectangle {
+                    id: noteCard
                     width: ListView.view.width
                     implicitHeight: note.implicitHeight + Math.round(20 * appTheme.k)
                     radius: Math.round(10 * appTheme.k)
                     color: appTheme.canvas
+
+                    // Dismissal, both ways: this ✕ (or right-click →
+                    // Dismiss) removes the notification here and — when
+                    // it is from the live BLE session — on the iPhone
+                    // via ANCS's negative action. Hover-revealed, the
+                    // way a macOS notification offers its close.
+                    HoverHandler { id: noteHover }
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        onSingleTapped: noteMenu.popup()
+                    }
+                    ActionMenu {
+                        id: noteMenu
+                        theme: appTheme
+                        label: "Dismiss"
+                        onActivated: bridge.dismissNotification(model.eid)
+                    }
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.margins: Math.round(6 * appTheme.k)
+                        width: Math.round(18 * appTheme.k)
+                        height: width
+                        radius: width / 2
+                        z: 2
+                        visible: noteHover.hovered || xArea.containsMouse
+                        color: xArea.containsMouse ? appTheme.pressed
+                                                   : appTheme.hover
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\u00d7"
+                            color: appTheme.label2
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.rowSize
+                        }
+                        MouseArea {
+                            id: xArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: bridge.dismissNotification(model.eid)
+                        }
+                    }
 
                     ColumnLayout {
                         id: note
@@ -874,7 +917,13 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                             }
                             Label {
+                                // The ✕ appears where this sits, so the
+                                // stamp yields while the card is hovered.
+                                // Opacity, not visible: hiding it would
+                                // collapse the row and shift the title.
                                 text: model.stamp
+                                opacity: noteHover.hovered
+                                         || xArea.containsMouse ? 0 : 1
                                 color: appTheme.label2
                                 font.family: appTheme.ui
                                 font.pointSize: appTheme.captionSize

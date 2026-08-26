@@ -38,6 +38,7 @@ EVENT_SIGNALS = (
     ("MessageSent", "message-sent"),
     ("MessageSeen", "message-seen"),
     ("AncsNotification", "ancs-notification"),
+    ("AncsDismissed", "ancs-dismissed"),
 )
 
 

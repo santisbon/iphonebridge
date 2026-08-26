@@ -86,11 +86,16 @@ class MessagesService(dbus.service.Object):
         on_refresh_contacts=None,
         on_delete_local=None,
         on_mark_read=None,
+        on_dismiss_ancs=None,
     ):
         super().__init__(bus_name, OBJECT_PATH)
         self.sessions = sessions
         self.hfp = hfp
         self.ancs = ancs
+        # on_dismiss_ancs(eid) -> "phone" | "local" — daemon hook that
+        # removes a notification locally and, when its uid is still live,
+        # performs the ANCS negative action on the iPhone.
+        self._on_dismiss_ancs = on_dismiss_ancs
         # on_sent(recipient, body, transfer_path) — daemon hook to record a
         # message we just sent (logs it to history + the event feed).
         self._on_sent = on_sent
@@ -361,6 +366,39 @@ class MessagesService(dbus.service.Object):
     @dbus.service.signal(EVENTS_IFACE, signature="a{sv}")
     def MessageSeen(self, props):
         """Emitted on a message read-state change. Payload: SmsEvent.to_dict()."""
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="s")
+    def DismissNotification(self, eid) -> str:
+        """Dismiss one notification by its seen_at stamp. Returns where it
+        was dismissed: "phone" (negative action sent to the iPhone as
+        well) or "local" (removed from history and the feed only — the
+        notification predates the current BLE session, or iOS declared no
+        negative action for it)."""
+        eid = str(eid)
+        log.info("DBus DismissNotification called")
+        if self._on_dismiss_ancs is None:
+            raise dbus.exceptions.DBusException(
+                "daemon exposed no dismiss hook",
+                name="me.santisbon.iphonebridge.Error.NotReady",
+            )
+        try:
+            return str(self._on_dismiss_ancs(eid))
+        except Exception as e:
+            log.exception("DismissNotification failed")
+            raise dbus.exceptions.DBusException(
+                str(e), name="me.santisbon.iphonebridge.Error.DismissFailed"
+            )
+
+    @dbus.service.signal(EVENTS_IFACE, signature="a{sv}")
+    def AncsDismissed(self, props):
+        """Emitted when a notification is dismissed — from either end.
+        Payload: {"eid": seen_at stamp of the notification}."""
+
+    def emit_ancs_dismissed(self, eid: str) -> None:
+        try:
+            self.AncsDismissed(_variant_dict({"eid": eid}))
+        except Exception:
+            log.exception("AncsDismissed emit failed")
 
     @dbus.service.signal(EVENTS_IFACE, signature="a{sv}")
     def AncsNotification(self, props):

@@ -10,6 +10,12 @@ conversations, the per\-app notification feed, calls, and service
 status. It is a separate process talking to the daemon over D\-Bus, so
 closing it leaves messages, notifications and calls still arriving. It
 is not single\-instance; a second invocation opens a second window.
+.PP
+In the notification feed, hovering a card reveals a dismiss button
+(also on right\-click). Dismissing sends the ANCS negative action, so
+the notification clears from the iPhone as well when it is still
+current there; older cards are removed from this computer only.
+Notifications cleared on the iPhone disappear from the feed likewise.
 .SH ENVIRONMENT
 .TP
 .B IPHONEBRIDGE_UI_DIAG

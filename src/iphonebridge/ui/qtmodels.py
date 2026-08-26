@@ -248,7 +248,7 @@ class CallListModel(QAbstractListModel):
 class NotificationListModel(QAbstractListModel):
     """Per-app ANCS notifications, newest first."""
 
-    ROLES = _roles("app", "title", "body", "preview", "stamp")
+    ROLES = _roles("app", "title", "body", "preview", "stamp", "eid")
     countChanged = pyqtSignal()
 
     def __init__(self) -> None:
@@ -285,6 +285,19 @@ class NotificationListModel(QAbstractListModel):
             "body": body if title else "",
             "preview": " — ".join(p for p in (title, body) if p) or "(no preview)",
             "stamp": format_ts(event_ts(ev), fmt="%H:%M"),
+            # seen_at names the event everywhere dismissal travels: the
+            # ANCS uid cannot, since it is only unique per BLE connection.
+            "eid": ev.get("seen_at") or "",
         })
         self.endInsertRows()
         self.countChanged.emit()
+
+    def remove_eid(self, eid: str) -> bool:
+        for i, row in enumerate(self._rows):
+            if row["eid"] == eid:
+                self.beginRemoveRows(QModelIndex(), i, i)
+                del self._rows[i]
+                self.endRemoveRows()
+                self.countChanged.emit()
+                return True
+        return False

@@ -36,6 +36,7 @@ from iphonebridge.events import (
     SeenEvent,
     SmsEvent,
     deleted_keys,
+    drop_ancs_by_seen_at,
     drop_events_by_key,
     logged_messages,
     mark_logged_read,
@@ -156,6 +157,10 @@ class Daemon:
         self.sinks: list[Sink] = []
         self.listener: MapEventListener | None = None
         self.ancs: AncsClient | None = None
+        # ANCS uid -> the seen_at stamp the notification was logged under.
+        # uids are per-connection, so the client resets this every time a
+        # fresh subscription comes up.
+        self._ancs_uid_map: dict[int, str] = {}
         self.hfp: HfpManager | None = None
         self._contacts_refresh_id: int | None = None
         # message key -> live obex object path, and back. Rebuilt every
@@ -192,7 +197,12 @@ class Daemon:
             f"/org/bluez/{config.ADAPTER}"
             f"/dev_{config.IPHONE_MAC.replace(':', '_')}"
         )
-        self.ancs = AncsClient(device_path, on_event=self._fanout_ancs)
+        self.ancs = AncsClient(
+            device_path,
+            on_event=self._fanout_ancs,
+            on_removed=self._on_ancs_removed,
+            on_session_reset=self._ancs_uid_map.clear,
+        )
         self.ancs.start()
 
         # HFP — take/place calls via oFono. Also independent of MAP/PBAP; if
@@ -220,7 +230,8 @@ class Daemon:
                 on_refresh_contacts=lambda: self._refresh_contacts(
                     raise_on_error=True),
                 on_delete_local=self._delete_local,
-                on_mark_read=self.mark_read)
+                on_mark_read=self.mark_read,
+                on_dismiss_ancs=self._dismiss_ancs)
             log.info("DBus service ready: me.santisbon.iphonebridge")
         except Exception:
             log.exception("DBus service registration failed — continuing "
@@ -570,7 +581,50 @@ class Daemon:
         log.debug("sms_sent to %s: %r", event.display_sender, (body or "")[:80])
         self._fanout(event)
 
+    def _dismiss_ancs(self, eid: str) -> str:
+        """Dismiss a notification by its seen_at stamp. Returns where.
+
+        Always removed locally (log + feed + popup) right away rather than
+        waiting on the phone's round-trip: iOS answers a negative action
+        with its own NotificationRemoved, but whether and when is the
+        source app's business, and the user's dismissal should not hang on
+        it. When the uid is still live and carries a negative action the
+        command is also sent, so the notification leaves the iPhone too.
+        """
+        uid = next((u for u, e in self._ancs_uid_map.items() if e == eid),
+                   None)
+        where = "local"
+        if uid is not None:
+            self._ancs_uid_map.pop(uid, None)
+            if self.ancs is not None and self.ancs.dismiss(uid):
+                where = "phone"
+        self._remove_ancs_locally(eid, uid)
+        return where
+
+    def _on_ancs_removed(self, uid: int) -> None:
+        """The phone side dismissed (or our negative action landed)."""
+        eid = self._ancs_uid_map.pop(uid, None)
+        if eid is None:
+            return   # not from this session, or already dismissed here
+        log.info("ANCS notification dismissed on the phone")
+        self._remove_ancs_locally(eid, uid)
+
+    def _remove_ancs_locally(self, eid: str, uid: int | None) -> None:
+        drop_ancs_by_seen_at(config.EVENTS_JSONL, {eid})
+        for sink in self.sinks:
+            handler = getattr(sink, "handle_ancs_dismissed", None)
+            if handler is not None:
+                try:
+                    handler(eid, uid)
+                except Exception:
+                    log.exception("sink %s dismiss failed",
+                                  getattr(sink, "name", sink))
+        if self._dbus_service is not None:
+            self._dbus_service.emit_ancs_dismissed(eid)
+
     def _fanout_ancs(self, event: AncsEvent) -> None:
+        self._ancs_uid_map[event.notification_id] = \
+            event.seen_at.isoformat()
         for sink in self.sinks:
             try:
                 handler = getattr(sink, "handle_ancs", None)

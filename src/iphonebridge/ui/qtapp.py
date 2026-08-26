@@ -94,6 +94,8 @@ class Bridge(QObject):
         client.messageSent.connect(lambda ev: self._ingest(ev, True))
         client.messageSeen.connect(self._on_seen)
         client.ancsNotification.connect(self._on_ancs)
+        client.ancsDismissed.connect(
+            lambda ev: self.notifications.remove_eid(str((ev or {}).get("eid", ""))))
         client.availabilityChanged.connect(lambda _ok: self._refresh_status())
         client.callStateChanged.connect(self._on_call_state)
         self.recheck()
@@ -283,6 +285,18 @@ class Bridge(QObject):
     def hangupAll(self) -> None:
         self._client.hangup_all(
             lambda err: self.toast.emit(f"Hang up failed: {err}"))
+
+    @pyqtSlot(str)
+    def dismissNotification(self, eid: str) -> None:
+        """Dismiss a notification here and, when it is from the live BLE
+        session and carries a negative action, on the iPhone too. The
+        card leaves the feed when the daemon's AncsDismissed comes back,
+        so both ends stay on one removal path."""
+        if not eid:
+            return
+        self._client.dismiss_notification(
+            eid, None,
+            lambda err: self.toast.emit(f"Dismiss failed: {err}"))
 
     @pyqtSlot(str)
     def deleteThread(self, key: str) -> None:
