@@ -101,10 +101,49 @@ ApplicationWindow {
                     model: messages
                     spacing: 2
 
-                    // The whole of the follow behaviour. callLater defers
-                    // to after the delegate is laid out, which is what the
-                    // GTK version could never reliably do.
-                    onCountChanged: Qt.callLater(messageList.positionViewAtEnd)
+                    // Following the end of a growing list takes two
+                    // steps, not one. On countChanged the new delegate has
+                    // not been laid out yet, so contentHeight is still an
+                    // estimate built from one-line rows: positionViewAtEnd
+                    // scrolls to that estimate and stops, leaving a tall
+                    // wrapped message mostly below the edge. contentHeight
+                    // changes again once the delegate is measured, and
+                    // that is when the position has to be re-asserted.
+                    property bool follow: true
+
+                    // Written out rather than positionViewAtEnd(), which
+                    // places the last row against the viewport as if the
+                    // origin were zero. For a list of variable-height rows
+                    // it is not: originY shifts as rows above the viewport
+                    // get measured, and the view was then left short by
+                    // exactly that shift. This is stated in the same terms
+                    // the checks use, and re-running it is harmless.
+                    function toEnd() {
+                        var end = originY + contentHeight - height
+                        contentY = end > originY ? end : originY
+                    }
+
+                    // Scrolling to the end moves the end: the rows that
+                    // come into view get measured, which corrects
+                    // contentHeight and originY again. One deferred call
+                    // is not enough — on countChanged the new delegate is
+                    // not laid out yet, so the end is still estimated from
+                    // one-line rows, and stopping there is what left a
+                    // tall wrapped message below the bottom edge. So
+                    // re-assert a frame later, which is idempotent and
+                    // settles as soon as nothing is moving.
+                    Timer {
+                        id: settle
+                        interval: 16
+                        onTriggered: if (messageList.follow) messageList.toEnd()
+                    }
+
+                    onCountChanged: { follow = true; toEnd(); settle.restart() }
+                    onContentHeightChanged: if (follow) settle.restart()
+                    onOriginYChanged: if (follow) settle.restart()
+                    // Scrolling away stops the view yanking itself back
+                    // while you read; the next message resumes following.
+                    onMovementEnded: follow = atYEnd
 
                     delegate: Column {
                         width: messageList.width
