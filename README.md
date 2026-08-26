@@ -2,7 +2,7 @@
 
 # 📱🐧 iPhone Bridge
 
-**Your iPhone's messages, calls, notifications, and contacts — on your Linux desktop, over Bluetooth.**  
+**iPhone messages, notifications, contacts and calls on Linux**  
 *No Mac relay. No cloud service. No subscription. Just Bluetooth.*
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
@@ -115,37 +115,11 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
 ## CLI
 
 The `iphonebridge` command covers sending, history, calls, setup and
-diagnostics. Deleting from local history is the app's job:
-
-| Command | What it does |
-|---|---|
-| `iphonebridge run` | Run the daemon in the foreground (the systemd service uses this) |
-| `iphonebridge doctor` | Check prerequisites — config, adapter class, obexd, state dir, BLE advertising, ANCS bond |
-| `iphonebridge pair-setup` | First-run wizard — find the paired iPhone, write config |
-| `iphonebridge sms-list` | Recent messages — `-n N`, `--from <contact>`, `--source iphone\|local` |
-| `iphonebridge sms-send <to> <body>` | Send an SMS / iMessage (`<to>` = number or contact name) |
-| `iphonebridge call <to>` | Place a phone call over HFP — number, contact name, or `1-800-LETTERS` |
-| `iphonebridge calls` | List active calls |
-| `iphonebridge hangup` | Hang up the active call(s) |
-| `iphonebridge contacts-sync` | Force a contacts refresh (otherwise automatic every 24 h) |
-| `iphonebridge ancs-enable` | One-time setup for per-app notifications (ANCS) |
-| `iphonebridge hfp-enable` | One-time setup for phone calls (HFP) |
-| `iphonebridge version` | Print the version |
+diagnostics.
 
 ```bash
-# Recent messages — live from the iPhone, or from the daemon's own log
-iphonebridge sms-list -n 20
-iphonebridge sms-list --from Maddie
-iphonebridge sms-list --source local
-
-# Send — recipient can be a phone number OR a contact name
-iphonebridge sms-send "+15551234567" "on my way"
-iphonebridge sms-send Maddie "running late"
-
-# Calls — needs HFP set up (packaging/deb/README.md, step 7)
-iphonebridge call Maddie
-iphonebridge calls
-iphonebridge hangup
+man iphonebridge
+man iphonebridge-ui
 
 # Watch the daemon live · control the service
 journalctl --user -u iphonebridge -f
