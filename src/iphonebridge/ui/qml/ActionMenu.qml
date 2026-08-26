@@ -1,18 +1,19 @@
 import QtQuick
 import QtQuick.Controls
 
-// The right-click menu — a Popup, deliberately not a Menu.
+// The right-click menu.
 //
-// A Menu's list belongs to whichever Quick Controls style the desktop
-// provides (org.kde.breeze here), and that style gives it a highlight item
-// painted from the Kirigami selection colour. It draws over whatever the
-// MenuItem's background says, so the row read blue in light and green
-// against a dark surface no matter how it was styled underneath.
-// Overriding the background, replacing contentItem, and clearing
-// `highlight` after construction all left it in place.
+// Styling the MenuItem is not enough on its own. Whichever Quick Controls
+// style the desktop provides also owns the Menu's internal ListView, and
+// org.kde.breeze — the style in use here — gives that list a highlight
+// item painted from the Kirigami selection colour. It is drawn *over* the
+// MenuItem, so a row styled underneath was simply covered, and the
+// highlight read blue on a light surface and green on a dark one.
 //
-// A Popup has no list of its own, so everything here is ours.
-Popup {
+// Replacing contentItem with a list that has no highlight of its own is
+// what fixes it. A Menu rather than a Popup: keyboard navigation, Escape,
+// the focus grab and the menu's accessibility role all come with it.
+Menu {
     id: menu
 
     property Theme theme
@@ -20,17 +21,27 @@ Popup {
     property bool destructive: false
     signal activated()
 
-    padding: Math.round(5 * theme.k)
-    modal: false
-    dim: false
-    closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+    // In-scene, not a native or separate-window popup — a menu drawn by
+    // the platform ignores everything below.
     popupType: Popup.Item
+    padding: Math.round(5 * theme.k)
 
-    // Opened where the pointer is, the way a context menu should be.
+    // Opened where the pointer is, which is what Menu.popup(pos) does;
+    // named so the call sites read as an intent rather than an overload.
     function popupAt(pos) {
-        x = pos.x
-        y = pos.y
-        open()
+        popup(pos)
+    }
+
+    contentItem: ListView {
+        implicitHeight: contentHeight
+        implicitWidth: Math.round(150 * theme.k)
+        model: menu.contentModel
+        currentIndex: menu.currentIndex
+        keyNavigationWraps: true
+        interactive: false
+        clip: true
+        // The whole point: the row paints its own state.
+        highlight: null
     }
 
     background: Rectangle {
@@ -40,18 +51,20 @@ Popup {
         border.color: theme.separator
     }
 
-    contentItem: Rectangle {
-        implicitWidth: Math.round(150 * theme.k)
+    MenuItem {
+        id: item
+        text: menu.label
         implicitHeight: Math.round(30 * theme.k)
-        radius: Math.round(6 * theme.k)
-        // The surface, lightened — never a colour laid over it.
-        color: area.containsMouse ? theme.hover : "transparent"
+        onTriggered: menu.activated()
 
-        Row {
-            anchors.left: parent.left
-            anchors.leftMargin: Math.round(9 * theme.k)
-            anchors.verticalCenter: parent.verticalCenter
+        background: Rectangle {
+            radius: Math.round(6 * theme.k)
+            // The surface, lightened — never a colour laid over it.
+            color: item.highlighted ? theme.hover : "transparent"
+        }
+        contentItem: Row {
             spacing: Math.round(8 * theme.k)
+            leftPadding: Math.round(8 * theme.k)
             TrashMark {
                 visible: menu.destructive
                 color: theme.destructive
@@ -59,7 +72,7 @@ Popup {
                 anchors.verticalCenter: parent.verticalCenter
             }
             Text {
-                text: menu.label
+                text: item.text
                 // Apple colours a destructive action rather than
                 // announcing it, so the menu stays quiet until read.
                 color: menu.destructive ? theme.destructive : theme.label
@@ -67,13 +80,6 @@ Popup {
                 font.pointSize: theme.rowSize
                 anchors.verticalCenter: parent.verticalCenter
             }
-        }
-
-        MouseArea {
-            id: area
-            anchors.fill: parent
-            hoverEnabled: true
-            onClicked: { menu.close(); menu.activated() }
         }
     }
 }
