@@ -61,6 +61,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.13.0" date="2026-08-26">
+      <description>
+        <p>Notifications can be dismissed from either end: dismissing a
+        card in the app clears the notification on the iPhone, and
+        clearing it on the iPhone removes the card from the app. The
+        status page no longer reports app notifications as working while
+        the phone is disconnected.</p>
+      </description>
+    </release>
     <release version="0.12.1" date="2026-08-26">
       <description>
         <p>The man pages now report the correct version.</p>

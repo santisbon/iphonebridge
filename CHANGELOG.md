@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.13.0] — 2026-08-26
+
+### Added
+- **Dismiss notifications, both ways.** Hovering a card in the app's
+  notification feed reveals a dismiss button (also on right-click);
+  dismissing sends the ANCS negative action, so the notification clears
+  from the iPhone's notification center too. Clearing one on the iPhone
+  removes its card from the app and closes its desktop popup. The
+  daemon's D-Bus interface grew a `DismissNotification` method and an
+  `AncsDismissed` signal for this.
+
+### Fixed
+- **The Status page claimed system notifications were working while the
+  phone was disconnected.** BlueZ keeps a bonded device's
+  characteristics, and accepts a subscription on them, with the device
+  gone, so the subscription alone proved nothing; the check now also
+  requires the phone to be connected.
+
+### Known
+- Dismissing from the app reaches the phone only for notifications from
+  the current BLE connection — ANCS numbers them per connection, so a
+  card from before the last reconnect cannot be addressed remotely and
+  is removed from this computer only. It always leaves the app.
+
 ## [0.12.1] — 2026-08-26
 
 ### Fixed
