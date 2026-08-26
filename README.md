@@ -236,12 +236,19 @@ sudo systemctl restart bluetooth     # releases stale instances
 systemctl --user restart iphonebridge
 ```
 
-> Known-unresolved: on one BlueZ 5.85 / Intel BE200 setup, registration
-> fails with `org.bluez.Error.Failed` even with every slot free and a bare
-> `Type: peripheral` advert carrying no payload, from a separate process on
-> its own object path. That points below iphonebridge, at BlueZ or the
-> controller. MAP and PBAP are unaffected, so messages and contacts keep
-> working; only ANCS is lost. Reports from other chipsets welcome.
+> Known cause on BlueZ 5.85: every `RegisterAdvertisement` fails with
+> `org.bluez.Error.Failed` regardless of adapter, payload or free slots.
+> bluetoothd 5.85 sizes the `MGMT_OP_ADD_EXT_ADV_DATA` buffer with the
+> legacy `mgmt_cp_add_advertising` struct, so every data command carries
+> eight trailing slack bytes, and kernels that enforce exact mgmt payload
+> length reject it with `Invalid Parameters (0x0d)` before the controller
+> is ever consulted (visible in `btmon`; bluetoothd logs
+> `add_client_complete() Failed to add advertisement: Invalid Parameters`).
+> Fixed upstream in bluez commit `2a6968b40` ("advertising: Fix sending
+> extra bytes with MGMT_OP_ADD_EXT_ADV_DATA"); until your distro ships it,
+> a bluez rebuilt with that one-line patch restores ANCS. The adapter is
+> not at fault. MAP and PBAP are unaffected, so messages and contacts keep
+> working; only ANCS is lost.
 </details>
 
 <details>
