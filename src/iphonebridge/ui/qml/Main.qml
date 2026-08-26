@@ -250,36 +250,50 @@ ApplicationWindow {
                     anchors.fill: parent
                     spacing: 0
 
-                    // Over the conversation list, where a new conversation
-                    // is plainly what it starts.
-                    Button {
-                        id: newBtn
-                        objectName: "newConversation"
+                    // Top of the sidebar, aligned right, icon only —
+                    // where Messages puts it. The name it lost lives in
+                    // the tooltip and in Accessible.name, so hovering or
+                    // a screen reader still says what it does.
+                    Item {
                         Layout.fillWidth: true
-                        Layout.margins: 10
-                        implicitHeight: 30
-                        onClicked: {
-                            bridge.clearCompose()
-                            composing = true
-                            toField.text = ""
-                            toField.forceActiveFocus()
+                        implicitHeight: 42
+
+                        Button {
+                            id: newBtn
+                            objectName: "newConversation"
+                            anchors.right: parent.right
+                            anchors.rightMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitWidth: 30
+                            implicitHeight: 30
+                            Accessible.name: "New conversation"
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 500
+                            ToolTip.text: "New conversation"
+                            onClicked: {
+                                bridge.clearCompose()
+                                composing = true
+                                toField.text = ""
+                                toField.forceActiveFocus()
+                            }
+                            background: Rectangle {
+                                radius: 7
+                                color: newBtn.down ? theme.selected
+                                     : newBtn.hovered ? theme.fill
+                                     : "transparent"
+                            }
+                            contentItem: Item {
+                                ComposeMark {
+                                    anchors.centerIn: parent
+                                    color: theme.accent
+                                }
+                            }
                         }
-                        // Tinted, not filled. Blue is the selected
-                        // conversation and your own words; spending it on
-                        // a permanent button as well leaves nothing for
-                        // those to mean.
-                        background: Rectangle {
-                            radius: 8
-                            color: newBtn.down ? theme.selected : theme.fill
-                        }
-                        contentItem: Text {
-                            text: "New Conversation"
-                            color: theme.accent
-                            font.family: theme.ui
-                            font.pixelSize: theme.rowSize
-                            font.weight: Font.DemiBold
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width; height: 1
+                            color: theme.separator
                         }
                     }
 
