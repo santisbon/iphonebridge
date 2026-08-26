@@ -6,12 +6,15 @@ ApplicationWindow {
     id: win
     width: 940; height: 720; visible: true
     title: "iphonebridge"
-    color: theme.canvas
+    color: appTheme.canvas
 
     // True while a new conversation is being addressed but not yet sent.
     property bool composing: false
 
-    Theme { id: theme }
+    // Named so it cannot be shadowed: inside a component that
+    // has its own `theme` property, `theme: appTheme` binds the
+    // property to itself and resolves to null.
+    Theme { id: appTheme }
 
     // A recipient box that suggests contacts as you type. Used by the
     // new-conversation form and by the dialer, which want exactly the
@@ -27,24 +30,24 @@ ApplicationWindow {
         signal submitted()
         signal picked()
 
-        implicitHeight: theme.fieldHeight
+        implicitHeight: appTheme.fieldHeight
         implicitWidth: field.implicitWidth
 
         TextField {
             id: field
             anchors.fill: parent
             placeholderText: rf.placeholder
-            color: theme.label
-            placeholderTextColor: theme.label2
-            font.family: theme.ui
-            font.pointSize: theme.bodySize
+            color: appTheme.label
+            placeholderTextColor: appTheme.label2
+            font.family: appTheme.ui
+            font.pointSize: appTheme.bodySize
             leftPadding: 12
             rightPadding: 12
             background: Rectangle {
-                radius: theme.pillRadius
-                color: theme.fill
+                radius: appTheme.pillRadius
+                color: appTheme.fill
                 border.width: field.activeFocus ? 2 : 0
-                border.color: theme.accent
+                border.color: appTheme.accent
             }
             // onTextEdited, never onTextChanged: picking a suggestion
             // sets the text, and reacting to that would reopen the popup
@@ -68,9 +71,9 @@ ApplicationWindow {
             implicitHeight: Math.min(contentItem.contentHeight + 8, 240)
             background: Rectangle {
                 radius: 10
-                color: theme.canvas
+                color: appTheme.canvas
                 border.width: 1
-                border.color: theme.separator
+                border.color: appTheme.separator
             }
 
             contentItem: ListView {
@@ -89,23 +92,23 @@ ApplicationWindow {
                     }
                     background: Rectangle {
                         radius: 6
-                        color: sug.hovered ? theme.fill : "transparent"
+                        color: sug.hovered ? appTheme.fill : "transparent"
                     }
                     contentItem: RowLayout {
                         spacing: 12
                         Label {
                             text: modelData.name
-                            color: theme.label
-                            font.family: theme.ui
-                            font.pointSize: theme.bodySize
+                            color: appTheme.label
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.bodySize
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
                         Label {
                             text: modelData.phone
-                            color: theme.label2
-                            font.family: theme.ui
-                            font.pointSize: theme.captionSize
+                            color: appTheme.label2
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.captionSize
                         }
                     }
                 }
@@ -122,7 +125,7 @@ ApplicationWindow {
         visible: opacity > 0
         opacity: 0
         radius: 10
-        color: theme.dark ? "#3A3A3C" : "#323232"
+        color: appTheme.dark ? "#3A3A3C" : "#323232"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 28
@@ -135,8 +138,8 @@ ApplicationWindow {
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
             color: "white"
-            font.family: theme.ui
-            font.pointSize: theme.bodySize
+            font.family: appTheme.ui
+            font.pointSize: appTheme.bodySize
         }
         Behavior on opacity { NumberAnimation { duration: 160 } }
         Timer { id: toastHide; interval: 4000; onTriggered: toast.opacity = 0 }
@@ -162,39 +165,39 @@ ApplicationWindow {
     // window has a handful of peer sections.
     header: Rectangle {
         implicitHeight: 48
-        color: theme.sidebar
+        color: appTheme.sidebar
         Rectangle {
             anchors.bottom: parent.bottom
             width: parent.width; height: 1
-            color: theme.separator
+            color: appTheme.separator
         }
         TabBar {
             id: tabs
             objectName: "tabs"
             anchors.centerIn: parent
-            implicitWidth: Math.round(440 * theme.k)
+            implicitWidth: Math.round(440 * appTheme.k)
             spacing: 2
             background: Rectangle {
                 radius: 8
-                color: theme.fill
+                color: appTheme.fill
             }
             Repeater {
                 model: ["Messages", "Notifications", "Calls", "Status"]
                 TabButton {
                     id: tabBtn
                     text: modelData
-                    height: Math.round(30 * theme.k)
+                    height: Math.round(30 * appTheme.k)
                     background: Rectangle {
                         radius: 7
-                        color: tabBtn.checked ? theme.canvas : "transparent"
+                        color: tabBtn.checked ? appTheme.canvas : "transparent"
                         border.width: tabBtn.checked ? 1 : 0
-                        border.color: theme.separator
+                        border.color: appTheme.separator
                     }
                     contentItem: Text {
                         text: tabBtn.text
-                        color: theme.label
-                        font.family: theme.ui
-                        font.pointSize: theme.rowSize
+                        color: appTheme.label
+                        font.family: appTheme.ui
+                        font.pointSize: appTheme.rowSize
                         font.weight: tabBtn.checked ? Font.DemiBold : Font.Normal
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -210,13 +213,13 @@ ApplicationWindow {
         visible: !bridge.available
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: visible ? 30 : 0
-        color: theme.down
+        color: appTheme.down
         Text {
             anchors.centerIn: parent
             text: "Daemon not reachable — systemctl --user start iphonebridge"
             color: "#000000"
-            font.family: theme.ui
-            font.pointSize: theme.captionSize
+            font.family: appTheme.ui
+            font.pointSize: appTheme.captionSize
         }
     }
 
@@ -228,7 +231,7 @@ ApplicationWindow {
         // ---- Messages ----------------------------------------------
         SplitView {
             orientation: Qt.Horizontal
-            handle: Rectangle { implicitWidth: 1; color: theme.separator }
+            handle: Rectangle { implicitWidth: 1; color: appTheme.separator }
 
             Connections {
                 target: bridge
@@ -244,7 +247,7 @@ ApplicationWindow {
             Rectangle {
                 SplitView.preferredWidth: 300
                 SplitView.minimumWidth: 240
-                color: theme.sidebar
+                color: appTheme.sidebar
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -264,8 +267,8 @@ ApplicationWindow {
                             anchors.right: parent.right
                             anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            implicitWidth: Math.round(32 * theme.k)
-                            implicitHeight: Math.round(32 * theme.k)
+                            implicitWidth: Math.round(32 * appTheme.k)
+                            implicitHeight: Math.round(32 * appTheme.k)
                             Accessible.name: "New conversation"
                             ToolTip.visible: hovered
                             ToolTip.delay: 500
@@ -278,15 +281,15 @@ ApplicationWindow {
                             }
                             background: Rectangle {
                                 radius: 7
-                                color: newBtn.down ? theme.selected
-                                     : newBtn.hovered ? theme.fill
+                                color: newBtn.down ? appTheme.selected
+                                     : newBtn.hovered ? appTheme.fill
                                      : "transparent"
                             }
                             contentItem: Item {
                                 ComposeMark {
                                     anchors.centerIn: parent
-                                    color: theme.accent
-                                    k: theme.k
+                                    color: appTheme.accent
+                                    k: appTheme.k
                                 }
                             }
                         }
@@ -294,7 +297,7 @@ ApplicationWindow {
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: parent.width; height: 1
-                            color: theme.separator
+                            color: appTheme.separator
                         }
                     }
 
@@ -314,7 +317,7 @@ ApplicationWindow {
                         delegate: ItemDelegate {
                             id: threadRow
                             width: threadList.width
-                            height: theme.rowHeight
+                            height: appTheme.rowHeight
                             onClicked: bridge.openThread(model.key)
                             // Right-click or long-press, as in the GTK
                             // version. Deleting is local only: iOS ignores
@@ -337,8 +340,8 @@ ApplicationWindow {
                             }
                             background: Rectangle {
                                 color: threadRow.ListView.isCurrentItem
-                                       ? theme.accent
-                                       : threadRow.hovered ? theme.fill
+                                       ? appTheme.accent
+                                       : threadRow.hovered ? appTheme.fill
                                                            : "transparent"
                                 radius: threadRow.ListView.isCurrentItem ? 8 : 0
                                 anchors.fill: parent
@@ -349,10 +352,10 @@ ApplicationWindow {
                                     visible: !threadRow.ListView.isCurrentItem
                                     anchors.bottom: parent.bottom
                                     anchors.right: parent.right
-                                    x: theme.gutter + 12
+                                    x: appTheme.gutter + 12
                                     width: parent.width - x
                                     height: 1
-                                    color: theme.separator
+                                    color: appTheme.separator
                                 }
                             }
                             contentItem: Item {
@@ -363,13 +366,13 @@ ApplicationWindow {
                                     x: 5
                                     anchors.verticalCenter: parent.verticalCenter
                                     color: threadRow.ListView.isCurrentItem
-                                           ? "white" : theme.accent
+                                           ? "white" : appTheme.accent
                                     visible: model.unread
                                 }
                                 ColumnLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: theme.gutter + 4
-                                    anchors.rightMargin: theme.gutter
+                                    anchors.leftMargin: appTheme.gutter + 4
+                                    anchors.rightMargin: appTheme.gutter
                                     anchors.topMargin: 10
                                     anchors.bottomMargin: 10
                                     spacing: 2
@@ -378,9 +381,9 @@ ApplicationWindow {
                                         Label {
                                             text: model.name
                                             color: threadRow.ListView.isCurrentItem
-                                                   ? "white" : theme.label
-                                            font.family: theme.ui
-                                            font.pointSize: theme.titleSize
+                                                   ? "white" : appTheme.label
+                                            font.family: appTheme.ui
+                                            font.pointSize: appTheme.titleSize
                                             font.weight: Font.DemiBold
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
@@ -389,18 +392,18 @@ ApplicationWindow {
                                             text: model.stamp
                                             color: threadRow.ListView.isCurrentItem
                                                    ? Qt.rgba(1, 1, 1, 0.75)
-                                                   : theme.label2
-                                            font.family: theme.ui
-                                            font.pointSize: theme.captionSize
+                                                   : appTheme.label2
+                                            font.family: appTheme.ui
+                                            font.pointSize: appTheme.captionSize
                                         }
                                     }
                                     Label {
                                         text: model.preview
                                         color: threadRow.ListView.isCurrentItem
                                                ? Qt.rgba(1, 1, 1, 0.85)
-                                               : theme.label2
-                                        font.family: theme.ui
-                                        font.pointSize: theme.subSize
+                                               : appTheme.label2
+                                        font.family: appTheme.ui
+                                        font.pointSize: appTheme.subSize
                                         elide: Text.ElideRight
                                         maximumLineCount: 1
                                         Layout.fillWidth: true
@@ -414,7 +417,7 @@ ApplicationWindow {
 
             Rectangle {
                 SplitView.fillWidth: true
-                color: theme.canvas
+                color: appTheme.canvas
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -433,9 +436,9 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             horizontalAlignment: Text.AlignHCenter
                             text: bridge.threadName
-                            color: theme.label
-                            font.family: theme.ui
-                            font.pointSize: theme.titleSize
+                            color: appTheme.label
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.titleSize
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
                         }
@@ -444,21 +447,21 @@ ApplicationWindow {
                             implicitWidth: ribbon.implicitWidth + 20
                             implicitHeight: 19
                             radius: 9.5
-                            color: theme.fill
+                            color: appTheme.fill
                             RowLayout {
                                 id: ribbon
                                 anchors.centerIn: parent
                                 spacing: 5
                                 Rectangle {
                                     width: 6; height: 6; radius: 3
-                                    color: bridge.linkOk ? theme.up : theme.down
+                                    color: bridge.linkOk ? appTheme.up : appTheme.down
                                     Behavior on color { ColorAnimation { duration: 200 } }
                                 }
                                 Label {
                                     text: bridge.linkText
-                                    color: theme.label2
-                                    font.family: theme.ui
-                                    font.pointSize: theme.captionSize
+                                    color: appTheme.label2
+                                    font.family: appTheme.ui
+                                    font.pointSize: appTheme.captionSize
                                     font.letterSpacing: 0.3
                                 }
                             }
@@ -472,9 +475,9 @@ ApplicationWindow {
                         spacing: 8
                         Label {
                             text: "To:"
-                            color: theme.label2
-                            font.family: theme.ui
-                            font.pointSize: theme.bodySize
+                            color: appTheme.label2
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.bodySize
                         }
                         RecipientField {
                             id: toField
@@ -491,9 +494,9 @@ ApplicationWindow {
                             onClicked: { composing = false; bridge.clearCompose() }
                             contentItem: Text {
                                 text: cancelBtn.text
-                                color: theme.accent
-                                font.family: theme.ui
-                                font.pointSize: theme.bodySize
+                                color: appTheme.accent
+                                font.family: appTheme.ui
+                                font.pointSize: appTheme.bodySize
                                 verticalAlignment: Text.AlignVCenter
                             }
                             background: Item {}
@@ -506,9 +509,9 @@ ApplicationWindow {
                         Layout.rightMargin: 12
                         text: bridge.composeError
                         visible: composing && text.length > 0
-                        color: theme.destructive
-                        font.family: theme.ui
-                        font.pointSize: theme.bodySize
+                        color: appTheme.destructive
+                        font.family: appTheme.ui
+                        font.pointSize: appTheme.bodySize
                         wrapMode: Text.Wrap
                     }
 
@@ -520,9 +523,9 @@ ApplicationWindow {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         wrapMode: Text.Wrap
-                        color: theme.label2
-                        font.family: theme.ui
-                        font.pointSize: theme.bodySize
+                        color: appTheme.label2
+                        font.family: appTheme.ui
+                        font.pointSize: appTheme.bodySize
                         visible: !composing && bridge.threadName.length === 0
                         text: "No conversation selected\n\n"
                               + "Pick a thread on the left, or start a new one."
@@ -536,9 +539,9 @@ ApplicationWindow {
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         wrapMode: Text.Wrap
-                        color: theme.label2
-                        font.family: theme.ui
-                        font.pointSize: theme.bodySize
+                        color: appTheme.label2
+                        font.family: appTheme.ui
+                        font.pointSize: appTheme.bodySize
                         visible: composing
                         text: "New message\n\n"
                               + "Enter a name or number above, then write "
@@ -562,7 +565,7 @@ ApplicationWindow {
                         // sentence. The model needs the number; only the
                         // view knows it.
                         Component.onCompleted: messages.emojiPointSize =
-                                               theme.bodySize * 1.4
+                                               appTheme.bodySize * 1.4
 
                         // Following the end of a growing list takes two
                         // steps, not one. On countChanged the new delegate
@@ -643,17 +646,17 @@ ApplicationWindow {
                                 horizontalAlignment: Text.AlignHCenter
                                 textFormat: Text.StyledText
                                 text: model.dayText
-                                color: theme.label2
-                                font.family: theme.ui
-                                font.pointSize: theme.captionSize
+                                color: appTheme.label2
+                                font.family: appTheme.ui
+                                font.pointSize: appTheme.captionSize
                                 font.letterSpacing: 0.3
                                 topPadding: 6
                                 bottomPadding: 6
                             }
                             Rectangle {
                                 anchors.right: model.outgoing ? parent.right : undefined
-                                anchors.rightMargin: theme.gutter
-                                x: model.outgoing ? 0 : theme.gutter
+                                anchors.rightMargin: appTheme.gutter
+                                x: model.outgoing ? 0 : appTheme.gutter
                                 // A message that is nothing but a couple of
                                 // emoji is drawn large and bare, the way
                                 // Messages does it: there the picture is
@@ -661,11 +664,11 @@ ApplicationWindow {
                                 // decoration on a decoration.
                                 readonly property bool bare: model.emojiOnly
                                 width: Math.min(bubbleText.implicitWidth + (bare ? 0 : 24),
-                                                messageList.width * theme.bubbleMax)
+                                                messageList.width * appTheme.bubbleMax)
                                 height: bubbleText.implicitHeight + (bare ? 2 : 14)
-                                radius: theme.bubbleRadius
+                                radius: appTheme.bubbleRadius
                                 color: bare ? "transparent"
-                                     : model.outgoing ? theme.accent : theme.bubbleIn
+                                     : model.outgoing ? appTheme.accent : appTheme.bubbleIn
                                 TextEdit {
                                     id: bubbleText
                                     anchors.centerIn: parent
@@ -678,12 +681,12 @@ ApplicationWindow {
                                     textFormat: parent.bare ? Text.PlainText
                                                             : Text.RichText
                                     text: parent.bare ? model.body : model.bodyHtml
-                                    color: parent.bare ? theme.label
+                                    color: parent.bare ? appTheme.label
                                          : model.outgoing ? "white"
-                                                          : theme.bubbleInText
-                                    font.family: theme.ui
-                                    font.pointSize: parent.bare ? theme.bodySize * 2.6
-                                                                : theme.bodySize
+                                                          : appTheme.bubbleInText
+                                    font.family: appTheme.ui
+                                    font.pointSize: parent.bare ? appTheme.bodySize * 2.6
+                                                                : appTheme.bodySize
                                     // Selectable but not editable: copying
                                     // a verification code out of a message
                                     // was possible before and is worth
@@ -692,7 +695,7 @@ ApplicationWindow {
                                     selectByMouse: true
                                     selectionColor: model.outgoing
                                                     ? Qt.rgba(1, 1, 1, 0.35)
-                                                    : theme.accent
+                                                    : appTheme.accent
                                     selectedTextColor: model.outgoing
                                                        ? "white" : "white"
                                 }
@@ -710,30 +713,30 @@ ApplicationWindow {
                         TextField {
                             id: composer
                             Layout.fillWidth: true
-                            implicitHeight: theme.fieldHeight
+                            implicitHeight: appTheme.fieldHeight
                             placeholderText: bridge.linkOk ? "Message"
                                                            : "Waiting for the iPhone"
                             enabled: (composing || bridge.threadName.length > 0)
                                      && bridge.linkOk
-                            color: theme.label
-                            placeholderTextColor: theme.label2
-                            font.family: theme.ui
-                            font.pointSize: theme.bodySize
+                            color: appTheme.label
+                            placeholderTextColor: appTheme.label2
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.bodySize
                             leftPadding: 14
                             rightPadding: 14
                             background: Rectangle {
-                                radius: theme.pillRadius
-                                color: composer.enabled ? "transparent" : theme.fill
+                                radius: appTheme.pillRadius
+                                color: composer.enabled ? "transparent" : appTheme.fill
                                 border.width: 1
-                                border.color: composer.activeFocus ? theme.accent
-                                                                   : theme.separator
+                                border.color: composer.activeFocus ? appTheme.accent
+                                                                   : appTheme.separator
                             }
                             onAccepted: sendButton.send()
                         }
                         Button {
                             id: sendButton
-                            implicitWidth: theme.fieldHeight
-                            implicitHeight: theme.fieldHeight
+                            implicitWidth: appTheme.fieldHeight
+                            implicitHeight: appTheme.fieldHeight
                             enabled: composer.enabled && composer.text.length > 0
                                      && (!composing || toField.text.length > 0)
                             opacity: enabled ? 1 : 0
@@ -758,8 +761,8 @@ ApplicationWindow {
                             onClicked: send()
                             background: Rectangle {
                                 radius: width / 2
-                                color: sendButton.down ? Qt.darker(theme.accent, 1.15)
-                                                       : theme.accent
+                                color: sendButton.down ? Qt.darker(appTheme.accent, 1.15)
+                                                       : appTheme.accent
                             }
                             contentItem: Canvas {
                                 onPaint: {
@@ -786,61 +789,98 @@ ApplicationWindow {
         }
 
         // ---- Notifications ------------------------------------------
+        // Notification Center's shape: a narrow column of light cards on
+        // the grouped background, grouped under the app that sent them.
         Rectangle {
-            color: theme.canvas
+            color: appTheme.sidebar
+
             Label {
                 objectName: "noNotifications"
                 anchors.fill: parent
-                anchors.margins: 40
+                anchors.margins: Math.round(40 * appTheme.k)
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 wrapMode: Text.Wrap
-                color: theme.label2
-                font.family: theme.ui
-                font.pointSize: theme.bodySize
+                color: appTheme.label2
+                font.family: appTheme.ui
+                font.pointSize: appTheme.bodySize
                 visible: notifications.count === 0
                 text: "No notifications yet\n\n"
                       + "Per-app notifications from your iPhone — Slack, Mail, "
                       + "WhatsApp and the rest — show up here as they arrive."
             }
+
             ListView {
-                anchors.fill: parent
-                anchors.margins: 12
+                // Explicit edges, not anchors.fill: fill would override
+                // the width below and stretch the cards across the window.
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.topMargin: appTheme.gutter
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(parent.width - 2 * appTheme.gutter,
+                                Math.round(620 * appTheme.k))
                 clip: true
-                spacing: 8
+                spacing: Math.round(6 * appTheme.k)
                 model: notifications
+                visible: notifications.count > 0
+                ScrollBar.vertical: ScrollBar {}
+
+                // Consecutive notifications from one app sit under its
+                // name, the way Notification Center stacks them.
+                section.property: "app"
+                section.criteria: ViewSection.FullString
+                section.delegate: Label {
+                    width: ListView.view.width
+                    leftPadding: appTheme.gutter
+                    topPadding: Math.round(14 * appTheme.k)
+                    bottomPadding: Math.round(5 * appTheme.k)
+                    text: section.toUpperCase()
+                    color: appTheme.label2
+                    font.family: appTheme.ui
+                    font.pointSize: appTheme.captionSize
+                    font.letterSpacing: 0.7
+                }
+
                 delegate: Rectangle {
                     width: ListView.view.width
-                    height: 54
-                    radius: 12
-                    color: theme.fill
+                    implicitHeight: note.implicitHeight + Math.round(20 * appTheme.k)
+                    radius: Math.round(10 * appTheme.k)
+                    color: appTheme.canvas
+
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 12
+                        id: note
+                        x: appTheme.gutter
+                        y: Math.round(10 * appTheme.k)
+                        width: parent.width - 2 * appTheme.gutter
                         spacing: 2
+
                         RowLayout {
+                            Layout.fillWidth: true
                             spacing: 8
                             Label {
-                                text: model.app
-                                color: theme.label
-                                font.family: theme.ui
-                                font.pointSize: theme.rowSize
+                                text: model.title
+                                color: appTheme.label
+                                font.family: appTheme.ui
+                                font.pointSize: appTheme.rowSize
                                 font.weight: Font.DemiBold
-                                Layout.fillWidth: true
                                 elide: Text.ElideRight
+                                Layout.fillWidth: true
                             }
                             Label {
                                 text: model.stamp
-                                color: theme.label2
-                                font.family: theme.ui
-                                font.pointSize: theme.captionSize
+                                color: appTheme.label2
+                                font.family: appTheme.ui
+                                font.pointSize: appTheme.captionSize
                             }
                         }
                         Label {
-                            text: model.preview
-                            color: theme.label2
-                            font.family: theme.ui
-                            font.pointSize: theme.bodySize
+                            visible: model.body.length > 0
+                            text: model.body
+                            color: appTheme.label2
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.subSize
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 3
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -851,175 +891,148 @@ ApplicationWindow {
 
         // ---- Calls ---------------------------------------------------
         Rectangle {
-            color: theme.canvas
-            ColumnLayout {
+            color: appTheme.sidebar
+
+            Flickable {
                 anchors.fill: parent
-                anchors.margins: 14
-                spacing: 10
+                contentHeight: callColumn.implicitHeight + 2 * appTheme.gutter
+                clip: true
+                ScrollBar.vertical: ScrollBar {}
 
-                Label {
-                    text: "Call audio routes through this computer's mic and speakers."
-                    color: theme.label2
-                    font.family: theme.ui
-                    font.pointSize: theme.bodySize
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    RecipientField {
-                        id: dialEntry
-                        objectName: "dialEntry"
-                        Layout.fillWidth: true
-                        placeholder: "Contact name or number e.g. 1 (800) MYAPPLE"
-                        onSubmitted: bridge.dial(text)
-                    }
-                    Button {
-                        id: callBtn
-                        implicitWidth: 76; implicitHeight: 30
-                        onClicked: bridge.dial(dialEntry.text)
-                        background: Rectangle {
-                            radius: theme.pillRadius
-                            color: callBtn.down ? Qt.darker(theme.up, 1.15) : theme.up
-                        }
-                        contentItem: Text {
-                            text: "Call"
-                            color: "white"
-                            font.family: theme.ui
-                            font.pointSize: theme.rowSize
-                            font.weight: Font.DemiBold
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-                }
+                ColumnLayout {
+                    id: callColumn
+                    width: Math.min(parent.width - 2 * appTheme.gutter,
+                                    Math.round(620 * appTheme.k))
+                    x: (parent.width - width) / 2
+                    y: appTheme.gutter
+                    spacing: Math.round(18 * appTheme.k)
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 6
-                    Label {
-                        text: "Active calls"
-                        color: theme.label2
-                        font.family: theme.ui
-                        font.pointSize: theme.captionSize
-                        font.weight: Font.DemiBold
-                        font.letterSpacing: 0.6
-                        Layout.fillWidth: true
-                    }
-                    // Per-call Hang up buttons only exist while a call
-                    // does, which left no sign the app could end one.
-                    Button {
-                        id: hangAll
-                        objectName: "hangUpAll"
-                        implicitHeight: 26
-                        enabled: calls.count > 0
-                        onClicked: bridge.hangupAll()
-                        background: Rectangle {
-                            radius: 13
-                            color: hangAll.down ? theme.fill : "transparent"
-                            border.width: 1
-                            border.color: hangAll.enabled ? theme.destructive
-                                                          : theme.separator
-                        }
-                        contentItem: Text {
-                            text: "Hang up all"
-                            color: hangAll.enabled ? theme.destructive : theme.label2
-                            font.family: theme.ui
-                            font.pointSize: theme.captionSize
-                            leftPadding: 12; rightPadding: 12
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-                }
-                Label {
-                    text: bridge.callSummary
-                    color: theme.label2
-                    font.family: theme.ui
-                    font.pointSize: theme.bodySize
-                    visible: text.length > 0
-                }
-                ListView {
-                    objectName: "callList"
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: 8
-                    model: calls
-                    delegate: Rectangle {
-                        width: ListView.view.width
-                        height: theme.cardHeight
-                        radius: 12
-                        color: theme.fill
+                    Group {
+                        theme: appTheme
+                        title: "Place a call"
+                        footer: "Call audio routes through this computer's "
+                                + "mic and speakers."
                         RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 14
-                            anchors.rightMargin: 10
-                            spacing: 10
-                            ColumnLayout {
-                                spacing: 1
+                            Layout.fillWidth: true
+                            Layout.margins: Math.round(10 * appTheme.k)
+                            spacing: Math.round(8 * appTheme.k)
+                            RecipientField {
+                                id: dialEntry
+                                objectName: "dialEntry"
                                 Layout.fillWidth: true
-                                Label {
-                                    text: model.peer
-                                    color: theme.label
-                                    font.family: theme.ui
-                                    font.pointSize: theme.titleSize
-                                    font.weight: Font.DemiBold
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                Label {
-                                    text: model.detail
-                                    color: theme.label2
-                                    font.family: theme.ui
-                                    font.pointSize: theme.captionSize
-                                }
+                                placeholder: "Contact name or number "
+                                             + "e.g. 1 (800) MYAPPLE"
+                                onSubmitted: bridge.dial(text)
                             }
-                            // Named, not glyphed. A circle with an arrow
-                            // in it is style at the cost of telling you
-                            // which button ends the call.
                             Button {
-                                id: answerBtn
-                                objectName: "answerCall"
-                                visible: model.canAnswer
-                                implicitWidth: 74; implicitHeight: 30
-                                onClicked: bridge.answer(model.path)
+                                id: callBtn
+                                implicitWidth: Math.round(72 * appTheme.k)
+                                implicitHeight: appTheme.fieldHeight
+                                onClicked: bridge.dial(dialEntry.text)
                                 background: Rectangle {
                                     radius: height / 2
-                                    color: answerBtn.down ? Qt.darker(theme.up, 1.15)
-                                                          : theme.up
+                                    color: callBtn.down ? Qt.darker(appTheme.up, 1.15)
+                                                        : appTheme.up
                                 }
                                 contentItem: Text {
-                                    text: "Answer"
+                                    text: "Call"
                                     color: "white"
-                                    font.family: theme.ui
-                                    font.pointSize: theme.rowSize
+                                    font.family: appTheme.ui
+                                    font.pointSize: appTheme.rowSize
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
                             }
-                            Button {
-                                id: hangBtn
-                                objectName: "hangUpCall"
-                                implicitWidth: 74; implicitHeight: 30
-                                onClicked: bridge.hangup(model.path)
-                                background: Rectangle {
-                                    radius: height / 2
-                                    color: hangBtn.down
-                                           ? Qt.darker(theme.destructive, 1.15)
-                                           : theme.destructive
+                        }
+                    }
+
+                    Group {
+                        theme: appTheme
+                        title: "Active calls"
+                        GroupRow {
+                            theme: appTheme
+                            label: bridge.callSummary
+                            last: true
+                            visible: calls.count === 0
+                        }
+                        Repeater {
+                            id: callRepeater
+                            model: calls
+                            GroupRow {
+                                objectName: "callList"
+                                theme: appTheme
+                                label: model.peer
+                                value: model.detail
+                                last: index === callRepeater.count - 1
+                                Button {
+                                    id: answerBtn
+                                    objectName: "answerCall"
+                                    visible: model.canAnswer
+                                    implicitWidth: Math.round(70 * appTheme.k)
+                                    implicitHeight: Math.round(28 * appTheme.k)
+                                    onClicked: bridge.answer(model.path)
+                                    background: Rectangle {
+                                        radius: height / 2
+                                        color: answerBtn.down
+                                               ? Qt.darker(appTheme.up, 1.15) : appTheme.up
+                                    }
+                                    contentItem: Text {
+                                        text: "Answer"; color: "white"
+                                        font.family: appTheme.ui
+                                        font.pointSize: appTheme.captionSize
+                                        font.weight: Font.DemiBold
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
-                                contentItem: Text {
-                                    text: "Hang up"
-                                    color: "white"
-                                    font.family: theme.ui
-                                    font.pointSize: theme.rowSize
-                                    font.weight: Font.DemiBold
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
+                                Button {
+                                    id: hangBtn
+                                    objectName: "hangUpCall"
+                                    implicitWidth: Math.round(70 * appTheme.k)
+                                    implicitHeight: Math.round(28 * appTheme.k)
+                                    onClicked: bridge.hangup(model.path)
+                                    background: Rectangle {
+                                        radius: height / 2
+                                        color: hangBtn.down
+                                               ? Qt.darker(appTheme.destructive, 1.15)
+                                               : appTheme.destructive
+                                    }
+                                    contentItem: Text {
+                                        text: "Hang up"; color: "white"
+                                        font.family: appTheme.ui
+                                        font.pointSize: appTheme.captionSize
+                                        font.weight: Font.DemiBold
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
                                 }
                             }
+                        }
+                    }
+
+                    // A destructive action gets its own card in red, the
+                    // way a settings list puts one — not a small outlined
+                    // pill floating beside a heading.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: Math.round(40 * appTheme.k)
+                        radius: Math.round(10 * appTheme.k)
+                        color: hangAllArea.pressed ? appTheme.selected : appTheme.canvas
+                        opacity: calls.count > 0 ? 1 : 0.45
+                        Label {
+                            anchors.centerIn: parent
+                            text: "Hang up all"
+                            color: appTheme.destructive
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.rowSize
+                        }
+                        MouseArea {
+                            id: hangAllArea
+                            objectName: "hangUpAll"
+                            anchors.fill: parent
+                            enabled: calls.count > 0
+                            onClicked: bridge.hangupAll()
                         }
                     }
                 }
@@ -1033,11 +1046,11 @@ ApplicationWindow {
         // problem is coloured — a screen where everything is marked is a
         // screen nobody reads.
         Rectangle {
-            color: theme.sidebar
+            color: appTheme.sidebar
 
             Flickable {
                 anchors.fill: parent
-                contentHeight: statusColumn.implicitHeight + 2 * theme.gutter
+                contentHeight: statusColumn.implicitHeight + 2 * appTheme.gutter
                 clip: true
                 ScrollBar.vertical: ScrollBar {}
 
@@ -1047,109 +1060,31 @@ ApplicationWindow {
                     // Constrained and centred rather than edge to edge:
                     // a full-width row leaves its label and its value at
                     // opposite ends of the window with nothing between.
-                    width: Math.min(parent.width - 2 * theme.gutter,
-                                    Math.round(620 * theme.k))
+                    width: Math.min(parent.width - 2 * appTheme.gutter,
+                                    Math.round(620 * appTheme.k))
                     x: (parent.width - width) / 2
-                    y: theme.gutter
-                    spacing: Math.round(18 * theme.k)
+                    y: appTheme.gutter
+                    spacing: Math.round(18 * appTheme.k)
 
                     Repeater {
                         model: bridge.statusGroups
-                        ColumnLayout {
+                        Group {
                             required property var modelData
-                            Layout.fillWidth: true
-                            spacing: Math.round(6 * theme.k)
-
-                            Label {
-                                Layout.leftMargin: theme.gutter
-                                text: modelData.title.toUpperCase()
-                                color: theme.label2
-                                font.family: theme.ui
-                                font.pointSize: theme.captionSize
-                                font.letterSpacing: 0.7
-                            }
-
-                            Rectangle {
-                                Layout.fillWidth: true
-                                implicitHeight: rows.implicitHeight
-                                radius: Math.round(10 * theme.k)
-                                color: theme.canvas
-
-                                ColumnLayout {
-                                    id: rows
-                                    width: parent.width
-                                    spacing: 0
-                                    Repeater {
-                                        id: rowRepeater
-                                        model: modelData.rows
-                                        ColumnLayout {
-                                            required property var modelData
-                                            required property int index
-                                            Layout.fillWidth: true
-                                            spacing: 0
-
-                                            RowLayout {
-                                                Layout.fillWidth: true
-                                                Layout.leftMargin: theme.gutter
-                                                Layout.rightMargin: theme.gutter
-                                                Layout.preferredHeight: Math.round(38 * theme.k)
-                                                Label {
-                                                    text: modelData.label
-                                                    color: theme.label
-                                                    font.family: theme.ui
-                                                    font.pointSize: theme.rowSize
-                                                    elide: Text.ElideRight
-                                                    Layout.fillWidth: true
-                                                }
-                                                Label {
-                                                    text: modelData.value
-                                                    color: modelData.state === "warn"
-                                                           ? theme.destructive
-                                                           : theme.label2
-                                                    font.family: theme.ui
-                                                    font.pointSize: theme.rowSize
-                                                }
-                                            }
-                                            // Inset hairline, stopping
-                                            // short of the card edge the
-                                            // way a grouped list does, and
-                                            // never under the last row.
-                                            Rectangle {
-                                                Layout.fillWidth: true
-                                                Layout.leftMargin: theme.gutter
-                                                Layout.preferredHeight: 1
-                                                visible: index < rowRepeater.count - 1
-                                                color: theme.separator
-                                            }
-                                        }
-                                    }
+                            theme: appTheme
+                            title: modelData.title
+                            footer: modelData.footer
+                            code: modelData.code
+                            Repeater {
+                                id: statusRows
+                                model: modelData.rows
+                                GroupRow {
+                                    theme: appTheme
+                                    label: modelData.label
+                                    value: modelData.value
+                                    valueColor: modelData.state === "warn"
+                                                ? appTheme.destructive : appTheme.label2
+                                    last: index === statusRows.count - 1
                                 }
-                            }
-
-                            Label {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: theme.gutter
-                                Layout.rightMargin: theme.gutter
-                                visible: modelData.footer.length > 0
-                                text: modelData.footer
-                                color: theme.label2
-                                font.family: theme.ui
-                                font.pointSize: theme.captionSize
-                                wrapMode: Text.Wrap
-                            }
-                            // A command is the one thing on this screen
-                            // you would actually type, so it is the one
-                            // thing set in a monospaced face.
-                            Label {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: theme.gutter
-                                Layout.rightMargin: theme.gutter
-                                visible: modelData.code.length > 0
-                                text: modelData.code
-                                color: theme.label2
-                                font.family: theme.mono
-                                font.pointSize: theme.captionSize
-                                wrapMode: Text.Wrap
                             }
                         }
                     }
@@ -1158,16 +1093,16 @@ ApplicationWindow {
                     // where a settings list puts an action.
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.topMargin: Math.round(4 * theme.k)
-                        implicitHeight: Math.round(40 * theme.k)
-                        radius: Math.round(10 * theme.k)
-                        color: recheckArea.pressed ? theme.selected : theme.canvas
+                        Layout.topMargin: Math.round(4 * appTheme.k)
+                        implicitHeight: Math.round(40 * appTheme.k)
+                        radius: Math.round(10 * appTheme.k)
+                        color: recheckArea.pressed ? appTheme.selected : appTheme.canvas
                         Label {
                             anchors.centerIn: parent
                             text: "Check again"
-                            color: theme.accent
-                            font.family: theme.ui
-                            font.pointSize: theme.rowSize
+                            color: appTheme.accent
+                            font.family: appTheme.ui
+                            font.pointSize: appTheme.rowSize
                         }
                         MouseArea {
                             id: recheckArea

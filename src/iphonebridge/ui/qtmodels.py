@@ -248,7 +248,7 @@ class CallListModel(QAbstractListModel):
 class NotificationListModel(QAbstractListModel):
     """Per-app ANCS notifications, newest first."""
 
-    ROLES = _roles("app", "preview", "stamp")
+    ROLES = _roles("app", "title", "body", "preview", "stamp")
     countChanged = pyqtSignal()
 
     def __init__(self) -> None:
@@ -274,9 +274,15 @@ class NotificationListModel(QAbstractListModel):
     def add(self, ev: dict) -> None:
         title = (ev.get("title") or "").strip()
         body = (ev.get("body") or "").strip()
+        # Kept apart, not joined with a dash. A notification has a
+        # headline and a message, and the phone sends them separately;
+        # gluing them together threw away the only structure it gave us.
+        # `preview` stays for anything that wants one line.
         self.beginInsertRows(QModelIndex(), 0, 0)
         self._rows.insert(0, {
             "app": ev.get("app_name") or ev.get("app_id") or "Notification",
+            "title": title or body or "(no preview)",
+            "body": body if title else "",
             "preview": " — ".join(p for p in (title, body) if p) or "(no preview)",
             "stamp": format_ts(event_ts(ev), fmt="%H:%M"),
         })
