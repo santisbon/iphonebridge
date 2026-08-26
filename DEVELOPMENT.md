@@ -11,8 +11,8 @@ Two ways to install. A `.deb` package (see `README.md`) and from source. Pick **
 The rest of this section walks through it: venv, symlinks, sudoers
 installers, and a path-substituted systemd unit. The package names in step 1
 are Debian-family. On non-apt distros, e.g. **Fedora, Arch, openSUSE**  
-install your distro's equivalents of BlueZ, `bluez-obexd`, dbus-python, PyGObject, 
-and the GTK4/libadwaita introspection bindings. 
+install your distro's equivalents of BlueZ, `bluez-obexd`, dbus-python, PyGObject
+(the daemon's main loop), and PyQt6 with its QtQuick/QML runtime modules (the app). 
 
 You can also use this on any distro when you're developing —
 edits to the clone take effect without rebuilding a package (see
@@ -23,8 +23,13 @@ edits to the clone take effect without rebuilding a package (see
 
 ```bash
 sudo apt install bluez bluez-obexd python3-dbus python3-gi python3-venv
-# For the desktop app (iphonebridge-ui):
-sudo apt install gir1.2-gtk-4.0 gir1.2-adw-1
+# For the desktop app (iphonebridge-ui). The QML runtime modules are
+# separate packages; the Python bindings do not pull them in, and without
+# them the window never loads.
+sudo apt install python3-pyqt6 python3-pyqt6.qtqml python3-pyqt6.qtquick \
+                 python3-dbus.mainloop.pyqt6 \
+                 qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+                 qml6-module-qtquick-templates qml6-module-qtquick-window
 # For auto-copying verification codes (Wayland):
 sudo apt install wl-clipboard
 ```
@@ -35,8 +40,9 @@ sudo apt install wl-clipboard
 git clone https://github.com/santisbon/iphonebridge.git
 cd iphonebridge
 
-# A venv that inherits the system PyGObject + dbus-python.
-# (Never install those two from PyPI — the builds are notoriously fragile.)
+# A venv that inherits the system PyGObject, PyQt6 and dbus-python.
+# (Never install those from PyPI — the builds are notoriously fragile,
+# and a pip PyQt6 will not see apt's QML modules.)
 # Spell out /usr/bin/python3: --system-site-packages inherits the *creating*
 # interpreter's packages, and only the system one can see apt's dist-packages.
 /usr/bin/python3 -m venv --system-site-packages .venv
@@ -211,6 +217,10 @@ sed "s|^Exec=iphonebridge-ui$|Exec=$HOME/.local/bin/iphonebridge-ui|" \
   > "$APPS/me.santisbon.iphonebridge.UI.desktop"
 
 update-desktop-database "$APPS"
+# Freedesktop's hicolor icon cache, not a GTK-app thing — every toolkit
+# resolves themed icons through it, and this is the app's desktop icon,
+# which has nothing to do with the retired GTK UI. The tool just happens
+# to ship in a GTK package.
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
 kbuildsycoca6 --noincremental   # KDE only; GNOME picks it up on its own
 ```
@@ -222,8 +232,9 @@ and that directory is usually absent from the systemd user environment, which
 is what Plasma launches menu entries through. Left as-is, the entry appears in
 the menu and silently fails to start.
 
-Don't rename the file. It has to match `APP_ID` in `src/iphonebridge/ui/app.py`
-or the taskbar won't associate the running window with this icon.
+Don't rename the file. Its basename has to match the name passed to
+`setDesktopFileName` in `src/iphonebridge/ui/qtapp.py`, which is how the
+compositor associates the running window with this entry and its icon.
 
 Check it registered:
 
@@ -246,19 +257,39 @@ tree. **Editing a `.py` file never needs `pip install -e .` again** — adding a
 whole new module doesn't either, since that path entry is searched live.
 
 What needs restarting: every process that imports the file you changed. Everything in
-`src/iphonebridge/` except `cli.py`, `pair_setup.py`, and `ui/` is daemon code;
-`bus.py` and `config.py` are imported by the app as well, so those two need
-both actions.
+`src/iphonebridge/` except `cli.py`, `pair_setup.py`, and `ui/` is daemon code.
+`config.py` is imported by the app as well, so it needs both actions. `bus.py`
+is **not**: it installs the GLib main loop, and the app deliberately reaches
+D-Bus through `ui/qtbus.py` instead, which installs Qt's. Only one main-loop
+integration can be default per process, so `ui/qtbus.py` raises on import if
+`iphonebridge.bus` got pulled in first.
 
 | Changed | Do this |
 |---|---|
 | Daemon code — anything but `cli.py`, `pair_setup.py`, `ui/` | `systemctl --user restart iphonebridge` |
 | CLI — `cli.py`, `pair_setup.py` | Nothing; every `iphonebridge <cmd>` is a fresh process |
-| App — `ui/` | Close and reopen `iphonebridge-ui` |
-| Shared — `bus.py`, `config.py` | Restart the daemon *and* reopen the app |
+| App — `ui/qt*.py`, `ui/qml/*.qml`, `ui/model.py`, `ui/protocol.py`, `ui/util.py` | Close and reopen `iphonebridge-ui` |
+| Shared — `config.py` | Restart the daemon *and* reopen the app |
+| Daemon bus — `bus.py` | `systemctl --user restart iphonebridge` (the app doesn't import it) |
 | `systemd/iphonebridge.service` | Re-run the install from step 5, then `systemctl --user daemon-reload`, then restart |
 | `systemd/sudoers-*`, `set-le-bearer.sh`, or an installer | Re-run the matching installer — `install-cod-sudoers.sh` for the CoD rule, `install-ancs-sudoers.sh` for the ANCS rule + helper |
 | `data/*.desktop` or the icon | Re-run the install snippet under *Adding it to your app launcher* — a plain copy loses the `Exec` rewrite |
+
+`ui/` is Qt only. The GTK front end it replaced was deleted once the Qt UI
+had caught up on everything it did — conversation and message delete,
+recipient autocomplete, the link-health pill, call answer/hang-up, toasts,
+empty states, and light/dark. It is in the history if a detail needs
+looking up; `ui/style.css` there is where the old Apple palette lives.
+
+The app follows the desktop's light/dark setting through Qt's platform
+theme, which supplies the palette. Nothing in the app asks for a scheme:
+`QStyleHints.setColorScheme` is ignored here, and so is setting a palette
+on the application object. That matters when rendering screenshots — see
+`screenshots/README.md`.
+
+Nothing under `src/` imports GTK or libadwaita any more. `bus.py` and
+`daemon.py` still import `gi.repository.GLib` — that is the daemon's main
+loop, and it stays whatever toolkit the app uses.
 
 Only two changes actually need a reinstall:
 

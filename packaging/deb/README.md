@@ -1,6 +1,6 @@
 # Building the .deb
 
-One package installs everything: the daemon, the CLI, the GTK app, the
+One package installs everything: the daemon, the CLI, the Qt app, the
 systemd user unit, the desktop entry and icon, and the privileged pieces
 (sudoers rules and the ANCS helper) that ruled sandboxed formats out.
 Target: Debian-family distros (Pop!_OS, Kubuntu, Debian).
@@ -15,7 +15,7 @@ does the rest.
 
 | Repo source | Installed path |
 |---|---|
-| `src/iphonebridge/` (incl. `ui/icons/`) | `/usr/lib/python3/dist-packages/iphonebridge/` |
+| `src/iphonebridge/` (incl. `ui/qml/`) | `/usr/lib/python3/dist-packages/iphonebridge/` |
 | entry points from `pyproject.toml` | `/usr/bin/iphonebridge`, `/usr/bin/iphonebridge-ui` |
 | `systemd/iphonebridge.service` (placeholder substituted) | `/usr/lib/systemd/user/iphonebridge.service` |
 | `data/me.santisbon.iphonebridge.UI.desktop` (as-is: `Exec=iphonebridge-ui` is on PATH now) | `/usr/share/applications/` |
@@ -48,13 +48,17 @@ record of why:
 2. **Unit placeholder.** `systemd/iphonebridge.service` contains
    `@INSTALL_DIR@`. The deb build substitutes `ExecStart=/usr/bin/iphonebridge run`
    (a `sed` in `debian/rules`, or a static `debian/iphonebridge.user.service`).
-3. **Package data.** `pyproject.toml` needs the bundled UI icons declared
-   so non-editable installs ship them:
+3. **Package data.** `pyproject.toml` needs the bundled UI files declared
+   so non-editable installs ship them. The QML is the easiest one to miss:
+   without it the app installs and starts but cannot draw anything.
 
    ```toml
    [tool.setuptools.package-data]
-   "iphonebridge.ui" = ["icons/*.svg", "icons/README.md"]
+   "iphonebridge.ui" = ["qml/*.qml"]
    ```
+
+   Check it landed in a built package with
+   `dpkg-deb -c ../iphonebridge_*_all.deb | grep '\.qml'`.
 4. **Setup hints in messages.** `pair-setup` and `doctor` print repo
    paths like `sudo bash systemd/install-cod-sudoers.sh`. Installed from
    a deb, the right hint is `sudo adduser $USER iphonebridge`. Gate the
@@ -88,12 +92,20 @@ Package: iphonebridge
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends},
  python3-dbus, python3-gi, python3-typer,
- gir1.2-gtk-4.0, gir1.2-adw-1,
+ python3-pyqt6, python3-pyqt6.qtqml, python3-pyqt6.qtquick,
+ python3-dbus.mainloop.pyqt6,
+ qml6-module-qtquick-controls, qml6-module-qtquick-layouts,
+ qml6-module-qtquick-templates, qml6-module-qtquick-window,
  bluez (>= 5.72), bluez-obexd
 Recommends: ofono, wl-clipboard
 Description: iPhone messages, calls, and contacts over Bluetooth
- Daemon, CLI, and GTK4 app bridging a paired iPhone via MAP, PBAP,
- ANCS, and HFP. No Mac relay, no cloud service.
+ Daemon, CLI, and Qt app bridging a paired iPhone via the standard
+ Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
+ service, no subscription.
+ .
+ Ships the systemd user unit, desktop entry, and the sudoers rules
+ (group iphonebridge) for the two privileged operations: setting the
+ adapter Class-of-Device and the ANCS BLE-bearer edit.
 ```
 
 `debian/rules` (executable):
@@ -211,7 +223,7 @@ sudo apt install ./iphonebridge_*_all.deb
 ```
 
 Dependencies (`bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`,
-GTK/Adwaita) install automatically. `ofono` and `wl-clipboard` come in as Recommends unless apt is configured to skip those.
+PyQt6 and the QtQuick QML modules) install automatically. `ofono` and `wl-clipboard` come in as Recommends unless apt is configured to skip those.
 
 Two `apt` notices are normal when installing from a local file: 
 - "Note, selecting 'iphonebridge' instead of *path*" is `apt` resolving the file to the
@@ -360,9 +372,28 @@ sudo apt install ./iphonebridge_<version>_all.deb
 systemctl --user restart iphonebridge
 ```
 
+**Rebuilding the same version needs `--reinstall`.** During development
+`debian/changelog` usually does not get a new entry between builds, so the
+freshly built `.deb` carries the version that is already installed. apt
+compares versions, sees no upgrade, and does nothing — silently, with a
+zero exit status. The result is a build that never reaches the system and
+a daemon that keeps running the old code:
+
+```bash
+sudo apt install --reinstall ./iphonebridge_<version>_all.deb
+systemctl --user restart iphonebridge
+```
+
 The restart is required and is not optional politeness: dpkg cannot
 restart per-user services, so the running daemon keeps executing the old
 code until you restart it. Reopen the app too if it is running.
+
+Confirm the running daemon is the one you just built, rather than assuming
+the install landed:
+
+```bash
+journalctl --user -u iphonebridge -n 20 | grep "sink ready"
+```
 
 No `daemon-reload` is needed: dpkg rewrites the unit file and systemd
 would otherwise keep its cached copy, so `postinst` reloads each

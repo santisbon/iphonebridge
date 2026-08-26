@@ -3,10 +3,16 @@
 Body format: title = display sender (contact name or phone number),
              body  = SMS text (truncated at ~280 chars to avoid huge popups).
 
-Persistence model — notifications stay visible until ONE of:
+Persistence model — a message popup goes away when ONE of:
+  • It expires after config.NOTIFY_EXPIRE_MS               → nothing else happens
   • The user dismisses the popup (clicks/swipes)        → we mark-read on iPhone
   • The iPhone marks the message read (user opens it)  → we auto-close popup
-That way an unread message is never "missed" on the desktop side.
+
+Only dismissal means "I have seen this", so only dismissal is propagated.
+An expired popup leaves the message unread on the iPhone, which is the
+honest reading of a notification that timed out unattended. Set
+IPHONEBRIDGE_NOTIFY_EXPIRE_MS=0 to go back to popups that sit there until
+dealt with.
 
 Read-state sync:
   Linux dismiss → MAP Message1.Properties.Set(Read=true)  → iPhone marks read
@@ -22,6 +28,7 @@ import logging
 import dbus
 import dbus.exceptions
 
+from iphonebridge import config
 from iphonebridge.ancs.events import AncsEvent
 from iphonebridge.bus import session_bus
 from iphonebridge.events import SmsEvent
@@ -39,7 +46,8 @@ _BODY_LIMIT = 280
 #
 # We mark-read only on dismissed-by-user. Reason 3 = we're already closing
 # because the iPhone marked it read (so we'd be in a write-self-write loop).
-# Reason 1 = expired, but with timeout=0 this shouldn't happen for us.
+# Reason 1 = expired, which is the normal end of a message popup now and
+# deliberately does not mark anything read.
 _REASON_DISMISSED = 2
 
 
@@ -74,8 +82,10 @@ class LibnotifySink:
         self._action_match = self._notif.connect_to_signal(
             "ActionInvoked", self._on_action,
         )
-        log.info(
-            "libnotify sink ready (persistent + bidirectional read-sync)")
+        log.info("libnotify sink ready (expire after %s, bidirectional "
+                 "read-sync)",
+                 f"{config.NOTIFY_EXPIRE_MS}ms" if config.NOTIFY_EXPIRE_MS
+                 else "never")
 
     def handle(self, event: SmsEvent) -> None:
         # Don't pop a desktop notification for a message we ourselves sent.
@@ -86,10 +96,10 @@ class LibnotifySink:
         if len(body) > _BODY_LIMIT:
             body = body[:_BODY_LIMIT - 1] + "…"
         try:
-            # expire_timeout=0 → notification stays visible indefinitely.
-            # We close it ourselves when the iPhone marks the message read,
-            # or rely on the user to dismiss it manually (which we then
-            # propagate back as mark-read).
+            # Expires on its own after NOTIFY_EXPIRE_MS. We still close it
+            # early when the iPhone marks the message read, and a manual
+            # dismissal still propagates back as mark-read; an expiry does
+            # not, since nobody looked at it.
             nid = int(self._notif.Notify(
                 _APP_NAME,
                 dbus.UInt32(0),
@@ -98,7 +108,7 @@ class LibnotifySink:
                 body,
                 dbus.Array([], signature="s"),
                 dbus.Dictionary({"urgency": dbus.Byte(1)}, signature="sv"),
-                dbus.Int32(0),  # 0 = never expire
+                dbus.Int32(config.NOTIFY_EXPIRE_MS),
             ))
         except dbus.exceptions.DBusException as e:
             log.error("libnotify Notify failed: %s", e.get_dbus_name())
@@ -128,9 +138,9 @@ class LibnotifySink:
         if len(body) > _BODY_LIMIT:
             body = body[:_BODY_LIMIT - 1] + "…"
         try:
-            # ANCS notifications also persistent (timeout=0). User dismisses
-            # or we close on demand. No mark-read sync for ANCS (the iPhone
-            # doesn't expose a write-back path for app notification state).
+            # Same expiry as a message popup. No mark-read sync for ANCS:
+            # the iPhone exposes no write-back path for app notification
+            # state, so there is nothing a dismissal could propagate.
             self._notif.Notify(
                 _APP_NAME,
                 dbus.UInt32(0),
@@ -139,7 +149,7 @@ class LibnotifySink:
                 body,
                 dbus.Array([], signature="s"),
                 dbus.Dictionary({"urgency": dbus.Byte(1)}, signature="sv"),
-                dbus.Int32(0),
+                dbus.Int32(config.NOTIFY_EXPIRE_MS),
             )
         except dbus.exceptions.DBusException as e:
             log.error("libnotify Notify (ANCS) failed: %s", e.get_dbus_name())

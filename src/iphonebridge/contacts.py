@@ -14,13 +14,15 @@ import time
 import unicodedata
 from contextlib import closing
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import dbus
 
 from iphonebridge import config
-from iphonebridge.bus import obex
 from iphonebridge.events import normalize_phone
-from iphonebridge.obex.sessions import SessionManager
+
+if TYPE_CHECKING:  # importing it for real would pull in the GLib bus
+    from iphonebridge.obex.sessions import SessionManager
 
 log = logging.getLogger(__name__)
 
@@ -138,6 +140,11 @@ def pull_phonebook(sessions: SessionManager, *, max_contacts: int = 65535) -> in
 
     Replaces the local cache atomically (transaction).
     """
+    # Imported here, not at module scope: ContactsResolver is pure
+    # sqlite, and importing iphonebridge.bus installs the GLib
+    # main loop as dbus-python's default. A front end on another
+    # loop must be able to resolve contact names without that.
+    from iphonebridge.bus import obex
     pbap = obex(sessions.pbap_path, "org.bluez.obex.PhonebookAccess1")
     log.info("PBAP Select(int, pb)")
     pbap.Select("int", "pb")

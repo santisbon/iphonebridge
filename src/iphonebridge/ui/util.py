@@ -1,7 +1,11 @@
 """Small shared helpers for the UI pages."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
+from html import escape
+
+log = logging.getLogger(__name__)
 
 
 def _parse(value: str | None) -> datetime | None:
@@ -65,7 +69,6 @@ def daystamp(value: str | None) -> str:
     Messages prints the day in bold with the time beside it, and switches
     to relative wording for the last two days.
     """
-    from gi.repository import GLib
     dt = _parse(value)
     if dt is None:
         return ""
@@ -78,8 +81,11 @@ def daystamp(value: str | None) -> str:
         day = _fmt(dt, "%A")
     else:
         day = _fmt(dt, "%b %-d")
-    return (f"<b>{GLib.markup_escape_text(day)}</b>  "
-            f"{GLib.markup_escape_text(_fmt(dt, '%H:%M'))}")
+    # html.escape rather than GLib's: the &amp;/&lt;/&gt; entities it
+    # produces are valid in both Pango markup and Qt's StyledText, so the
+    # same string serves either front end and this stays free of gi.
+    return (f"<b>{escape(day, quote=False)}</b>  "
+            f"{escape(_fmt(dt, '%H:%M'), quote=False)}")
 
 
 def relative_stamp(value: str | None) -> str:
@@ -140,51 +146,36 @@ def resolve_recipient(contacts, raw: str) -> str | None:
     return matches[0][1]
 
 
-def pin_popover_height(listbox, scroll, cap: int = 320) -> None:
-    """Size a suggestion popover to its content on every rebuild.
+def contact_suggestions(contacts, text: str, *,
+                        limit: int = 10) -> list[tuple[str, str]]:
+    """Contacts to offer while a recipient is being typed.
 
-    GTK popovers grow with content but don't renegotiate smaller when it
-    shrinks, so a narrowed match list leaves dead space. Pinning the
-    ScrolledWindow's min and max content height to the list's measured
-    natural height (capped) forces the popover to follow in both
-    directions; past the cap it scrolls.
+    Two characters minimum, and nothing at all once a digit appears: a
+    number being entered is not a name being searched for, and offering
+    names over a half-typed number is noise. One row per name, so a
+    contact with several numbers cannot crowd everyone else out of a
+    short list, and capped so the list stays a glance rather than a
+    scroll.
+
+    Returns (name, number) pairs, with the number ready to send —
+    `find_by_name` preserves an explicit country code and never invents
+    one.
     """
-    from gi.repository import Gtk
-    _, nat, _, _ = listbox.measure(Gtk.Orientation.VERTICAL, -1)
-    h = min(nat, cap)
-    scroll.set_min_content_height(h)
-    scroll.set_max_content_height(h)
-    # The vertical scrollbar imposes its own minimum height (~58px) on
-    # the scrolled window even when unused, leaving blank space under a
-    # short list — only enable it when the content actually overflows.
-    scroll.set_policy(Gtk.PolicyType.NEVER,
-                      Gtk.PolicyType.AUTOMATIC if nat > cap
-                      else Gtk.PolicyType.NEVER)
-    # A mapped popover never applies a shrink on its own (a fresh map
-    # does, which is why programmatic set_text — delete+insert, closing
-    # and reopening the popover per step — masked this). present() asks
-    # the popover to renegotiate its surface size in place.
-    popover = scroll.get_ancestor(Gtk.Popover)
-    if popover is not None and popover.get_visible():
-        popover.present()
-
-
-_PREFERRED_FONTS = ("SF Pro Text", "SF Pro Display", "Inter", "Adwaita Sans",
-                    "Cantarell")
-
-
-def has_preferred_font() -> bool:
-    """True when one of the Apple-adjacent UI faces is installed.
-
-    style.css only applies its font stack behind the `ib-font` class,
-    gated on this: setting font-family unconditionally would swap the
-    desktop's chosen UI font for fontconfig's generic sans on machines
-    that have none of these installed.
-    """
-    from gi.repository import PangoCairo
+    text = (text or "").strip()
+    if len(text) < 2 or any(ch.isdigit() for ch in text):
+        return []
     try:
-        families = PangoCairo.FontMap.get_default().list_families()
+        matches = contacts.find_by_name(text)
     except Exception:
-        return False
-    installed = {f.get_name() for f in families}
-    return any(name in installed for name in _PREFERRED_FONTS)
+        log.exception("suggestion lookup failed for %d chars", len(text))
+        return []
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for name, phone in matches:
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append((name, phone))
+        if len(out) >= limit:
+            break
+    return out

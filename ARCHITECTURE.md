@@ -5,7 +5,7 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
 
 ### Feature details
 
-- **Incoming messages** appear as **persistent notifications** — they stay until you dismiss them on the desktop *or* read the message on your iPhone. **Read-state syncs both ways.**
+- **Incoming messages** appear as desktop notifications that clear themselves after ten seconds. Dismissing one instead means "I read this", and marks the message read on the iPhone; letting it expire means nobody looked, so it stays unread. Reading it on the iPhone closes the popup here. **Read-state syncs both ways.** Set `IPHONEBRIDGE_NOTIFY_EXPIRE_MS=0` in `~/.config/iphonebridge/local.env` for popups that sit there until dealt with.
 - **Verification codes** — when a text carries a one-time / 2FA code, iphonebridge detects it and copies it to your clipboard automatically; press <kbd>Ctrl</kbd>+<kbd>V</kbd> to paste. Detection needs both a verification keyword and a 4–8 digit number, so ordinary texts don't trigger it.
 - **Incoming calls** raise a notification with **Answer / Decline** buttons that act on the call directly.
 - **Sent messages** — replies you send from the desktop are recorded into conversation history, so a thread shows both sides.
@@ -28,14 +28,15 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
         ┌────────────┼────────────┐
         ▼            ▼            ▼
   notifications   JSONL log   D-Bus service
-  + clipboard     (history)   (CLI · GTK app)
+  + clipboard     (history)   (CLI · Qt app)
 ```
 
 - **MAP** (Message Access Profile) — read SMS/iMessage, get real-time push of new ones, and send.
 - **PBAP** (Phone Book Access Profile) — pull the iPhone's contacts so messages show names, not numbers.
 - **ANCS** (Apple Notification Center Service) — every app's notifications, over a BLE GATT link.
 - **HFP** (Hands-Free Profile) — take and place calls; oFono speaks the HFP protocol, PipeWire's oFono backend carries the call audio to the laptop's mic/speakers.
-- One daemon, pluggable **sinks** (desktop popups, verification-code clipboard copy, append-only JSONL log), and a **D-Bus service** so the CLI and the GTK app can send messages, control calls, and subscribe to a live event feed.
+- One daemon, pluggable **sinks** (desktop popups, verification-code clipboard copy, append-only JSONL log), and a **D-Bus service** so the CLI and the Qt app can send messages, control calls, and subscribe to a live event feed.
+- The daemon and the desktop app are **separate processes running different main loops**: the daemon runs GLib's, the app runs Qt's. dbus-python delivers signals only under a running loop and takes one integration per process, so the app binds dbus-python to Qt (`ui/qtbus.py`) and must never import `iphonebridge.bus`, which binds it to GLib. D-Bus is the seam between them, which is why the toolkit could be swapped without touching the daemon.
 
 Design rationale and the empirical Bluetooth findings that shaped it are in [`spike/RESULTS.md`](spike/RESULTS.md).
 
