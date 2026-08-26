@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.10.0] — 2026-08-25
+
+The desktop app is rebuilt on Qt 6 / QML. The daemon is untouched, so
+messages, contacts and calls work exactly as before — what changes is the
+app you read them in, and the packages it needs.
+
+Upgrading swaps `gir1.2-gtk-4.0` and `gir1.2-adw-1` for `python3-pyqt6`,
+`python3-dbus.mainloop.pyqt6` and the QtQuick QML runtime modules. apt
+pulls the new ones in; the old ones are left behind and can be removed if
+nothing else on the system wants them.
+
+### Changed
+- **The desktop app is Qt 6 / QML.** The GTK message view would not follow
+  new messages, and would not scroll down until nudged upwards first. Seven
+  attempts failed: every measurement reachable from Python — adjustment
+  value, extent, row bounds, a settle re-check — reported the view correctly
+  parked at the bottom with the newest row inside the viewport, while the
+  screen showed otherwise. That is a rendering fault below the level any of
+  those measurements can see. A QML ListView is built for exactly this shape
+  of view, and the port was gated on proving that before any of the app was
+  rewritten.
+- **Message and app notifications clear themselves after ten seconds.** They
+  used to stay until dismissed, deliberately: dismissing one is what tells
+  the iPhone you read the message. That coupling survives, because the
+  notification spec distinguishes the two — expiry closes with reason 1,
+  dismissal with reason 2, and only reason 2 is propagated. A popup nobody
+  attended to therefore leaves the message unread on the phone, which is the
+  honest reading of it. Set `IPHONEBRIDGE_NOTIFY_EXPIRE_MS=0` in
+  `~/.config/iphonebridge/local.env` for the old behaviour. Incoming-call
+  popups still never expire; they close when the call is answered or ends.
+- **Conversations are grouped by address, not by what they are labelled.**
+  A contact label is not proof of identity — two people can share one — so a
+  label now only merges two threads when doing so would not put two
+  different numbers together, and a label seen against a second number stops
+  merging anything at all. The invariant, checked inside the merge itself, is
+  that a thread never holds two different numbers, because a thread holding
+  two people's numbers means a reply can leave for the wrong person.
+
+### Added
+- **Hang up all**, on the Calls tab. The daemon has exposed `HangupAll`
+  since calls landed and nothing in the UI reached it; per-call buttons only
+  exist while a call does, so there was no sign the app could end one.
+
+### Fixed
+- **Texting your own number produced two conversations.** The outgoing copy
+  carried the digits the composer had, labelled from your own contact card;
+  the copy that came back carried E.164 and was labelled "My Number".
+  Neither the label nor the exact digits matched across the pair. Exactly one
+  country code is now folded, and only where the string proves it — an
+  explicit leading `+1` on eleven digits, which can only be a country code
+  because NANP national numbers are ten. Nothing looser: `+52 1 628 555 0138`
+  ends in the same ten digits as the NANP number `628 555 0138`, and a bare
+  leading `1` also begins an eleven-digit Chinese mobile.
+- A reply now goes to whoever the conversation most recently corresponded
+  with, rather than to whatever spelling the thread happened to be created
+  with.
+
+### Known
+- **The app is unstyled.** 0.9.x had an Apple-styled GTK front end; this one
+  uses QtQuick Controls' stock look. It follows your desktop's light/dark
+  setting, but the iOS palette, bubble shaping and spacing rhythm have not
+  been reapplied yet. That is the next piece of work.
+- **The app is no longer single-instance.** It takes no D-Bus name, so
+  running `iphonebridge-ui` twice gives two windows instead of raising the
+  first.
+
 ## [0.9.1] — 2026-08-25
 
 Three message-loss and message-leak fixes. 0.9.0 silently drops repeated

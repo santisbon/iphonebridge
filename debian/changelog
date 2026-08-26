@@ -1,3 +1,12 @@
+iphonebridge (0.10.0) unstable; urgency=medium
+
+  * The desktop app is rebuilt on Qt 6 / QML, replacing GTK4/libadwaita.
+    Dependencies change accordingly. Message and app notifications now
+    clear themselves after ten seconds. A conversation with your own
+    number no longer splits in two. See CHANGELOG.md.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 25 Aug 2026 22:31:25 -0500
+
 iphonebridge (0.9.1) unstable; urgency=medium
 
   * Fixes repeated confirmation codes being silently dropped, duplicated

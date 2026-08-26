@@ -72,7 +72,7 @@ These are Apple's Bluetooth-stack limits, not bugs:
 | **Bluetooth adapter** | Intel chipset (for ANCS) | Intel AX-series · BE200 (MAP/PBAP/HFP work; ANCS doesn't — see Troubleshooting) |
 | **Python** | 3.10+ | 3.12, 3.14 |
 | **iPhone** | iOS 16.5+ | iPhone 16 Pro Max, iOS 26.5 · iPhone 17 Pro, iOS 26.6.1 |
-| **System packages** | `bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`, `python3-pyqt6` + its QtQuick modules (+ `ofono` for calls, `wl-clipboard` for code auto-copy) | — |
+| **System packages** | `bluez`, `bluez-obexd`, `python3-dbus`, `python3-gi`, `python3-pyqt6` + its QtQuick modules, `qt6-wayland` (+ `ofono` for calls, `wl-clipboard` for code auto-copy, `qt6-gtk-platformtheme` to match a GNOME desktop) | — |
 
 > ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 

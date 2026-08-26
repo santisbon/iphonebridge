@@ -96,8 +96,9 @@ Depends: ${python3:Depends}, ${misc:Depends},
  python3-dbus.mainloop.pyqt6,
  qml6-module-qtquick-controls, qml6-module-qtquick-layouts,
  qml6-module-qtquick-templates, qml6-module-qtquick-window,
+ qt6-wayland,
  bluez (>= 5.72), bluez-obexd
-Recommends: ofono, wl-clipboard
+Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme
 Description: iPhone messages, calls, and contacts over Bluetooth
  Daemon, CLI, and Qt app bridging a paired iPhone via the standard
  Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
@@ -107,6 +108,16 @@ Description: iPhone messages, calls, and contacts over Bluetooth
  (group iphonebridge) for the two privileged operations: setting the
  adapter Class-of-Device and the ANCS BLE-bearer edit.
 ```
+
+Two of those are about the desktop the app lands on rather than the app
+itself. `qt6-wayland` ships Qt's Wayland platform plugin, and nothing in
+the PyQt6 dependency chain pulls it in — on this machine it arrived via
+`plasma-workspace`, so a KDE box has it by accident. Without it Qt falls
+back to XWayland, which runs but is blurry under fractional scaling.
+`qt6-gtk-platformtheme` is a Recommends because it only matters on a GTK
+desktop, where it is what makes Qt pick up GNOME's fonts, colours and
+dark-mode preference; it is also what initialises GTK inside the process
+and produces the accessibility-bus warning documented in the README.
 
 `debian/rules` (executable):
 
