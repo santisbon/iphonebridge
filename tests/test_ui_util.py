@@ -1,11 +1,14 @@
-"""Tests for iphonebridge.ui.util — timestamp ordering and formatting.
+"""Tests for the UI's toolkit-free layer — timestamp ordering and
+formatting, conversation grouping, contact suggestions, and the QML
+context contract.
 
-These import the UI helper module but not GTK: util.py keeps its gi
-imports inside the functions that need them, so this runs without a
-display.
+None of this imports Qt, so it runs without a display and without PyQt6
+installed, which is what CI has.
 """
 from __future__ import annotations
 
+import pathlib
+import re
 from typing import ClassVar
 
 from iphonebridge.ui.util import event_ts, same_group, ts_key
@@ -379,3 +382,54 @@ class TestContactSuggestions:
                 raise RuntimeError("database is locked")
 
         assert contact_suggestions(Broken(), "dana") == []
+
+
+class TestQmlContext:
+    """Every name the QML reaches for must actually be published to it.
+
+    A missing one does not crash: the view simply has no model and the
+    bindings read null. The Calls tab shipped permanently empty that way,
+    because the screenshot renderer published `calls` and the app did not,
+    so every harness passed while the app showed nothing.
+    """
+
+    @staticmethod
+    def _qml() -> str:
+        import iphonebridge.ui as ui
+        return (pathlib.Path(ui.__file__).parent / "qml" / "Main.qml").read_text()
+
+    @classmethod
+    def _context_refs(cls) -> set[str]:
+        """Names a `model:` binding reaches for from outside the file.
+
+        Anything declared with `id:` in the QML resolves locally, and
+        `modelData`/`parent` are QML's own, so none of those need
+        publishing.
+        """
+        qml = cls._qml()
+        used = set(re.findall(r"\bmodel:\s*([a-z][A-Za-z0-9_]*)", qml))
+        local = set(re.findall(r"\bid:\s*([a-z][A-Za-z0-9_]*)", qml))
+        return used - local - {"modelData", "parent"}
+
+    def test_every_model_reference_is_published(self):
+        from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
+        unpublished = self._context_refs() - set(QML_CONTEXT_NAMES)
+        assert not unpublished, f"QML uses unpublished context names: {unpublished}"
+
+    def test_it_catches_a_missing_model(self):
+        """The guard itself, against the list main() actually had."""
+        before_the_fix = {"bridge", "threads", "messages", "notifications"}
+        assert self._context_refs() - before_the_fix == {"calls"}
+
+    def test_every_published_name_is_used(self):
+        """The other direction, so the list does not rot."""
+        from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
+        qml = self._qml()
+        unused = [n for n in QML_CONTEXT_NAMES if n not in qml]
+        assert not unused, f"published but never referenced: {unused}"
+
+    def test_calls_is_among_them(self):
+        """The specific regression: the Calls tab needs its model."""
+        from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
+        assert "calls" in QML_CONTEXT_NAMES
+        assert "model: calls" in self._qml()

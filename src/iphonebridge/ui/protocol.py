@@ -25,6 +25,13 @@ MESSAGES_IFACE = "me.santisbon.iphonebridge.Messages1"
 CALLS_IFACE = "me.santisbon.iphonebridge.Calls1"
 EVENTS_IFACE = "me.santisbon.iphonebridge.Events1"
 
+#: Everything the QML expects to find in its root context. Kept here, and
+#: away from any toolkit import, so a test can check the QML against it
+#: without a display: a name missing from the context is not a crash, it
+#: is a view with no model and a binding that quietly reads null, which is
+#: how the Calls tab once shipped permanently empty.
+QML_CONTEXT_NAMES = ("bridge", "threads", "messages", "notifications", "calls")
+
 #: Events1 signal name -> the name a front end re-emits it under.
 EVENT_SIGNALS = (
     ("MessageReceived", "message-received"),

@@ -20,6 +20,7 @@ from PyQt6.QtQml import QQmlApplicationEngine
 
 from iphonebridge.contacts import ContactsResolver
 from iphonebridge.ui.model import ThreadStore
+from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
 from iphonebridge.ui.qtmodels import (
     CallListModel,
     MessageListModel,
@@ -419,6 +420,29 @@ class Bridge(QObject):
         self._client.profile_status(show, lambda _e: show({}))
 
 
+def install_context(engine, bridge) -> None:
+    """Publish the bridge and its models under the names the QML uses.
+
+    One place, because anything that loads Main.qml needs exactly the same
+    set and they drift otherwise — the screenshot renderer had `calls` and
+    the app did not, so the Calls tab was empty in the app and populated
+    in every test.
+    """
+    ctx = engine.rootContext()
+    models = {
+        "bridge": bridge,
+        "threads": bridge.threads,
+        "messages": bridge.messages,
+        "notifications": bridge.notifications,
+        "calls": bridge.calls,
+    }
+    missing = set(QML_CONTEXT_NAMES) - set(models)
+    if missing:
+        raise RuntimeError(f"no object for QML context name(s): {sorted(missing)}")
+    for name, obj in models.items():
+        ctx.setContextProperty(name, obj)
+
+
 def _diag_to_file() -> None:
     """Mirror the DIAG lines to a file as well as stderr, so a session can
     be read back after the fact instead of scrolled away."""
@@ -465,11 +489,7 @@ def main() -> int:
     bridge = Bridge(client)
 
     engine = QQmlApplicationEngine()
-    ctx = engine.rootContext()
-    ctx.setContextProperty("bridge", bridge)
-    ctx.setContextProperty("threads", bridge.threads)
-    ctx.setContextProperty("messages", bridge.messages)
-    ctx.setContextProperty("notifications", bridge.notifications)
+    install_context(engine, bridge)
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     if not engine.rootObjects():
         log.error("QML failed to load from %s", QML_DIR)

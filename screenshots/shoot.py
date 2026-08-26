@@ -163,19 +163,16 @@ def _render(out: pathlib.Path) -> int:
         def dial(self, number, on_ok, on_err) -> None:
             pass
 
-    from iphonebridge.ui.qtapp import QML_DIR, Bridge
+    from iphonebridge.ui.qtapp import QML_DIR, Bridge, install_context
 
     app = QGuiApplication([])
     client = StubClient()
     bridge = Bridge(client)
 
     engine = QQmlApplicationEngine()
-    ctx = engine.rootContext()
-    ctx.setContextProperty("bridge", bridge)
-    ctx.setContextProperty("threads", bridge.threads)
-    ctx.setContextProperty("messages", bridge.messages)
-    ctx.setContextProperty("notifications", bridge.notifications)
-    ctx.setContextProperty("calls", bridge.calls)
+    # The same helper the app uses, so a model added to one is never
+    # missing from the other.
+    install_context(engine, bridge)
     engine.load(QUrl.fromLocalFile(str(QML_DIR / "Main.qml")))
     roots = engine.rootObjects()
     if not roots:
