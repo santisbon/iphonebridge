@@ -55,7 +55,7 @@ Removing a stale pairing, calls over HFP, per-app notifications, building
 the package and uninstalling are all in
 [`packaging/deb/README.md`](packaging/deb/README.md).
 
-## Why
+## Why this exists
 
 Windows and macOS users can get their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent:
 
@@ -117,7 +117,7 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
 
 ## Requirements
 
-> ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably (AX-series, and BE200 confirmed with this project). **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
+> ⚠️ **Adapter chipset matters for app notifications (ANCS).** Per-app notifications need a real BLE bond with the iPhone. **Intel adapters do this reliably** (AX-series, and BE200 confirmed with this project). **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
 ## CLI
 
@@ -134,6 +134,69 @@ systemctl --user {start,stop,restart} iphonebridge
 ```
 
 ## Troubleshooting
+
+<details>
+<summary><b>App notifications (ANCS) not working</b></summary>
+
+ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, forget the iPhone on both ends and re-pair. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone shows an **allow-notifications prompt** (on current iOS this replaces the third Bluetooth toggle) — answer Allow there.
+
+Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
+
+`iphonebridge doctor` runs both checks below for you. Manually: if ANCS is
+granted and an LE connection has happened, the iPhone's device object
+carries the ANCS GATT service UUID:
+
+```bash
+busctl --system tree org.bluez | grep dev_          # find your device path
+busctl --system get-property org.bluez <path> org.bluez.Device1 UUIDs \
+  | grep -i 7905f431-b5ce-4e99-a40f-4b1e122d00d0
+```
+
+No match means either no LE connection has occurred yet (run
+`iphonebridge ancs-enable`) or the bond never got LE keys — the latter is
+adapter-dependent. An Intel adapter is necessary; `spike/RESULTS.md` §5 has the BR/EDR-vs-BLE mutex this runs into. Confirm the chipset with:
+
+```bash
+lsusb | grep -i bluetooth        # Intel Corp. = supported; Realtek / dongles = not
+```
+
+**Check the advertisement registered at all.** The grant also needs the
+ANCS-soliciting BLE advertisement the daemon registers at startup
+(`spike/RESULTS.md` §1; `doctor` probes this path directly). A failure is
+logged plainly:
+
+```bash
+journalctl --user -u iphonebridge | grep -i advert
+# good: BLE advert registered: /me/santisbon/iphonebridge/ancs_advert
+# bad:  RegisterAdvertisement failed: org.bluez.Error.Failed: ...
+```
+
+If it failed, first clear stale advertising slots — bluetoothd can hold
+instances from earlier sessions that are never released:
+
+```bash
+# ActiveInstances = in use, SupportedInstances = still free
+busctl --system get-property org.bluez /org/bluez/hci0 \
+  org.bluez.LEAdvertisingManager1 ActiveInstances SupportedInstances
+sudo systemctl restart bluetooth     # releases stale instances
+systemctl --user restart iphonebridge
+```
+
+> Known cause on BlueZ 5.85: every `RegisterAdvertisement` fails with
+> `org.bluez.Error.Failed` regardless of adapter, payload or free slots.
+> bluetoothd 5.85 sizes the `MGMT_OP_ADD_EXT_ADV_DATA` buffer with the
+> legacy `mgmt_cp_add_advertising` struct, so every data command carries
+> eight trailing slack bytes, and kernels that enforce exact mgmt payload
+> length reject it with `Invalid Parameters (0x0d)` before the controller
+> is ever consulted (visible in `btmon`; bluetoothd logs
+> `add_client_complete() Failed to add advertisement: Invalid Parameters`).
+> Fixed upstream in bluez commit `2a6968b40` ("advertising: Fix sending
+> extra bytes with MGMT_OP_ADD_EXT_ADV_DATA"); until your distro ships it,
+> a bluez rebuilt with that one-line patch restores ANCS —
+> [`packaging/bluez-adv-fix.md`](packaging/bluez-adv-fix.md) is the
+> walkthrough. The adapter is not at fault. MAP and PBAP are unaffected,
+> so messages and contacts keep working; only ANCS is lost.
+</details>
 
 <details>
 <summary><b>Messages stopped arriving</b></summary>
@@ -176,69 +239,6 @@ seconds for a large phonebook.
 daemon running it asks it over D-Bus, so the daemon's existing MAP and PBAP
 sessions are reused rather than torn down; with the daemon stopped it opens its
 own sessions and closes them again.
-</details>
-
-<details>
-<summary><b>ANCS notifications never arrive</b></summary>
-
-ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, forget the iPhone on both ends and re-pair. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone shows an **allow-notifications prompt** (on current iOS this replaces the third Bluetooth toggle) — answer Allow there.
-
-Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
-
-`iphonebridge doctor` runs both checks below for you. Manually: if ANCS is
-granted and an LE connection has happened, the iPhone's device object
-carries the ANCS GATT service UUID:
-
-```bash
-busctl --system tree org.bluez | grep dev_          # find your device path
-busctl --system get-property org.bluez <path> org.bluez.Device1 UUIDs \
-  | grep -i 7905f431-b5ce-4e99-a40f-4b1e122d00d0
-```
-
-No match means either no LE connection has occurred yet (run
-`iphonebridge ancs-enable`) or the bond never got LE keys — the latter is
-adapter-dependent. An Intel adapter is necessary but not sufficient; `spike/RESULTS.md` §5 has the BR/EDR-vs-BLE mutex this runs into. Confirm the chipset with:
-
-```bash
-lsusb | grep -i bluetooth        # Intel Corp. = supported; Realtek / dongles = not
-```
-
-**Check the advertisement registered at all.** The grant also needs the
-ANCS-soliciting BLE advertisement the daemon registers at startup
-(`spike/RESULTS.md` §1; `doctor` probes this path directly). A failure is
-logged plainly:
-
-```bash
-journalctl --user -u iphonebridge | grep -i advert
-# good: BLE advert registered: /me/santisbon/iphonebridge/ancs_advert
-# bad:  RegisterAdvertisement failed: org.bluez.Error.Failed: ...
-```
-
-If it failed, first clear stale advertising slots — bluetoothd can hold
-instances from earlier sessions that are never released:
-
-```bash
-# ActiveInstances = in use, SupportedInstances = still free
-busctl --system get-property org.bluez /org/bluez/hci0 \
-  org.bluez.LEAdvertisingManager1 ActiveInstances SupportedInstances
-sudo systemctl restart bluetooth     # releases stale instances
-systemctl --user restart iphonebridge
-```
-
-> Known cause on BlueZ 5.85: every `RegisterAdvertisement` fails with
-> `org.bluez.Error.Failed` regardless of adapter, payload or free slots.
-> bluetoothd 5.85 sizes the `MGMT_OP_ADD_EXT_ADV_DATA` buffer with the
-> legacy `mgmt_cp_add_advertising` struct, so every data command carries
-> eight trailing slack bytes, and kernels that enforce exact mgmt payload
-> length reject it with `Invalid Parameters (0x0d)` before the controller
-> is ever consulted (visible in `btmon`; bluetoothd logs
-> `add_client_complete() Failed to add advertisement: Invalid Parameters`).
-> Fixed upstream in bluez commit `2a6968b40` ("advertising: Fix sending
-> extra bytes with MGMT_OP_ADD_EXT_ADV_DATA"); until your distro ships it,
-> a bluez rebuilt with that one-line patch restores ANCS —
-> [`packaging/bluez-adv-fix.md`](packaging/bluez-adv-fix.md) is the
-> walkthrough. The adapter is not at fault. MAP and PBAP are unaffected,
-> so messages and contacts keep working; only ANCS is lost.
 </details>
 
 <details>
