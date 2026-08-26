@@ -14,9 +14,8 @@ systemd **user** service.
    ExecStart`, or `/proc/<pid>/cmdline`. A deb install runs
    `/usr/bin/iphonebridge`; editing `src/` does not affect it.
 2. **Rebuild.** `dpkg-buildpackage -us -uc -b`.
-3. **Run `lintian` on the result.** A clean build reports exactly two
-   warnings, both `no-manual-page`, one per entry point. Anything else is
-   new and worth reading rather than waving through.
+3. **Run `lintian` on the result.** A clean build reports nothing at
+   all. Any output is new and worth reading rather than waving through.
 4. **Prove the artifact carries the change.** `dpkg-deb -x` it to a temp
    directory and grep for the new symbol, then diff every installed `.py`
    and `.qml` against the worktree. `dpkg-deb -c | grep '\.qml'` is the

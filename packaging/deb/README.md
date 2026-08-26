@@ -180,7 +180,7 @@ sudo apt install debhelper dh-python pybuild-plugin-pyproject python3-all lintia
 
 ```bash
 dpkg-buildpackage -us -uc -b     # unsigned, binary-only
-lintian ../iphonebridge_*_all.deb   # two no-manual-page warnings expected
+lintian ../iphonebridge_*_all.deb   # a clean build prints nothing
 ```
 
 ## Cutting a release
@@ -204,7 +204,7 @@ git tag -a vX.Y.Z -m "vX.Y.Z — one-line summary"
 git push && git push origin vX.Y.Z
 
 dpkg-buildpackage -us -uc -b                          # builds ../iphonebridge_X.Y.Z_all.deb
-lintian ../iphonebridge_X.Y.Z_all.deb                 # two no-manual-page warnings expected
+lintian ../iphonebridge_X.Y.Z_all.deb                 # a clean build prints nothing
 
 gh release create vX.Y.Z -R santisbon/iphonebridge \
   --title "vX.Y.Z" --notes "..." ../iphonebridge_X.Y.Z_all.deb

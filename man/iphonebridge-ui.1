@@ -1,0 +1,20 @@
+.TH IPHONEBRIDGE-UI 1 "2026-08-26" "iphonebridge 0.11.0" "User Commands"
+.SH NAME
+iphonebridge-ui \- desktop app for iphonebridge
+.SH SYNOPSIS
+.B iphonebridge-ui
+.SH DESCRIPTION
+Graphical front end for
+.BR iphonebridge (1):
+conversations, the per\-app notification feed, calls, and service
+status. It is a separate process talking to the daemon over D\-Bus, so
+closing it leaves messages, notifications and calls still arriving. It
+is not single\-instance; a second invocation opens a second window.
+.SH ENVIRONMENT
+.TP
+.B IPHONEBRIDGE_UI_DIAG
+When set, logs which conversation is open and how arriving messages are
+filed, as redacted digests, to
+.IR ~/.local/state/iphonebridge/ui-diag.log .
+.SH SEE ALSO
+.BR iphonebridge (1)

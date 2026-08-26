@@ -1,0 +1,154 @@
+.TH IPHONEBRIDGE 1 "2026-08-26" "iphonebridge 0.11.0" "User Commands"
+.SH NAME
+iphonebridge \- iPhone messages, notifications, contacts and calls over Bluetooth
+.SH SYNOPSIS
+.B iphonebridge
+.I command
+.RI [ options ]
+.RI [ arguments ]
+.SH DESCRIPTION
+.B iphonebridge
+bridges a paired iPhone to the Linux desktop over the standard Bluetooth
+profiles MAP (messages), PBAP (contacts), ANCS (per\-app notifications)
+and HFP (calls) \- no Mac relay, no cloud service.
+.PP
+A background daemon (a systemd user service) holds the Bluetooth
+sessions and surfaces events as desktop notifications, an append\-only
+history, and a D\-Bus service. This command starts that daemon, checks
+its prerequisites, and talks to it. The graphical front end is
+.BR iphonebridge-ui (1).
+.SH COMMANDS
+.TP
+.B run
+Run the daemon in the foreground until Ctrl+C or SIGTERM. The systemd
+unit uses this; run it directly only for debugging.
+.TP
+.B doctor
+Check prerequisites: configuration, the adapter's Class of Device,
+obexd, the state directory, BLE advertising (a live register/release
+probe) and whether the iPhone's bond exposes ANCS. Exits non\-zero if a
+required check fails.
+.TP
+.B pair-setup
+First\-run wizard: pick a paired iPhone, write the local configuration,
+and walk through the iPhone\-side toggles. With
+.B \-\-no\-restart
+the daemon is not restarted at the end.
+.TP
+.B sms-list
+Show recent SMS/iMessage history.
+.RS
+.TP
+.BR \-n ", " \-\-limit " " \fIN\fR
+Maximum messages to show, most recent first.
+.TP
+.BR \-\-source " " iphone | local
+.B iphone
+(default) queries the phone live over MAP through the running daemon;
+.B local
+reads the daemon's own history file and works with the daemon stopped.
+.TP
+.BR \-\-folder " " \fIFOLDER\fR
+MAP folder for \-\-source=iphone, e.g. telecom/msg/INBOX (default) or
+telecom/msg/sent.
+.TP
+.BR \-\-from " " \fIWHO\fR
+Only messages from this contact name or number.
+.RE
+.TP
+.BI sms-send " RECIPIENT BODY"
+Send an SMS or iMessage through the running daemon.
+.I RECIPIENT
+is a phone number, a contact name, or a vanity number such as
+"1 (800) MYAPPLE". iOS routes the message as iMessage automatically
+when the recipient is iMessage\-capable.
+.TP
+.BI call " RECIPIENT"
+Place a phone call over HFP; same recipient forms as
+.BR sms-send .
+Requires
+.B hfp-enable
+setup. Call audio uses this computer's microphone and speakers.
+.TP
+.B calls
+List active calls.
+.TP
+.B hangup
+Hang up all active calls.
+.TP
+.B contacts-sync
+Re\-pull the phonebook (otherwise refreshed daily). With the daemon
+running the pull reuses its sessions; the iPhone allows only one OBEX
+session at a time.
+.TP
+.B ancs-enable
+Enable per\-app notifications. Steers the next connection to the iPhone
+over BLE by setting BlueZ's experimental PreferredBearer control, then
+reconnects; answer the allow\-notifications prompt that appears on the
+phone. Requires "Experimental = true" in /etc/bluetooth/main.conf and
+an adapter capable of a BLE bond with the iPhone (Intel chipsets are;
+Realtek and USB dongles are not).
+.TP
+.B hfp-enable
+Set up call support: writes the WirePlumber configuration that routes
+HFP through oFono, restarts WirePlumber, and prints the remaining
+root\-only steps.
+.TP
+.B version
+Print the version and exit.
+.PP
+Most commands accept
+.BR \-v / \-\-verbose .
+.SH ENVIRONMENT
+Variables may also be set in the configuration file (see FILES), which
+the daemon, the CLI and the systemd unit all read. Explicit environment
+variables win.
+.TP
+.B IPHONEBRIDGE_MAC
+The iPhone's Bluetooth address. Required;
+.B pair-setup
+writes it.
+.TP
+.B IPHONEBRIDGE_ADAPTER
+Bluetooth adapter to use (default: hci0).
+.TP
+.B IPHONEBRIDGE_NOTIFY_EXPIRE_MS
+How long message and app notifications stay on screen, in
+milliseconds (default: 10000). 0 means never expire; dismissing a
+message popup marks that message read on the iPhone, letting it expire
+does not.
+.SH FILES
+.TP
+.I ~/.config/iphonebridge/local.env
+Configuration, one VAR=value per line.
+.TP
+.I ~/.local/state/iphonebridge/events.jsonl
+Message and notification history (append\-only).
+.TP
+.I ~/.local/state/iphonebridge/contacts.sqlite
+Contacts cache pulled over PBAP.
+.TP
+.I ~/.local/state/iphonebridge/deleted-keys.txt
+Tombstones for locally deleted messages.
+.PP
+Paths honour XDG_CONFIG_HOME and XDG_STATE_HOME.
+.SH EXAMPLES
+.nf
+iphonebridge sms-list -n 20
+iphonebridge sms-list --from Maddie --source local
+iphonebridge sms-send Maddie "running late"
+iphonebridge call "1 (800) MYAPPLE"
+journalctl --user -u iphonebridge -f
+.fi
+.SH SEE ALSO
+.BR iphonebridge-ui (1),
+.BR bluetoothctl (1),
+.BR journalctl (1)
+.PP
+Full documentation and troubleshooting:
+.UR https://github.com/santisbon/iphonebridge
+.UE
+.SH BUGS
+Report at
+.UR https://github.com/santisbon/iphonebridge/issues
+.UE
