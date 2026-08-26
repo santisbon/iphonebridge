@@ -80,7 +80,7 @@ class Bridge(QObject):
         self._pending_open: str | None = None
         self._compose_error = ""
         self._link_ok = False
-        self._status_rows: list = []
+        self._status_groups: list = []
         self._status = "Checking…"
         self._calls = "No active calls"
 
@@ -149,15 +149,20 @@ class Bridge(QObject):
         return len(self._client.read_events())
 
     @pyqtProperty(list, notify=changed)
-    def statusRows(self) -> list:
-        """The Setup tab as data, so the view can mark each line.
+    def statusGroups(self) -> list:
+        """The Status tab as grouped data.
 
-        States are "ok", "warn" or "idle", mirroring what the GTK page
-        showed as tinted icons. Checklist marks are inferred from what is
-        actually working rather than read from the phone: a live session
-        proves its toggle is on.
+        Shaped for a settings-style list: each row is a label and a short
+        value, and anything that needs explaining is a footer under its
+        group rather than a sentence trailing every row. `state` is "ok",
+        "warn" or "idle", and only "warn" is coloured — a screen where
+        everything is marked is a screen nobody reads.
+
+        The iPhone toggles are inferred from what is actually working
+        rather than read from the phone: a live session proves its toggle
+        is on, and nothing else can.
         """
-        return self._status_rows
+        return self._status_groups
 
     def _refresh_threads(self) -> None:
         """Re-read the conversation list, then tell QML.
@@ -383,45 +388,55 @@ class Bridge(QObject):
         self._set_link(healthy)
 
         def show(profiles: dict) -> None:
-            rows = [
-                {"label": "iphonebridge daemon",
-                 "detail": "Running" if reachable else
-                           "Not reachable — start it with "
-                           "systemctl --user start iphonebridge",
-                 "state": "ok" if reachable else "warn"},
-                {"label": "Messages — MAP session",
-                 "detail": "Connected" if healthy else
-                           "Unavailable — check the iPhone toggles below",
-                 "state": "ok" if healthy else "warn"},
-            ]
-            for label, base, code in (
-                ("Show Message Notifications", "SMS & iMessage (MAP)", "map"),
-                ("Sync Contacts", "contact-name resolution (PBAP)", "pbap"),
-                ("Show System Notifications",
-                 "per-app notifications (ANCS)", "ancs"),
-            ):
+            service = {
+                "title": "Service",
+                "rows": [
+                    {"label": "Background service",
+                     "value": "Running" if reachable else "Not reachable",
+                     "state": "ok" if reachable else "warn"},
+                    {"label": "Messages",
+                     "value": "Connected" if healthy else "Unavailable",
+                     "state": "ok" if healthy else "warn"},
+                ],
+                "footer": "" if reachable else "Start it with",
+                "code": "" if reachable else
+                        "systemctl --user start iphonebridge",
+            }
+
+            toggles = {"title": "On your iPhone", "rows": [], "code": "",
+                       "footer": "Settings → Bluetooth → tap ⓘ next to this "
+                                 "computer. Each one is marked from what is "
+                                 "working now, not read from the phone."}
+            for label, code in (("Show Message Notifications", "map"),
+                                ("Sync Contacts", "pbap"),
+                                ("Show System Notifications", "ancs")):
                 if not reachable or code not in profiles:
-                    rows.append({"label": label, "state": "idle",
-                                 "detail": base + " — state unknown "
-                                                  "(daemon unreachable)"})
+                    value, state = "Unknown", "idle"
                 elif profiles[code]:
-                    rows.append({"label": label, "state": "ok",
-                                 "detail": base + " — working now"})
+                    value, state = "Working", "ok"
                 else:
-                    rows.append({"label": label, "state": "warn",
-                                 "detail": base + " — not detected; "
-                                                  "check this toggle"})
+                    value, state = "Not detected", "warn"
+                toggles["rows"].append({"label": label, "value": value,
+                                        "state": state})
+
             try:
                 cached = ContactsResolver().count()
             except Exception:
                 log.exception("contact count failed")
                 cached = 0
-            rows.append({"label": "Contacts cached", "detail": str(cached),
-                         "state": "ok" if cached else "idle"})
-            rows.append({"label": "Events logged",
-                         "detail": str(len(self._client.read_events())),
-                         "state": "ok"})
-            self._status_rows = rows
+            stored = {
+                "title": "Stored on this computer",
+                "footer": "", "code": "",
+                "rows": [
+                    {"label": "Contacts", "value": f"{cached:,}",
+                     "state": "ok" if cached else "idle"},
+                    {"label": "Messages and notifications",
+                     "value": f"{len(self._client.read_events()):,}",
+                     "state": "ok"},
+                ],
+            }
+
+            self._status_groups = [service, toggles, stored]
             self._status = ""
             self.changed.emit()
         self._client.profile_status(show, lambda _e: show({}))

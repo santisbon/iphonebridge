@@ -46,9 +46,9 @@ QtObject {
     }
 
     readonly property string ui: pick(["Inter", "SF Pro Text", "Adwaita Sans"])
-    // The exception, and it earns itself: the Setup tab is a readout of
-    // daemon health and counts, which is the one place Apple would set in
-    // SF Mono.
+    // The exception, and it earns itself: a command you would actually
+    // type is the one thing on screen that is code, and it is the one
+    // thing set in a monospaced face.
     readonly property string mono: pick(["SF Mono", "Noto Sans Mono",
                                          "DejaVu Sans Mono"])
 

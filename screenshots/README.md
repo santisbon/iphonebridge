@@ -10,7 +10,7 @@ lists every shipped file by name, and pybuild only packages what is under
 | `messages-daemon-down.png` | Same, with the daemon off the bus |
 | `notifications.png` | ANCS notification feed |
 | `calls.png` | Dialer, and an active call with Answer / Hang up |
-| `setup.png` | Daemon health, the iPhone checklist, data counts |
+| `status.png` | Service health, the iPhone toggles, what is stored here |
 
 ## Why these are light
 

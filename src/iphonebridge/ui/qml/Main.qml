@@ -179,7 +179,7 @@ ApplicationWindow {
                 color: theme.fill
             }
             Repeater {
-                model: ["Messages", "Notifications", "Calls", "Setup"]
+                model: ["Messages", "Notifications", "Calls", "Status"]
                 TabButton {
                     id: tabBtn
                     text: modelData
@@ -1026,81 +1026,155 @@ ApplicationWindow {
             }
         }
 
-        // ---- Setup ---------------------------------------------------
+        // ---- Status --------------------------------------------------
+        // A settings-style grouped list: cards of label-and-value rows on
+        // the grouped background, each group carrying its explanation as a
+        // footer rather than trailing a sentence off every row. Only a
+        // problem is coloured — a screen where everything is marked is a
+        // screen nobody reads.
         Rectangle {
-            color: theme.canvas
-            ColumnLayout {
+            color: theme.sidebar
+
+            Flickable {
                 anchors.fill: parent
-                anchors.margins: 14
-                spacing: 10
-                ListView {
+                contentHeight: statusColumn.implicitHeight + 2 * theme.gutter
+                clip: true
+                ScrollBar.vertical: ScrollBar {}
+
+                ColumnLayout {
+                    id: statusColumn
                     objectName: "statusList"
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: 10
-                    model: bridge.statusRows
-                    header: Label {
-                        width: ListView.view ? ListView.view.width : 0
-                        bottomPadding: 12
-                        wrapMode: Text.Wrap
-                        color: theme.label2
-                        font.family: theme.ui
-                        font.pointSize: theme.bodySize
-                        text: "On the iPhone: Settings → Bluetooth → tap ⓘ next "
-                              + "to this computer, then enable each toggle."
-                    }
-                    delegate: RowLayout {
-                        width: ListView.view ? ListView.view.width : 0
-                        spacing: 10
-                        Rectangle {
-                            width: 9; height: 9; radius: 4.5
-                            Layout.alignment: Qt.AlignTop
-                            Layout.topMargin: 4
-                            color: modelData.state === "ok" ? theme.up
-                                 : modelData.state === "warn" ? theme.destructive
-                                 : theme.label2
-                        }
+                    // Constrained and centred rather than edge to edge:
+                    // a full-width row leaves its label and its value at
+                    // opposite ends of the window with nothing between.
+                    width: Math.min(parent.width - 2 * theme.gutter,
+                                    Math.round(620 * theme.k))
+                    x: (parent.width - width) / 2
+                    y: theme.gutter
+                    spacing: Math.round(18 * theme.k)
+
+                    Repeater {
+                        model: bridge.statusGroups
                         ColumnLayout {
-                            spacing: 1
+                            required property var modelData
                             Layout.fillWidth: true
+                            spacing: Math.round(6 * theme.k)
+
                             Label {
-                                text: modelData.label
-                                color: theme.label
-                                font.family: theme.ui
-                                font.pointSize: theme.rowSize
-                                font.weight: Font.DemiBold
-                            }
-                            Label {
-                                text: modelData.detail
+                                Layout.leftMargin: theme.gutter
+                                text: modelData.title.toUpperCase()
                                 color: theme.label2
-                                // The one place a monospaced face earns
-                                // itself: this tab is a readout.
+                                font.family: theme.ui
+                                font.pointSize: theme.captionSize
+                                font.letterSpacing: 0.7
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: rows.implicitHeight
+                                radius: Math.round(10 * theme.k)
+                                color: theme.canvas
+
+                                ColumnLayout {
+                                    id: rows
+                                    width: parent.width
+                                    spacing: 0
+                                    Repeater {
+                                        id: rowRepeater
+                                        model: modelData.rows
+                                        ColumnLayout {
+                                            required property var modelData
+                                            required property int index
+                                            Layout.fillWidth: true
+                                            spacing: 0
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Layout.leftMargin: theme.gutter
+                                                Layout.rightMargin: theme.gutter
+                                                Layout.preferredHeight: Math.round(38 * theme.k)
+                                                Label {
+                                                    text: modelData.label
+                                                    color: theme.label
+                                                    font.family: theme.ui
+                                                    font.pointSize: theme.rowSize
+                                                    elide: Text.ElideRight
+                                                    Layout.fillWidth: true
+                                                }
+                                                Label {
+                                                    text: modelData.value
+                                                    color: modelData.state === "warn"
+                                                           ? theme.destructive
+                                                           : theme.label2
+                                                    font.family: theme.ui
+                                                    font.pointSize: theme.rowSize
+                                                }
+                                            }
+                                            // Inset hairline, stopping
+                                            // short of the card edge the
+                                            // way a grouped list does, and
+                                            // never under the last row.
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.leftMargin: theme.gutter
+                                                Layout.preferredHeight: 1
+                                                visible: index < rowRepeater.count - 1
+                                                color: theme.separator
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: theme.gutter
+                                Layout.rightMargin: theme.gutter
+                                visible: modelData.footer.length > 0
+                                text: modelData.footer
+                                color: theme.label2
+                                font.family: theme.ui
+                                font.pointSize: theme.captionSize
+                                wrapMode: Text.Wrap
+                            }
+                            // A command is the one thing on this screen
+                            // you would actually type, so it is the one
+                            // thing set in a monospaced face.
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: theme.gutter
+                                Layout.rightMargin: theme.gutter
+                                visible: modelData.code.length > 0
+                                text: modelData.code
+                                color: theme.label2
                                 font.family: theme.mono
                                 font.pointSize: theme.captionSize
                                 wrapMode: Text.Wrap
-                                Layout.fillWidth: true
                             }
                         }
                     }
-                }
-                Button {
-                    id: recheckBtn
-                    implicitHeight: 30
-                    implicitWidth: 96
-                    onClicked: bridge.recheck()
-                    background: Rectangle {
-                        radius: 8
-                        color: recheckBtn.down ? theme.selected : theme.fill
-                    }
-                    contentItem: Text {
-                        text: "Recheck"
-                        color: theme.accent
-                        font.family: theme.ui
-                        font.pointSize: theme.rowSize
-                        font.weight: Font.DemiBold
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+
+                    // Its own card, centred and in the accent colour —
+                    // where a settings list puts an action.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Math.round(4 * theme.k)
+                        implicitHeight: Math.round(40 * theme.k)
+                        radius: Math.round(10 * theme.k)
+                        color: recheckArea.pressed ? theme.selected : theme.canvas
+                        Label {
+                            anchors.centerIn: parent
+                            text: "Check again"
+                            color: theme.accent
+                            font.family: theme.ui
+                            font.pointSize: theme.rowSize
+                        }
+                        MouseArea {
+                            id: recheckArea
+                            objectName: "recheck"
+                            anchors.fill: parent
+                            onClicked: bridge.recheck()
+                        }
                     }
                 }
             }

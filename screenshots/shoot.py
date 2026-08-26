@@ -46,7 +46,7 @@ VIEWS = [
     (0, "messages-daemon-down", "offline"),
     (1, "notifications", None),
     (2, "calls", None),
-    (3, "setup", None),
+    (3, "status", None),
 ]
 
 SETTLE_MS = 400   # after switching tab or scheme, before grabbing
