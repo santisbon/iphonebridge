@@ -18,6 +18,44 @@
 
 ---
 
+## 🚀 Install
+
+Any apt-based distro: Debian, Ubuntu and its flavours, Pop!_OS, Mint.
+
+```bash
+curl -LO "$(curl -s https://api.github.com/repos/santisbon/iphonebridge/releases/latest \
+  | grep -o 'https://[^"]*_all\.deb')"
+
+sudo apt install ./iphonebridge_*_all.deb
+sudo adduser $USER iphonebridge
+sudo reboot   # a re-login is not enough: user services keep old groups
+```
+
+Pair the iPhone from your desktop's Bluetooth settings. Keep it on its
+**Settings → Bluetooth** screen while you do — iOS is only discoverable
+while that screen is open — and confirm the 6-digit code on both sides.
+
+```bash
+iphonebridge pair-setup
+```
+
+On the iPhone, tap ⓘ next to this computer, give it a moment to show the
+toggles, and enable **Show Message Notifications** and **Sync Contacts**.
+Then open the app:
+
+```bash
+iphonebridge-ui # or through your app launcher
+```
+
+The app is a separate process from the daemon, so closing it leaves
+messages, notifications and calls still arriving.
+
+Removing a stale pairing, calls over HFP, per-app notifications, building
+the package and uninstalling are all in
+[`packaging/deb/README.md`](packaging/deb/README.md).
+
+## ❔ Why
+
 Windows and macOS users can get their iPhone's texts and notifications on the desktop. There has never been a Linux equivalent:
 
 - KDE Connect needs the Android/iOS *app* and on iOS it's missing notifications, SMS, and needs the iPhone app on-screen to maintain the connection. 
@@ -26,7 +64,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 - Beeper no longer supports iMessage.
 - Microsoft's Phone Link is Windows-only.
 
-**This is that missing piece.** It's a small Python daemon that talks to a paired iPhone over standard Bluetooth profiles (MAP, PBAP, ANCS, HFP) and surfaces everything as native desktop notifications, a CLI, and a desktop app.
+**This is that missing piece.** [How it works](ARCHITECTURE.md).
 
 ## ✨ What it does
 
@@ -76,41 +114,10 @@ These are Apple's Bluetooth-stack limits, not bugs:
 
 > ⚠️ **Adapter chipset matters for ANCS.** Per-app notifications need a real BLE bond with the iPhone. Intel adapters do this reliably. **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
-## 🚀 Installation
-
-Use this on any apt-based distro, e.g. **Debian, Ubuntu and its flavors (Kubuntu, Xubuntu…), Pop!_OS, Linux Mint**. Sandboxed formats (Snap/Flatpak) can't ship the daemon's privileged pieces without defeating the purpose of sandboxing.
-
-One package installs everything: daemon, CLI, desktop app, launcher
-entry, systemd unit, and the privileged sudoers rules.
-
-Download the `.deb` from the
-[latest release](https://github.com/santisbon/iphonebridge/releases/latest),
-then:
-
-```bash
-sudo apt install ./iphonebridge_*_all.deb
-sudo adduser $USER iphonebridge # then reboot
-```
-
-Reboot is needed because a re-login is not enough — user services keep their old groups
-while any session survives the logout. Then pair your iPhone and run
-`iphonebridge pair-setup`.
-
-The full walkthrough, including the iPhone-side toggles, optional calls
-and per-app notifications, building the package yourself, and a
-teardown script, is in
-[`packaging/deb/README.md`](packaging/deb/README.md).
-
-## 🖥️ Desktop app
-
-A separate process from the daemon, talking to it over D-Bus, so you can open and close it freely while the daemon keeps running in the background.
-```bash
-iphonebridge-ui
-```
-
 ## 💻 CLI
 
-The `iphonebridge` command does everything the app does, plus setup and diagnostics:
+The `iphonebridge` command covers sending, history, calls, setup and
+diagnostics. Deleting from local history is the app's job:
 
 | Command | What it does |
 |---|---|
@@ -137,7 +144,7 @@ iphonebridge sms-list --source local
 iphonebridge sms-send "+15551234567" "on my way"
 iphonebridge sms-send Maddie "running late"
 
-# Calls — needs HFP set up (install step 8)
+# Calls — needs HFP set up (packaging/deb/README.md, step 7)
 iphonebridge call Maddie
 iphonebridge calls
 iphonebridge hangup
@@ -163,8 +170,8 @@ is `MAP/PBAP sessions vanished`. To skip the wait:
 ```bash
 systemctl --user restart iphonebridge
 ```
-What the daemon can't do for you is re-enable the step 6 toggles, which a
-forget + re-pair switches off. Do that on the iPhone or it reopens straight back
+What the daemon can't do for you is re-enable the iPhone-side toggles,
+which a forget + re-pair switches off. Do that on the iPhone or it reopens straight back
 into `Forbidden`.
 </details>
 
@@ -262,9 +269,9 @@ sudo apt install python3-pyqt6 python3-pyqt6.qtqml python3-pyqt6.qtquick \
                  qml6-module-qtquick-templates qml6-module-qtquick-window
 ```
 
-Note that the app is **not** single-instance: unlike the GTK version it
-takes no D-Bus name, so running `iphonebridge-ui` twice gives you two
-windows rather than raising the first one.
+Note that the app is **not** single-instance: it takes no D-Bus name, so
+running `iphonebridge-ui` twice gives you two windows rather than raising
+the first one.
 </details>
 
 <details>
@@ -297,7 +304,7 @@ Install a clipboard tool: `sudo apt install wl-clipboard` (Wayland) or `xclip` (
 <details>
 <summary><b><code>iphonebridge: command not found</code></b></summary>
 
-The CLI lives in the venv. Either `source .venv/bin/activate`, or create the `~/.local/bin` symlink from install step 2.
+Only applies to a from-source install: the CLI lives in the venv. Either `source .venv/bin/activate`, or create the `~/.local/bin` symlink from [`DEVELOPMENT.md`](DEVELOPMENT.md). A packaged install puts it in `/usr/bin`.
 </details>
 
 <details>
