@@ -270,7 +270,7 @@ confirmation codes, so upgrading is worth doing promptly.
 
 ### Removed
 - The abandoned Flatpak draft; the packaging plan is a single .deb
-  shipping daemon, CLI, and UI (see BACKLOG).
+  shipping daemon, CLI, and UI.
 
 
 ## [0.5.0] — 2026-08-23
@@ -413,7 +413,7 @@ against iPhone 16 Pro Max running iOS 26.5.
 
 - **Outgoing iMessage via MAP `PushMessage` ALSO works.** Tested via `spike/07_map_send.py`: constructed a minimal bMessage (originator + BENV-wrapped recipient VCARD), called `MessageAccess1.PushMessage(sourcefile, "telecom/msg/outbox", {})` — transfer completed, the iPhone's outgoing bubble appeared **blue** (iMessage) in the recipient thread.
 
-Together: **iphonebridge is potentially the first free open-source Linux iMessage bridge that does not require a Mac relay**. README, BACKLOG, RESULTS.md updated accordingly.
+Together: **iphonebridge is potentially the first free open-source Linux iMessage bridge that does not require a Mac relay**. README and RESULTS.md updated accordingly.
 
 ### Phase 1 — MVP daemon (2026-05-19)
 - Working iphonebridge daemon: BLE-advert / CoD startup dance, long-lived MAP + PBAP sessions, MAP MNS push subscription, bMessage parsing, SQLite contacts cache, libnotify + JSONL sinks.

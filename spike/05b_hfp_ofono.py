@@ -13,8 +13,8 @@ go/no-go questions for the HFP Hands-Free feature:
      source/sink appear?
   4. Hangup()       → does the call end cleanly?
   5. Outgoing Dial  → does the iPhone actually place the call, reliably?
-     (This is the BACKLOG.md "Won't do" assumption — 'HFP HF can't reliably
-     ATD on iPhone' — under empirical test. It has never actually been tried.)
+     (This is the "Won't do" assumption of the day — 'HFP HF can't
+     reliably ATD on iPhone' — under empirical test. It had never been tried.)
   6. Which codec gets negotiated (CVSD narrowband vs mSBC wideband)?
 
 The verdict picks the integration backend (see plan Phase A0 decision gate):
@@ -396,7 +396,7 @@ print(f"[VERDICT 4] {'PASS' if hangup_ok else 'FAIL'} — call "
 # ---- 5. outgoing dial reliability ---------------------------------------
 
 hr("Check 5 — outgoing Dial reliability")
-print("This tests the BACKLOG 'Won't do' assumption: 'HFP HF can't reliably\n"
+print("This tests the 'Won't do' assumption: 'HFP HF can't reliably\n"
       "ATD on iPhone'. We dial a real number a few times and measure.",
       flush=True)
 number = ask("Enter a phone number to test-dial (e.g. another phone you hold):")
@@ -454,6 +454,6 @@ print("""
   • Checks 1–4 PASS         → integrate HFP via the oFono D-Bus client (plan A1).
   • oFono never saw a modem → fall back to roll-our-own AT-over-RFCOMM (A1-alt).
   • Outgoing 0/N            → ship incoming-only; mark 'place a call' best-effort
-                              and correct the stale BACKLOG.md 'Won't do' note.
+                              and correct the stale 'Won't do' note.
 """, flush=True)
 sys.exit(0)

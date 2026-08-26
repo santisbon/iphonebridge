@@ -48,8 +48,8 @@ Key findings:
   `RegisterProfile … UUID already registered` and never gets a working modem.
   Fix: bring WirePlumber up on the oFono backend first, *then* (re)start oFono.
 
-- **The stale "Won't do" assumption was wrong.** `BACKLOG.md` had claimed
-  "HFP HF role can't reliably ATD on iPhone." Outgoing dial succeeded 3/3 —
+- **The stale "Won't do" assumption was wrong.** The backlog at the time
+  had claimed "HFP HF role can't reliably ATD on iPhone." Outgoing dial succeeded 3/3 —
   placing calls from the laptop works fine. The note has been corrected.
 
 This upgrades the row-05 verdict from ⚠ PARTIAL to ✅ PASS and unblocked the

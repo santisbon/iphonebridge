@@ -464,7 +464,7 @@ oFono stays installed, since other software may use it. Remove it with
 
 - Pure-Python package, `Architecture: all`; one deb serves amd64/arm64.
 - No auto-updates from a bare deb on GitHub Releases. A PPA or a small
-  apt repo is the eventual fix (see BACKLOG).
+  apt repo is the eventual fix.
 - The daemon is a *user* service, globally enabled at install by
   debhelper's generated maintainer scripts: it starts at every user's
   login. Per-user opt-out is `systemctl --user mask iphonebridge`.
