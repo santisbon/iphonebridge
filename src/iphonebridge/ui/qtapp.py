@@ -57,6 +57,12 @@ class Bridge(QObject):
     toast = pyqtSignal(str)
     #: An incoming call wants the window in front, on the Calls tab.
     callArrived = pyqtSignal()
+    #: A composed message has been confirmed and its conversation is now
+    #: open. The view leaves compose mode on this and nothing else: it used
+    #: to infer the moment from `changed` plus a non-empty thread name, and
+    #: both were already true of the conversation you were last in, so that
+    #: one flashed up for a frame before the new one replaced it.
+    composeFinished = pyqtSignal()
 
     def __init__(self, client) -> None:
         super().__init__()
@@ -336,6 +342,7 @@ class Bridge(QObject):
         if outgoing and self._pending_open is not None:
             self._pending_open = None
             self.openThread(key)
+            self.composeFinished.emit()
         self._diag("settled")
 
     def _on_seen(self, ev: dict) -> None:

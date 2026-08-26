@@ -7,6 +7,8 @@ without a display.
 """
 from __future__ import annotations
 
+from typing import ClassVar
+
 from PyQt6.QtCore import (
     QAbstractListModel,
     QModelIndex,
@@ -183,16 +185,35 @@ class CallListModel(QAbstractListModel):
             return None
         return self._rows[index.row()].get(self.ROLES.get(role, b"").decode())
 
+    #: oFono's call states, said the way a person would. The raw pair was
+    #: shown before and read as "incoming · incoming", which is the
+    #: telephony stack's vocabulary rather than anything the reader has a
+    #: use for.
+    _PHRASE: ClassVar[dict[str, str]] = {
+        "incoming": "Incoming call",
+        "waiting": "Call waiting",
+        "dialing": "Calling…",
+        "alerting": "Ringing…",
+        "active": "Connected",
+        "held": "On hold",
+        "disconnected": "Ended",
+    }
+
     def show(self, calls: list) -> None:
         self.beginResetModel()
         self._rows = []
         for c in calls or []:
-            state = str(c.get("state") or "?")
+            state = str(c.get("state") or "")
             direction = str(c.get("direction") or "")
+            detail = self._PHRASE.get(state)
+            if detail is None:
+                # An unmapped state is still worth showing plainly rather
+                # than hiding: it means oFono grew a state we do not know.
+                detail = " ".join(p for p in (direction, state) if p) or "Call"
             self._rows.append({
                 "peer": (c.get("contact_name") or c.get("peer_phone")
                          or "(unknown)"),
-                "detail": " · ".join(p for p in (direction, state) if p),
+                "detail": detail,
                 "path": str(c.get("call_path") or ""),
                 "canAnswer": state in ("incoming", "waiting"),
             })
