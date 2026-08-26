@@ -40,10 +40,18 @@ ColumnLayout {
             color: row.valueColor
             font.family: theme.ui
             font.pointSize: theme.rowSize
+            // Rounded up, not left to the layout. A label's implicit
+            // width is fractional, so its position and its width round
+            // separately and the right edge lands a pixel or two off —
+            // which reads as a column of values that will not line up.
+            Layout.preferredWidth: Math.ceil(implicitWidth)
         }
         RowLayout {
             id: extra
             spacing: Math.round(8 * theme.k)
+            // Hidden when empty, so a row with nothing after its value
+            // does not still pay the spacing in front of it.
+            visible: children.length > 0
         }
     }
 
