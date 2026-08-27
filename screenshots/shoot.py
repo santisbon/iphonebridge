@@ -176,8 +176,8 @@ def _render(out: pathlib.Path) -> int:
             # Mid-song, so the capture shows the bar and both time labels.
             on_ok({
                 "available": self.available, "status": "playing",
-                "title": "Golden Hour", "artist": "The Marigolds",
-                "album": "Field Notes", "duration_ms": 214_000,
+                "title": "How do you do?", "artist": "Music 🗲 Band",
+                "album": "Fellow Kids", "duration_ms": 214_000,
                 "position_ms": 83_000, "shuffle": "off",
                 "repeat": "alltracks", "volume": 55,
                 "art_path": _seed_cover(),
