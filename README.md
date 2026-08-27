@@ -1,8 +1,8 @@
 <div align="center">
 
-# 📱🐧 iPhone Bridge
+# 📱🐧 iPhone Bridge for Linux
 
-**iPhone messages, notifications, contacts and calls on Linux**  
+**iPhone messages, notifications, contacts, calls, and music on Linux**  
 *No Mac relay. No cloud service. No subscription. Just Bluetooth*.
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
@@ -11,7 +11,8 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
 
-![](screenshots/messages.png)
+<img src="screenshots/messages.png" width="700" />&nbsp;&nbsp;&nbsp;
+<img src="screenshots/music.png" width="700" />
 
 </div>
 
