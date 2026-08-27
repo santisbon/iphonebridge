@@ -11,7 +11,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
 
-<img src="screenshots/messages.png" width="700" />&nbsp;&nbsp;&nbsp;
+<img src="screenshots/messages.png" width="700" />
 <img src="screenshots/music.png" width="700" />
 
 </div>
