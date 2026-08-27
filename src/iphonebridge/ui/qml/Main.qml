@@ -1122,9 +1122,9 @@ ApplicationWindow {
             }
 
             Flickable {
+                id: musicFlick
                 anchors.fill: parent
-                contentHeight: musicColumn.implicitHeight
-                               + 2 * appTheme.gutter
+                contentHeight: musicColumn.height + 2 * appTheme.gutter
                 clip: true
                 ScrollBar.vertical: ScrollBar {}
 
@@ -1134,6 +1134,12 @@ ApplicationWindow {
                                     Math.round(620 * appTheme.k))
                     x: (parent.width - width) / 2
                     y: appTheme.gutter
+                    // Explicit height so the art tile below can absorb
+                    // the leftover space and the page fills the window;
+                    // overflowing content still scrolls via implicit.
+                    height: Math.max(implicitHeight,
+                                     musicFlick.height
+                                     - 2 * appTheme.gutter)
                     spacing: Math.round(18 * appTheme.k)
 
                     Group {
@@ -1149,6 +1155,37 @@ ApplicationWindow {
                         }
                     }
 
+                    // Cover art, fetched by the daemon over the AVRCP
+                    // image service. Its wrapper takes all the height
+                    // the fixed groups below leave over, so the cover
+                    // scales to fill the window rather than pooling
+                    // empty space under the controls.
+                    Item {
+                        visible: bridge.mediaAvailable
+                                 && bridge.mediaArtPath.length > 0
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: Math.round(160 * appTheme.k)
+                        Rectangle {
+                            objectName: "mediaArt"
+                            anchors.centerIn: parent
+                            width: Math.min(parent.height, parent.width,
+                                            Math.round(420 * appTheme.k))
+                            height: width
+                            radius: Math.round(8 * appTheme.k)
+                            color: appTheme.fill
+                            clip: true
+                            Image {
+                                anchors.fill: parent
+                                source: bridge.mediaArtPath.length > 0
+                                        ? "file://" + bridge.mediaArtPath
+                                        : ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                            }
+                        }
+                    }
+
                     Group {
                         visible: bridge.mediaAvailable
                         theme: appTheme
@@ -1158,33 +1195,6 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.margins: appTheme.gutter
                             spacing: Math.round(4 * appTheme.k)
-
-                            // Cover art, fetched by the daemon over the
-                            // AVRCP image service. Absent until a track
-                            // reports a handle and the transfer lands.
-                            Rectangle {
-                                objectName: "mediaArt"
-                                visible: bridge.mediaArtPath.length > 0
-                                Layout.alignment: Qt.AlignHCenter
-                                Layout.bottomMargin:
-                                    Math.round(6 * appTheme.k)
-                                Layout.preferredWidth:
-                                    Math.round(140 * appTheme.k)
-                                Layout.preferredHeight:
-                                    Layout.preferredWidth
-                                radius: Math.round(8 * appTheme.k)
-                                color: appTheme.fill
-                                clip: true
-                                Image {
-                                    anchors.fill: parent
-                                    source: bridge.mediaArtPath.length > 0
-                                            ? "file://"
-                                              + bridge.mediaArtPath
-                                            : ""
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                }
-                            }
 
                             Label {
                                 objectName: "mediaTitle"
