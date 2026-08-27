@@ -13,6 +13,10 @@ ColumnLayout {
     property string value: ""
     property color valueColor: theme.label2
     property bool last: false
+    // Signal bars after the value; -1 (the default) draws none. An
+    // invisible item costs a layout nothing, so barless rows keep
+    // their exact geometry.
+    property int bars: -1
 
     default property alias trailing: extra.children
 
@@ -45,6 +49,12 @@ ColumnLayout {
             // separately and the right edge lands a pixel or two off —
             // which reads as a column of values that will not line up.
             Layout.preferredWidth: Math.ceil(implicitWidth)
+        }
+        SignalBars {
+            objectName: "signalBars"
+            visible: row.bars >= 0
+            theme: row.theme
+            bars: row.bars
         }
         RowLayout {
             id: extra

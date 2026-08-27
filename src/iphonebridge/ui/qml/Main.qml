@@ -1502,6 +1502,10 @@ ApplicationWindow {
                                     valueColor: modelData.state === "warn"
                                                 ? appTheme.destructive : appTheme.label2
                                     last: index === statusRows.count - 1
+                                    // Only rows that carry a bar count
+                                    // draw one (cellular).
+                                    bars: modelData.bars !== undefined
+                                          ? modelData.bars : -1
                                 }
                             }
                         }

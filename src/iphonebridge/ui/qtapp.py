@@ -530,16 +530,16 @@ class Bridge(QObject):
             rows.append({"label": "Cellular", "value": "Unknown",
                          "state": "idle"})
         else:
-            # The phone reports signal in five steps; oFono scales that
-            # to a percentage. Undo it — "80%" is really 4 of 5 bars,
-            # and showing the percentage implies precision nobody has.
-            bars = f"{round(sig / 20)}/5" if sig >= 0 else ""
-            value = " · ".join(b for b in (net, bars) if b)
-            if reg == "roaming":
-                value += " (roaming)"
+            # oFono scales the HFP signal indicator to a percentage;
+            # undo it. iOS sends its displayed bar count (0-4) even
+            # though the indicator allows 0-5, so cap at four bars and
+            # the row reads exactly like the phone's own status bar.
+            value = net + (" (roaming)" if reg == "roaming" else "")
             rows.append({"label": "Cellular", "value": value,
                          "state": "ok" if reg in ("registered", "roaming")
-                         else "warn"})
+                         else "warn",
+                         "bars": min(round(sig / 20), 4) if sig >= 0
+                         else -1})
         model = marketing_name(str(p.get("model", "")))
         rows.append({"label": "Model", "value": model or "Unknown",
                      "state": "ok" if model else "idle"})
