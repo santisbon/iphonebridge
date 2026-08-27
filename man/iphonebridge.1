@@ -117,6 +117,10 @@ How long message and app notifications stay on screen, in
 milliseconds (default: 10000). 0 means never expire; dismissing a
 message popup marks that message read on the iPhone, letting it expire
 does not.
+.TP
+.B IPHONEBRIDGE_LOW_BATTERY
+iPhone battery percentage at or below which a desktop notification is
+raised, once per dip (default: 20). 0 disables it.
 .SH FILES
 .TP
 .I ~/.config/iphonebridge/local.env

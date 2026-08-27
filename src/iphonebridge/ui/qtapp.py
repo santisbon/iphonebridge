@@ -19,6 +19,7 @@ from PyQt6.QtCore import QObject, QUrl, pyqtProperty, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
 
+from iphonebridge import config
 from iphonebridge.contacts import ContactsResolver
 from iphonebridge.media.events import (
     extrapolate_position,
@@ -97,6 +98,7 @@ class Bridge(QObject):
         # than trusting any clock that could skew between processes.
         self._media: dict = {}
         self._media_at = time.monotonic()
+        self._phone: dict = {}
 
         for ev in client.read_events(kinds={"sms_received", "sms_sent"}):
             self.store.ingest(ev, outgoing=(ev.get("kind") == "sms_sent"))
@@ -113,6 +115,7 @@ class Bridge(QObject):
         client.availabilityChanged.connect(lambda _ok: self._refresh_status())
         client.callStateChanged.connect(self._on_call_state)
         client.mediaStateChanged.connect(self._on_media_state)
+        client.phoneStatusChanged.connect(self._on_phone_status)
         self.recheck()
 
     # ---- properties QML binds to ---------------------------------------
@@ -452,6 +455,7 @@ class Bridge(QObject):
         self._refresh_status()
         self._client.list_calls(self._on_calls)
         self._client.get_media_state(self._on_media_state)
+        self._client.get_phone_status(self._on_phone_status)
 
     # ---- daemon events --------------------------------------------------
 
@@ -501,6 +505,45 @@ class Bridge(QObject):
         self._media_at = time.monotonic()
         self.changed.emit()
 
+    def _on_phone_status(self, state) -> None:
+        self._phone = dict(state or {})
+        self._refresh_status()
+
+    def _phone_rows(self) -> list:
+        p = self._phone
+        rows = []
+        pct = int(p.get("battery_pct", -1))
+        if pct < 0:
+            rows.append({"label": "Battery", "value": "Unknown",
+                         "state": "idle"})
+        else:
+            low = config.LOW_BATTERY_PCT > 0 \
+                and pct <= config.LOW_BATTERY_PCT
+            prefix = "~" if p.get("battery_estimated") else ""
+            rows.append({"label": "Battery", "value": f"{prefix}{pct}%",
+                         "state": "warn" if low else "ok"})
+        sig = int(p.get("signal_pct", -1))
+        net = str(p.get("network", ""))
+        reg = str(p.get("reg", ""))
+        if sig < 0 and not net:
+            rows.append({"label": "Cellular", "value": "Unknown",
+                         "state": "idle"})
+        else:
+            # The phone reports signal in five steps; oFono scales that
+            # to a percentage. Undo it — "80%" is really 4 of 5 bars,
+            # and showing the percentage implies precision nobody has.
+            bars = f"{round(sig / 20)}/5" if sig >= 0 else ""
+            value = " · ".join(b for b in (net, bars) if b)
+            if reg == "roaming":
+                value += " (roaming)"
+            rows.append({"label": "Cellular", "value": value,
+                         "state": "ok" if reg in ("registered", "roaming")
+                         else "warn"})
+        model = str(p.get("model", ""))
+        rows.append({"label": "Model", "value": model or "Unknown",
+                     "state": "ok" if model else "idle"})
+        return rows
+
     def _on_ancs(self, ev: dict) -> None:
         if not ev.get("is_preexisting"):
             self.notifications.add(ev)
@@ -539,7 +582,7 @@ class Bridge(QObject):
                         "systemctl --user start iphonebridge",
             }
 
-            toggles = {"title": "On your iPhone", "rows": [], "code": "",
+            toggles = {"title": "On your phone", "rows": [], "code": "",
                        "footer": "Settings → Bluetooth → tap ⓘ next to this "
                                  "computer. Each one is marked from what is "
                                  "working now, not read from the phone."}
@@ -554,6 +597,11 @@ class Bridge(QObject):
                     value, state = "Not detected", "warn"
                 toggles["rows"].append({"label": label, "value": value,
                                         "state": state})
+
+            phone = {"title": "Phone", "code": "",
+                     "footer": "Read over Bluetooth. Battery and signal "
+                               "update live.",
+                     "rows": self._phone_rows()}
 
             try:
                 cached = ContactsResolver().count()
@@ -572,7 +620,7 @@ class Bridge(QObject):
                 ],
             }
 
-            self._status_groups = [service, toggles, stored]
+            self._status_groups = [service, toggles, phone, stored]
             self._status = ""
             self.changed.emit()
         self._client.profile_status(show, lambda _e: show({}))

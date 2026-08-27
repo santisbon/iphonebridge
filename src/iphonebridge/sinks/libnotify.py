@@ -157,6 +157,24 @@ class LibnotifySink:
             return
         self._ancs_notifs[event.seen_at.isoformat()] = int(nid)
 
+    def handle_battery_low(self, pct: int) -> None:
+        """One popup per dip below the threshold; the daemon's alarm
+        provides the hysteresis, this only draws."""
+        try:
+            self._notif.Notify(
+                _APP_NAME,
+                dbus.UInt32(0),
+                "battery-caution-symbolic",
+                "\U0001f4f1 iPhone battery low",
+                f"{pct}% remaining",
+                dbus.Array([], signature="s"),
+                dbus.Dictionary({"urgency": dbus.Byte(1)}, signature="sv"),
+                dbus.Int32(config.NOTIFY_EXPIRE_MS),
+            )
+        except dbus.exceptions.DBusException as e:
+            log.error("libnotify Notify (battery) failed: %s",
+                      e.get_dbus_name())
+
     def handle_ancs_dismissed(self, eid: str, _uid) -> None:
         """A notification was dismissed (from either end) — take its
         popup off the screen if it is still showing."""

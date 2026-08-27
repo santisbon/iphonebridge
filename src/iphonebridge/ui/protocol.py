@@ -40,6 +40,7 @@ EVENT_SIGNALS = (
     ("MessageSeen", "message-seen"),
     ("AncsNotification", "ancs-notification"),
     ("AncsDismissed", "ancs-dismissed"),
+    ("PhoneStatusChanged", "phone-status"),
 )
 
 

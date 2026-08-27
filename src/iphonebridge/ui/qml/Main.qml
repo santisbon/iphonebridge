@@ -5,7 +5,7 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: win
     width: 940; height: 720; visible: true
-    title: "iphonebridge"
+    title: "iPhone Bridge"
     color: appTheme.canvas
 
     // True while a new conversation is being addressed but not yet sent.

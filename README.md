@@ -2,7 +2,7 @@
 
 # 📱🐧 iPhone Bridge for Linux
 
-**iPhone messages, notifications, contacts, calls, and music on Linux**  
+**iPhone messages, notifications, calls, and music on Linux**  
 *No Mac relay. No cloud service. No subscription. Just Bluetooth*.
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
@@ -80,6 +80,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions | ✅ |
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
 | 🎵 **Control playback** — album art, play/pause, skip, volume, shuffle/repeat | AVRCP via BlueZ | ✅ |
+| 🔋 **Battery, cellular signal & carrier** on the Status tab, with a low-battery alert | GATT + HFP | ✅ |
 | 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |
@@ -273,6 +274,30 @@ sudo apt install python3-pyqt6 python3-pyqt6.qtqml python3-pyqt6.qtquick \
 Note that the app is **not** single-instance: it takes no D-Bus name, so
 running `iphonebridge-ui` twice gives you two windows rather than raising
 the first one.
+</details>
+
+<details>
+<summary><b><code>ModuleNotFoundError</code> when launching from the project venv (development workflow)</b></summary>
+
+Running `iphonebridge` or `iphonebridge-ui` with the repo's `.venv`
+active is a development workflow: an editable install resolves the code
+live from `src/`, so you're running the worktree, not the installed
+`.deb` (your app launcher and the daemon's systemd unit keep using the
+`.deb`).
+
+The catch is that the venv's launcher scripts in `.venv/bin/` are
+generated once, at install time. The *code* they import tracks the
+worktree, but the scripts themselves don't — so after the project
+reorganises its modules, an outdated install leaves a launcher importing
+a module that no longer exists, and the command dies with
+`ModuleNotFoundError`. Regenerate them by reinstalling into the venv:
+
+```bash
+.venv/bin/pip install -e . --no-deps
+```
+
+(`--no-deps` because Qt and D-Bus come from apt, not PyPI; the venv is
+created with `--system-site-packages` so it sees them.)
 </details>
 
 <details>

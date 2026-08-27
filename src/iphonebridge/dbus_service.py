@@ -11,6 +11,7 @@ Messages1:
       Send an SMS/iMessage from the iPhone via MAP PushMessage. iOS routes
       as iMessage automatically when the recipient is iMessage-capable.
   • ListRecent(string folder, uint32 limit) → string json
+  • GetPhoneStatus() → string json — battery, cellular, model
   • IsHealthy() → bool
 
 Calls1 (HFP, via oFono):
@@ -35,6 +36,7 @@ Events1 (live event feed for separate UIs):
   • MarkRead(as) -> u       — mark messages read here and on the phone
   • MessageSeen(dict)       [signal] — a message's read-state changed
   • AncsNotification(dict)  [signal] — a per-app ANCS notification
+  • PhoneStatusChanged(dict) [signal] — battery/cellular/identity change
 
 Designed to be simple/synchronous. PushMessage typically completes in
 <2s on iOS 26.5 over the existing daemon session.
@@ -61,6 +63,7 @@ from iphonebridge.media.events import MediaState
 from iphonebridge.obex.map_query import list_recent_messages
 from iphonebridge.obex.map_send import send_message
 from iphonebridge.obex.sessions import SessionManager
+from iphonebridge.phone import build_phone_status
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +103,7 @@ class MessagesService(dbus.service.Object):
         hfp: HfpManager | None = None,
         ancs=None,
         media: MediaManager | None = None,
+        phone=None,
         on_sent=None,
         on_refresh_contacts=None,
         on_delete_local=None,
@@ -111,6 +115,8 @@ class MessagesService(dbus.service.Object):
         self.hfp = hfp
         self.ancs = ancs
         self.media = media
+        # PhoneMonitor, duck-typed: only snapshot() is called.
+        self.phone = phone
         # on_dismiss_ancs(eid) -> "phone" | "local" — daemon hook that
         # removes a notification locally and, when its uid is still live,
         # performs the ANCS negative action on the iPhone.
@@ -193,6 +199,14 @@ class MessagesService(dbus.service.Object):
             "pbap": self.sessions.pbap_alive(),
             "ancs": bool(self.ancs is not None and self.ancs.active),
         })
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="s")
+    def GetPhoneStatus(self) -> str:
+        """Battery, cellular and identity as JSON. Never raises: fields
+        the phone doesn't offer read as -1 / empty string."""
+        if self.phone is None:
+            return json.dumps(build_phone_status())
+        return json.dumps(self.phone.snapshot(), ensure_ascii=False)
 
     @dbus.service.method(IFACE, in_signature="", out_signature="b")
     def IsHealthy(self) -> bool:
@@ -468,6 +482,18 @@ class MessagesService(dbus.service.Object):
             self.MediaStateChanged(_variant_dict(state))
         except Exception:
             log.exception("MediaStateChanged emit failed")
+
+    @dbus.service.signal(EVENTS_IFACE, signature="a{sv}")
+    def PhoneStatusChanged(self, props):
+        """Emitted when battery, cellular or identity changes. Payload is
+        the same flat dict GetPhoneStatus returns."""
+
+    def emit_phone_status(self, state: dict) -> None:
+        """Daemon-side helper — push a phone snapshot out as a signal."""
+        try:
+            self.PhoneStatusChanged(_variant_dict(state))
+        except Exception:
+            log.exception("PhoneStatusChanged emit failed")
 
     # ---- Events1 (live event feed for separate UIs) ---------------------
 

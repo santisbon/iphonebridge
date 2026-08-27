@@ -50,6 +50,7 @@ from iphonebridge.media.art import ArtFetcher
 from iphonebridge.media.client import MediaManager
 from iphonebridge.obex.map_events import MapEventListener
 from iphonebridge.obex.sessions import SessionError, SessionManager
+from iphonebridge.phone import BatteryAlarm, PhoneMonitor
 from iphonebridge.sinks import Sink
 from iphonebridge.sinks.clipboard import ClipboardSink
 from iphonebridge.sinks.jsonl import JsonlSink
@@ -165,6 +166,8 @@ class Daemon:
         self._ancs_uid_map: dict[int, str] = {}
         self.hfp: HfpManager | None = None
         self.media: MediaManager | None = None
+        self.phone: PhoneMonitor | None = None
+        self._battery_alarm = BatteryAlarm(config.LOW_BATTERY_PCT)
         self._contacts_refresh_id: int | None = None
         # message key -> live obex object path, and back. Rebuilt every
         # session rather than persisted: obexd renumbers these objects on
@@ -220,6 +223,12 @@ class Daemon:
                                   art_fetcher=ArtFetcher(config.IPHONE_MAC))
         self.media.start()
 
+        # Battery, cellular and identity — read-only observers on BlueZ
+        # and oFono, dormant for whatever the phone doesn't offer.
+        self.phone = PhoneMonitor(device_path,
+                                  on_change=self._fanout_phone)
+        self.phone.start()
+
         # Sinks don't need the OBEX sessions — set them up now so ANCS and
         # HFP events still reach the desktop while MAP/PBAP are degraded.
         self._setup_sinks()
@@ -232,7 +241,7 @@ class Daemon:
             self._bus_name = claim_bus_name()
             self._dbus_service = MessagesService(
                 self._bus_name, self.sessions, hfp=self.hfp,
-                ancs=self.ancs, media=self.media,
+                ancs=self.ancs, media=self.media, phone=self.phone,
                 on_sent=self._record_sent,
                 on_refresh_contacts=lambda: self._refresh_contacts(
                     raise_on_error=True),
@@ -470,6 +479,8 @@ class Daemon:
             self.hfp.stop()
         if self.media is not None:
             self.media.stop()
+        if self.phone is not None:
+            self.phone.stop()
         self.sessions.close_all()
         bluez_setup.unregister_advert()
         main_loop.quit()
@@ -664,6 +675,22 @@ class Daemon:
         # appends everything it is handed. The app is the only consumer.
         if self._dbus_service is not None:
             self._dbus_service.emit_media_state(state)
+
+    def _fanout_phone(self, state: dict) -> None:
+        # Like media state, never logged. The one sink involvement is the
+        # low-battery popup, which opts in by defining the handler.
+        if self._battery_alarm.update(int(state.get("battery_pct", -1))):
+            for sink in self.sinks:
+                handler = getattr(sink, "handle_battery_low", None)
+                if handler is None:
+                    continue
+                try:
+                    handler(int(state["battery_pct"]))
+                except Exception:
+                    log.exception("sink %s failed on low battery",
+                                  sink.name)
+        if self._dbus_service is not None:
+            self._dbus_service.emit_phone_status(state)
 
     def _signal(self, signum, _frame):
         log.info("received signal %d, stopping", signum)

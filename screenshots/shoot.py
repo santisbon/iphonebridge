@@ -133,6 +133,7 @@ def _render(out: pathlib.Path) -> int:
         ancsDismissed = pyqtSignal(object)
         callStateChanged = pyqtSignal(object)
         mediaStateChanged = pyqtSignal(object)
+        phoneStatusChanged = pyqtSignal(object)
         availabilityChanged = pyqtSignal(bool)
 
         def __init__(self) -> None:
@@ -168,6 +169,12 @@ def _render(out: pathlib.Path) -> int:
 
         def mark_read(self, keys, on_ok=None, on_err=None) -> None:
             pass
+
+        def get_phone_status(self, on_ok, on_err=None) -> None:
+            on_ok({"battery_pct": 76, "battery_estimated": False,
+                   "signal_pct": 60, "network": "Lunar Mobile",
+                   "reg": "registered", "model": "iPhone18,1",
+                   "manufacturer": "Apple Inc."})
 
         def dismiss_notification(self, eid, on_ok=None, on_err=None) -> None:
             pass

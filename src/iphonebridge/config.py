@@ -50,6 +50,11 @@ ADAPTER: str = os.environ.get("IPHONEBRIDGE_ADAPTER", "hci0")
 """Local Bluetooth adapter."""
 
 
+LOW_BATTERY_PCT: int = int(os.environ.get("IPHONEBRIDGE_LOW_BATTERY", "20"))
+"""iPhone battery percentage at or below which a desktop notification is
+raised, once per dip. 0 disables it."""
+
+
 def device_path() -> str:
     """BlueZ D-Bus object path of the configured iPhone.
 

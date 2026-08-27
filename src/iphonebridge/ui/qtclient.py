@@ -48,6 +48,7 @@ class DaemonClient(QObject):
     ancsDismissed = pyqtSignal(object)
     callStateChanged = pyqtSignal(object)
     mediaStateChanged = pyqtSignal(object)
+    phoneStatusChanged = pyqtSignal(object)
     availabilityChanged = pyqtSignal(bool)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -73,6 +74,7 @@ class DaemonClient(QObject):
             "message-seen": self.messageSeen,
             "ancs-notification": self.ancsNotification,
             "ancs-dismissed": self.ancsDismissed,
+            "phone-status": self.phoneStatusChanged,
         }
         # add_signal_receiver works even before the daemon is up — delivery
         # just starts once it claims the bus name.
@@ -157,6 +159,16 @@ class DaemonClient(QObject):
                 on_ok({})
         self._call(MESSAGES_IFACE, "GetStatus",
                    on_ok=parse, on_err=on_err, timeout=5)
+
+    def get_phone_status(self, on_ok, on_err=None) -> None:
+        """Battery/cellular/identity snapshot; {} when unparsable."""
+        def parse(raw):
+            try:
+                on_ok(dict(json.loads(str(raw))))
+            except (ValueError, TypeError):
+                on_ok({})
+        self._call(MESSAGES_IFACE, "GetPhoneStatus", on_ok=parse,
+                   on_err=on_err, timeout=5)
 
     def send_message(self, recipient: str, body: str, on_ok, on_err) -> None:
         """Send asynchronously. on_ok(transfer_path) / on_err(text)."""
