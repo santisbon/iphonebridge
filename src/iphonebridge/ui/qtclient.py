@@ -26,6 +26,7 @@ from iphonebridge.ui.protocol import (
     CALLS_IFACE,
     EVENT_SIGNALS,
     EVENTS_IFACE,
+    MEDIA_IFACE,
     MESSAGES_IFACE,
     OBJECT_PATH,
     dbus_error_text,
@@ -46,6 +47,7 @@ class DaemonClient(QObject):
     ancsNotification = pyqtSignal(object)
     ancsDismissed = pyqtSignal(object)
     callStateChanged = pyqtSignal(object)
+    mediaStateChanged = pyqtSignal(object)
     availabilityChanged = pyqtSignal(bool)
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -82,6 +84,10 @@ class DaemonClient(QObject):
         self._matches.append(self._bus.add_signal_receiver(
             lambda props: self.callStateChanged.emit(plain(props)),
             dbus_interface=CALLS_IFACE, signal_name="CallStateChanged",
+            bus_name=BUS_NAME, path=OBJECT_PATH))
+        self._matches.append(self._bus.add_signal_receiver(
+            lambda props: self.mediaStateChanged.emit(plain(props)),
+            dbus_interface=MEDIA_IFACE, signal_name="MediaStateChanged",
             bus_name=BUS_NAME, path=OBJECT_PATH))
 
     def stop(self) -> None:
@@ -180,6 +186,42 @@ class DaemonClient(QObject):
                 on_ok([])
         self._call(CALLS_IFACE, "ListCalls", on_ok=parse, on_err=on_err,
                    timeout=15)
+
+    # ---- Media1 ---------------------------------------------------------
+
+    def media_play(self, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "Play", on_err=on_err, timeout=10)
+
+    def media_pause(self, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "Pause", on_err=on_err, timeout=10)
+
+    def media_next(self, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "Next", on_err=on_err, timeout=10)
+
+    def media_previous(self, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "Previous", on_err=on_err, timeout=10)
+
+    def set_media_volume(self, volume: int, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "SetVolume", dbus.UInt32(max(0, volume)),
+                   on_err=on_err, timeout=10)
+
+    def set_media_shuffle(self, value: str, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "SetShuffle", value, on_err=on_err,
+                   timeout=10)
+
+    def set_media_repeat(self, value: str, on_err=None) -> None:
+        self._call(MEDIA_IFACE, "SetRepeat", value, on_err=on_err,
+                   timeout=10)
+
+    def get_media_state(self, on_ok, on_err=None) -> None:
+        """Now-playing snapshot as a dict; {} when unparsable."""
+        def parse(raw):
+            try:
+                on_ok(dict(json.loads(str(raw))))
+            except (ValueError, TypeError):
+                on_ok({})
+        self._call(MEDIA_IFACE, "GetMediaState", on_ok=parse,
+                   on_err=on_err, timeout=5)
 
     # ---- the one call path ----------------------------------------------
 

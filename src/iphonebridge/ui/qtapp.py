@@ -13,12 +13,21 @@ import logging
 import os
 import pathlib
 import sys
+import time
 
 from PyQt6.QtCore import QObject, QUrl, pyqtProperty, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QGuiApplication
 from PyQt6.QtQml import QQmlApplicationEngine
 
 from iphonebridge.contacts import ContactsResolver
+from iphonebridge.media.events import (
+    extrapolate_position,
+    format_ms,
+    next_repeat,
+    next_shuffle,
+    repeat_display,
+    shuffle_display,
+)
 from iphonebridge.ui.model import ThreadStore
 from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
 from iphonebridge.ui.qtmodels import (
@@ -83,6 +92,11 @@ class Bridge(QObject):
         self._status_groups: list = []
         self._status = "Checking…"
         self._calls = "No active calls"
+        # Now-playing snapshot from the daemon, plus the monotonic instant
+        # it landed — the position bar extrapolates from that pair rather
+        # than trusting any clock that could skew between processes.
+        self._media: dict = {}
+        self._media_at = time.monotonic()
 
         for ev in client.read_events(kinds={"sms_received", "sms_sent"}):
             self.store.ingest(ev, outgoing=(ev.get("kind") == "sms_sent"))
@@ -98,6 +112,7 @@ class Bridge(QObject):
             lambda ev: self.notifications.remove_eid(str((ev or {}).get("eid", ""))))
         client.availabilityChanged.connect(lambda _ok: self._refresh_status())
         client.callStateChanged.connect(self._on_call_state)
+        client.mediaStateChanged.connect(self._on_media_state)
         self.recheck()
 
     # ---- properties QML binds to ---------------------------------------
@@ -165,6 +180,50 @@ class Bridge(QObject):
         is on, and nothing else can.
         """
         return self._status_groups
+
+    # ---- now playing (Music tab) ----------------------------------------
+
+    @pyqtProperty(bool, notify=changed)
+    def mediaAvailable(self) -> bool:
+        return bool(self._media.get("available"))
+
+    @pyqtProperty(str, notify=changed)
+    def mediaStatus(self) -> str:
+        return str(self._media.get("status", ""))
+
+    @pyqtProperty(str, notify=changed)
+    def mediaTitle(self) -> str:
+        return str(self._media.get("title", ""))
+
+    @pyqtProperty(str, notify=changed)
+    def mediaArtist(self) -> str:
+        return str(self._media.get("artist", ""))
+
+    @pyqtProperty(str, notify=changed)
+    def mediaAlbum(self) -> str:
+        return str(self._media.get("album", ""))
+
+    @pyqtProperty(int, notify=changed)
+    def mediaDurationMs(self) -> int:
+        try:
+            return int(self._media.get("duration_ms", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    @pyqtProperty(int, notify=changed)
+    def mediaVolume(self) -> int:
+        try:
+            return int(self._media.get("volume", -1))
+        except (TypeError, ValueError):
+            return -1
+
+    @pyqtProperty(str, notify=changed)
+    def mediaShuffleText(self) -> str:
+        return shuffle_display(str(self._media.get("shuffle", "")))
+
+    @pyqtProperty(str, notify=changed)
+    def mediaRepeatText(self) -> str:
+        return repeat_display(str(self._media.get("repeat", "")))
 
     def _refresh_threads(self) -> None:
         """Re-read the conversation list, then tell QML.
@@ -298,6 +357,59 @@ class Bridge(QObject):
             eid, None,
             lambda err: self.toast.emit(f"Dismiss failed: {err}"))
 
+    # ---- media controls --------------------------------------------------
+
+    def _media_err(self, err: str) -> None:
+        self.toast.emit(f"Playback control failed: {err}")
+
+    @pyqtSlot()
+    def mediaPlayPause(self) -> None:
+        if str(self._media.get("status", "")) == "playing":
+            self._client.media_pause(self._media_err)
+        else:
+            self._client.media_play(self._media_err)
+
+    @pyqtSlot()
+    def mediaNext(self) -> None:
+        self._client.media_next(self._media_err)
+
+    @pyqtSlot()
+    def mediaPrevious(self) -> None:
+        self._client.media_previous(self._media_err)
+
+    @pyqtSlot(int)
+    def setMediaVolume(self, volume: int) -> None:
+        self._client.set_media_volume(max(0, min(127, int(volume))),
+                                      self._media_err)
+
+    @pyqtSlot()
+    def toggleShuffle(self) -> None:
+        # The row's value only advances when the daemon echoes the write
+        # back — the honest rendering when an app ignores the setting.
+        self._client.set_media_shuffle(
+            next_shuffle(str(self._media.get("shuffle", ""))),
+            self._media_err)
+
+    @pyqtSlot()
+    def toggleRepeat(self) -> None:
+        self._client.set_media_repeat(
+            next_repeat(str(self._media.get("repeat", ""))),
+            self._media_err)
+
+    @pyqtSlot(result=int)
+    def mediaPositionMs(self) -> int:
+        elapsed_ms = int((time.monotonic() - self._media_at) * 1000)
+        try:
+            pos = int(self._media.get("position_ms", 0))
+        except (TypeError, ValueError):
+            pos = 0
+        return extrapolate_position(pos, str(self._media.get("status", "")),
+                                    elapsed_ms, self.mediaDurationMs)
+
+    @pyqtSlot(int, result=str)
+    def formatMs(self, ms: int) -> str:
+        return format_ms(ms)
+
     @pyqtSlot(str)
     def deleteThread(self, key: str) -> None:
         """Delete a whole conversation from local history.
@@ -335,6 +447,7 @@ class Bridge(QObject):
         self._client.refresh_availability()
         self._refresh_status()
         self._client.list_calls(self._on_calls)
+        self._client.get_media_state(self._on_media_state)
 
     # ---- daemon events --------------------------------------------------
 
@@ -378,6 +491,11 @@ class Bridge(QObject):
             # The GTK window switched to Calls and presented itself; a
             # ringing phone is the one event worth interrupting for.
             self.callArrived.emit()
+
+    def _on_media_state(self, state) -> None:
+        self._media = dict(state or {})
+        self._media_at = time.monotonic()
+        self.changed.emit()
 
     def _on_ancs(self, ev: dict) -> None:
         if not ev.get("is_preexisting"):

@@ -375,8 +375,7 @@ def ancs_enable(
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     sysbus = dbus.SystemBus()
 
-    dev_path = (f"/org/bluez/{config.ADAPTER}/dev_"
-                + config.IPHONE_MAC.upper().replace(":", "_"))
+    dev_path = config.device_path()
 
     def iface(name: str) -> dbus.Interface:
         return dbus.Interface(sysbus.get_object("org.bluez", dev_path), name)

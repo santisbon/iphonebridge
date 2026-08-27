@@ -16,12 +16,12 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
 
 ```
               iPhone  (paired: BR/EDR + BLE)
-   ┌──────────┬──────────┬───────────┬──────────┐
-   │ MAP      │ PBAP     │ ANCS      │ HFP      │
-   │ (OBEX)   │ (OBEX)   │ (BLE GATT)│ (oFono)  │
-   ▼          ▼          ▼           ▼
- messages   contacts   app notifs   calls
-   └──────────┴──────────┴───────────┴──────────┘
+   ┌──────────┬──────────┬───────────┬──────────┬──────────┐
+   │ MAP      │ PBAP     │ ANCS      │ HFP      │ AVRCP    │
+   │ (OBEX)   │ (OBEX)   │ (BLE GATT)│ (oFono)  │ (BlueZ)  │
+   ▼          ▼          ▼           ▼          ▼
+ messages   contacts   app notifs   calls    now playing
+   └──────────┴──────────┴───────────┴──────────┴──────────┘
                      │
            iphonebridge daemon
          (Python · GLib · D-Bus)
@@ -36,6 +36,7 @@ Every prior writeup of Bluetooth on iOS says **iMessage is invisible** to a pair
 - **PBAP** (Phone Book Access Profile) — pull the iPhone's contacts so messages show names, not numbers.
 - **ANCS** (Apple Notification Center Service) — every app's notifications, over a BLE GATT link.
 - **HFP** (Hands-Free Profile) — take and place calls; oFono speaks the HFP protocol, PipeWire's oFono backend carries the call audio to the laptop's mic/speakers.
+- **AVRCP** (Audio/Video Remote Control Profile) — control the iPhone's playback and see what's playing. BlueZ implements the whole protocol and publishes the phone's player on D-Bus; the daemon only watches those objects and proxies commands, so there is no protocol code of ours involved. The player exists only while the classic audio link is up, which in practice means while the iPhone plays audio through this computer.
 - One daemon, pluggable **sinks** (desktop popups, verification-code clipboard copy, append-only JSONL log), and a **D-Bus service** so the CLI and the Qt app can send messages, control calls, and subscribe to a live event feed.
 - The daemon and the desktop app are **separate processes running different main loops**: the daemon runs GLib's, the app runs Qt's. dbus-python delivers signals only under a running loop and takes one integration per process, so the app binds dbus-python to Qt (`ui/qtbus.py`) and must never import `iphonebridge.bus`, which binds it to GLib. D-Bus is the seam between them, which is why the toolkit could be swapped without touching the daemon.
 

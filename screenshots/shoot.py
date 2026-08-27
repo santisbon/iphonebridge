@@ -46,7 +46,8 @@ VIEWS = [
     (0, "messages-daemon-down", "offline"),
     (1, "notifications", None),
     (2, "calls", None),
-    (3, "status", None),
+    (3, "music", None),
+    (4, "status", None),
 ]
 
 SETTLE_MS = 400   # after switching tab or scheme, before grabbing
@@ -108,7 +109,9 @@ def _render(out: pathlib.Path) -> int:
         messageSent = pyqtSignal(object)
         messageSeen = pyqtSignal(object)
         ancsNotification = pyqtSignal(object)
+        ancsDismissed = pyqtSignal(object)
         callStateChanged = pyqtSignal(object)
+        mediaStateChanged = pyqtSignal(object)
         availabilityChanged = pyqtSignal(bool)
 
         def __init__(self) -> None:
@@ -143,6 +146,40 @@ def _render(out: pathlib.Path) -> int:
             ])
 
         def mark_read(self, keys, on_ok=None, on_err=None) -> None:
+            pass
+
+        def dismiss_notification(self, eid, on_ok=None, on_err=None) -> None:
+            pass
+
+        def get_media_state(self, on_ok, on_err=None) -> None:
+            # Mid-song, so the capture shows the bar and both time labels.
+            on_ok({
+                "available": self.available, "status": "playing",
+                "title": "Golden Hour", "artist": "The Marigolds",
+                "album": "Field Notes", "duration_ms": 214_000,
+                "position_ms": 83_000, "shuffle": "off",
+                "repeat": "alltracks", "volume": 55,
+            })
+
+        def media_play(self, on_err=None) -> None:
+            pass
+
+        def media_pause(self, on_err=None) -> None:
+            pass
+
+        def media_next(self, on_err=None) -> None:
+            pass
+
+        def media_previous(self, on_err=None) -> None:
+            pass
+
+        def set_media_volume(self, volume, on_err=None) -> None:
+            pass
+
+        def set_media_shuffle(self, value, on_err=None) -> None:
+            pass
+
+        def set_media_repeat(self, value, on_err=None) -> None:
             pass
 
         def answer_call(self, call_path, on_err=None) -> None:

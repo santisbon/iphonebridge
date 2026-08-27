@@ -68,7 +68,7 @@ def list_paired_devices() -> list[PairedDevice]:
 
 
 def trust_device(mac: str, adapter_path: str) -> None:
-    dev_path = f"{adapter_path}/dev_{mac.replace(':', '_')}"
+    dev_path = f"{adapter_path}/dev_{mac.upper().replace(':', '_')}"
     props = dbus.Interface(
         system_bus.get_object("org.bluez", dev_path),
         "org.freedesktop.DBus.Properties",

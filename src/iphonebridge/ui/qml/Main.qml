@@ -175,14 +175,15 @@ ApplicationWindow {
             id: tabs
             objectName: "tabs"
             anchors.centerIn: parent
-            implicitWidth: Math.round(440 * appTheme.k)
+            implicitWidth: Math.round(550 * appTheme.k)
             spacing: 2
             background: Rectangle {
                 radius: 8
                 color: appTheme.fill
             }
             Repeater {
-                model: ["Messages", "Notifications", "Calls", "Status"]
+                model: ["Messages", "Notifications", "Calls", "Music",
+                        "Status"]
                 TabButton {
                     id: tabBtn
                     text: modelData
@@ -1089,6 +1090,330 @@ ApplicationWindow {
                             anchors.fill: parent
                             enabled: calls.count > 0
                             onClicked: bridge.hangupAll()
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Music ---------------------------------------------------
+        // Now-playing control over AVRCP. BlueZ publishes the iPhone's
+        // player only while the classic audio link is up, so the page
+        // has an honest empty state instead of dead controls.
+        Rectangle {
+            id: musicPage
+            color: appTheme.sidebar
+
+            // The daemon reports Position sporadically; the bar advances
+            // between reports by asking the bridge to extrapolate, on a
+            // 1 Hz tick that only runs while this page can be seen.
+            property int posMs: 0
+            function syncPos() { posMs = bridge.mediaPositionMs() }
+            Component.onCompleted: syncPos()
+            Timer {
+                interval: 1000; repeat: true
+                running: musicPage.visible
+                         && bridge.mediaStatus === "playing"
+                onTriggered: musicPage.syncPos()
+            }
+            Connections {
+                target: bridge
+                function onChanged() { musicPage.syncPos() }
+            }
+
+            Flickable {
+                anchors.fill: parent
+                contentHeight: musicColumn.implicitHeight
+                               + 2 * appTheme.gutter
+                clip: true
+                ScrollBar.vertical: ScrollBar {}
+
+                ColumnLayout {
+                    id: musicColumn
+                    width: Math.min(parent.width - 2 * appTheme.gutter,
+                                    Math.round(620 * appTheme.k))
+                    x: (parent.width - width) / 2
+                    y: appTheme.gutter
+                    spacing: Math.round(18 * appTheme.k)
+
+                    Group {
+                        visible: !bridge.mediaAvailable
+                        theme: appTheme
+                        title: "Now playing"
+                        footer: "Controls appear while the iPhone plays "
+                                + "audio through this computer."
+                        GroupRow {
+                            theme: appTheme
+                            label: "Nothing playing"
+                            last: true
+                        }
+                    }
+
+                    Group {
+                        visible: bridge.mediaAvailable
+                        theme: appTheme
+                        title: "Now playing"
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.margins: appTheme.gutter
+                            spacing: Math.round(4 * appTheme.k)
+
+                            Label {
+                                objectName: "mediaTitle"
+                                Layout.fillWidth: true
+                                text: bridge.mediaTitle.length > 0
+                                      ? bridge.mediaTitle : "Unknown title"
+                                color: appTheme.label
+                                font.family: appTheme.ui
+                                font.pointSize: appTheme.rowSize
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                visible: text.length > 0
+                                text: bridge.mediaArtist
+                                      + (bridge.mediaArtist.length > 0
+                                         && bridge.mediaAlbum.length > 0
+                                         ? " · " : "")
+                                      + bridge.mediaAlbum
+                                color: appTheme.label2
+                                font.family: appTheme.ui
+                                font.pointSize: appTheme.subSize
+                                elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Math.round(8 * appTheme.k)
+                                spacing: Math.round(8 * appTheme.k)
+                                Label {
+                                    text: bridge.formatMs(musicPage.posMs)
+                                    color: appTheme.label2
+                                    font.family: appTheme.ui
+                                    font.pointSize: appTheme.captionSize
+                                    Layout.preferredWidth:
+                                        Math.ceil(implicitWidth)
+                                }
+                                // Display only: AVRCP has no seek, so a
+                                // draggable bar would be a lie.
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight:
+                                        Math.round(4 * appTheme.k)
+                                    radius: height / 2
+                                    color: appTheme.fill
+                                    Rectangle {
+                                        objectName: "mediaBar"
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.bottom: parent.bottom
+                                        width: parent.width
+                                               * (bridge.mediaDurationMs > 0
+                                                  ? Math.min(musicPage.posMs
+                                                    / bridge.mediaDurationMs,
+                                                    1)
+                                                  : 0)
+                                        radius: parent.radius
+                                        color: appTheme.accent
+                                    }
+                                }
+                                Label {
+                                    text: bridge.formatMs(
+                                              bridge.mediaDurationMs)
+                                    color: appTheme.label2
+                                    font.family: appTheme.ui
+                                    font.pointSize: appTheme.captionSize
+                                    Layout.preferredWidth:
+                                        Math.ceil(implicitWidth)
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.alignment: Qt.AlignHCenter
+                                Layout.topMargin: Math.round(6 * appTheme.k)
+                                spacing: Math.round(18 * appTheme.k)
+
+                                Button {
+                                    id: prevBtn
+                                    objectName: "mediaPrev"
+                                    implicitWidth:
+                                        Math.round(40 * appTheme.k)
+                                    implicitHeight: implicitWidth
+                                    onClicked: bridge.mediaPrevious()
+                                    background: Rectangle {
+                                        radius: height / 2
+                                        color: prevBtn.down
+                                               ? appTheme.pressed
+                                               : appTheme.fill
+                                    }
+                                    contentItem: Item {
+                                        MediaMark {
+                                            anchors.centerIn: parent
+                                            shape: "prev"
+                                            color: appTheme.label
+                                            k: appTheme.k
+                                        }
+                                    }
+                                }
+                                Button {
+                                    id: playBtn
+                                    objectName: "mediaPlayPause"
+                                    implicitWidth:
+                                        Math.round(52 * appTheme.k)
+                                    implicitHeight: implicitWidth
+                                    onClicked: bridge.mediaPlayPause()
+                                    background: Rectangle {
+                                        radius: height / 2
+                                        color: playBtn.down
+                                               ? appTheme.pressed
+                                               : appTheme.fill
+                                    }
+                                    contentItem: Item {
+                                        MediaMark {
+                                            anchors.centerIn: parent
+                                            shape: bridge.mediaStatus
+                                                   === "playing"
+                                                   ? "pause" : "play"
+                                            color: appTheme.label
+                                            k: appTheme.k
+                                            size: 24
+                                        }
+                                    }
+                                }
+                                Button {
+                                    id: nextBtn
+                                    objectName: "mediaNext"
+                                    implicitWidth:
+                                        Math.round(40 * appTheme.k)
+                                    implicitHeight: implicitWidth
+                                    onClicked: bridge.mediaNext()
+                                    background: Rectangle {
+                                        radius: height / 2
+                                        color: nextBtn.down
+                                               ? appTheme.pressed
+                                               : appTheme.fill
+                                    }
+                                    contentItem: Item {
+                                        MediaMark {
+                                            anchors.centerIn: parent
+                                            shape: "next"
+                                            color: appTheme.label
+                                            k: appTheme.k
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Group {
+                        visible: bridge.mediaAvailable
+                                 && bridge.mediaVolume >= 0
+                        theme: appTheme
+                        title: "Volume"
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: appTheme.gutter
+                            Layout.rightMargin: appTheme.gutter
+                            Layout.preferredHeight:
+                                Math.round(38 * appTheme.k)
+                            Slider {
+                                id: volSlider
+                                objectName: "mediaVolume"
+                                Layout.fillWidth: true
+                                from: 0; to: 127; stepSize: 1
+                                // Dragging must not fight the daemon's
+                                // echo: the model writes the handle only
+                                // while it is not held, and drags reach
+                                // the daemon debounced.
+                                onMoved: volCommit.restart()
+                                onPressedChanged: if (!pressed) {
+                                    volCommit.stop()
+                                    bridge.setMediaVolume(
+                                        Math.round(value))
+                                }
+                            }
+                            Binding {
+                                target: volSlider
+                                property: "value"
+                                value: bridge.mediaVolume
+                                when: !volSlider.pressed
+                            }
+                            Timer {
+                                id: volCommit
+                                interval: 200
+                                onTriggered: bridge.setMediaVolume(
+                                    Math.round(volSlider.value))
+                            }
+                        }
+                    }
+
+                    Group {
+                        visible: bridge.mediaAvailable
+                        theme: appTheme
+                        title: "Playback"
+                        footer: "Whether these take effect is up to the "
+                                + "app playing on the iPhone."
+                        GroupRow {
+                            theme: appTheme
+                            label: "Shuffle"
+                            Button {
+                                id: shuffleBtn
+                                objectName: "mediaShuffle"
+                                implicitWidth:
+                                    Math.round(64 * appTheme.k)
+                                implicitHeight:
+                                    Math.round(26 * appTheme.k)
+                                onClicked: bridge.toggleShuffle()
+                                background: Rectangle {
+                                    radius: height / 2
+                                    color: shuffleBtn.down
+                                           ? appTheme.pressed
+                                           : appTheme.fill
+                                }
+                                contentItem: Text {
+                                    text: bridge.mediaShuffleText
+                                    color: appTheme.label
+                                    font.family: appTheme.ui
+                                    font.pointSize: appTheme.captionSize
+                                    font.weight: Font.DemiBold
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                        }
+                        GroupRow {
+                            theme: appTheme
+                            label: "Repeat"
+                            last: true
+                            Button {
+                                id: repeatBtn
+                                objectName: "mediaRepeat"
+                                implicitWidth:
+                                    Math.round(64 * appTheme.k)
+                                implicitHeight:
+                                    Math.round(26 * appTheme.k)
+                                onClicked: bridge.toggleRepeat()
+                                background: Rectangle {
+                                    radius: height / 2
+                                    color: repeatBtn.down
+                                           ? appTheme.pressed
+                                           : appTheme.fill
+                                }
+                                contentItem: Text {
+                                    text: bridge.mediaRepeatText
+                                    color: appTheme.label
+                                    font.family: appTheme.ui
+                                    font.pointSize: appTheme.captionSize
+                                    font.weight: Font.DemiBold
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
                         }
                     }
                 }

@@ -49,6 +49,16 @@ will refuse to pass until you've overridden it."""
 ADAPTER: str = os.environ.get("IPHONEBRIDGE_ADAPTER", "hci0")
 """Local Bluetooth adapter."""
 
+
+def device_path() -> str:
+    """BlueZ D-Bus object path of the configured iPhone.
+
+    BlueZ paths always carry the address upper-cased, so this normalises —
+    a lower-case IPHONEBRIDGE_MAC otherwise builds a path that silently
+    matches nothing.
+    """
+    return f"/org/bluez/{ADAPTER}/dev_{IPHONE_MAC.upper().replace(':', '_')}"
+
 # ---- BlueZ identity dance (per spike/RESULTS.md §1) ---------------------
 
 # Class-of-Device: A/V Hands-Free Device. iOS surfaces MAP/PBAP toggles

@@ -4,6 +4,7 @@ Bus name:    me.santisbon.iphonebridge
 Object path: /me/santisbon/iphonebridge
 Interfaces:  me.santisbon.iphonebridge.Messages1   — messaging
              me.santisbon.iphonebridge.Calls1      — HFP call control
+             me.santisbon.iphonebridge.Media1      — AVRCP media control
 
 Messages1:
   • Send(string recipient, string body) → string transfer_path
@@ -19,6 +20,14 @@ Calls1 (HFP, via oFono):
   • HangupAll()
   • ListCalls() → string json
   • CallStateChanged(dict)  [signal] — emitted on every call lifecycle change
+
+Media1 (AVRCP, via BlueZ's MediaPlayer1/MediaTransport1):
+  • Play() / Pause() / Next() / Previous()
+  • SetVolume(uint32 0-127) — absolute A2DP volume
+  • SetShuffle(string) / SetRepeat(string) — BlueZ value strings
+  • GetMediaState() → string json — flat now-playing snapshot;
+      available=false when no player, never raises
+  • MediaStateChanged(dict)  [signal] — same flat snapshot
 
 Events1 (live event feed for separate UIs):
   • MessageReceived(dict)   [signal] — a new SMS/iMessage arrived
@@ -42,6 +51,13 @@ import dbus.service
 from iphonebridge.bus import session_bus
 from iphonebridge.events import dialable
 from iphonebridge.hfp.ofono_client import HfpError, HfpManager
+from iphonebridge.media.client import (
+    REPEAT_VALUES,
+    SHUFFLE_VALUES,
+    MediaError,
+    MediaManager,
+)
+from iphonebridge.media.events import MediaState
 from iphonebridge.obex.map_query import list_recent_messages
 from iphonebridge.obex.map_send import send_message
 from iphonebridge.obex.sessions import SessionManager
@@ -52,6 +68,7 @@ BUS_NAME = "me.santisbon.iphonebridge"
 OBJECT_PATH = "/me/santisbon/iphonebridge"
 IFACE = "me.santisbon.iphonebridge.Messages1"
 CALLS_IFACE = "me.santisbon.iphonebridge.Calls1"
+MEDIA_IFACE = "me.santisbon.iphonebridge.Media1"
 EVENTS_IFACE = "me.santisbon.iphonebridge.Events1"
 
 
@@ -82,6 +99,7 @@ class MessagesService(dbus.service.Object):
         sessions: SessionManager,
         hfp: HfpManager | None = None,
         ancs=None,
+        media: MediaManager | None = None,
         on_sent=None,
         on_refresh_contacts=None,
         on_delete_local=None,
@@ -92,6 +110,7 @@ class MessagesService(dbus.service.Object):
         self.sessions = sessions
         self.hfp = hfp
         self.ancs = ancs
+        self.media = media
         # on_dismiss_ancs(eid) -> "phone" | "local" — daemon hook that
         # removes a notification locally and, when its uid is still live,
         # performs the ANCS negative action on the iPhone.
@@ -352,6 +371,103 @@ class MessagesService(dbus.service.Object):
             self.CallStateChanged(_variant_dict(event.to_dict()))
         except Exception:
             log.exception("CallStateChanged emit failed")
+
+    # ---- Media1 (AVRCP via BlueZ) ---------------------------------------
+
+    def _require_media(self) -> MediaManager:
+        if self.media is None:
+            raise dbus.exceptions.DBusException(
+                "media control not available in this daemon build",
+                name="me.santisbon.iphonebridge.Error.NotReady",
+            )
+        return self.media
+
+    def _media_command(self, verb: str, fn) -> None:
+        try:
+            fn(self._require_media())
+        except MediaError as e:
+            raise dbus.exceptions.DBusException(
+                str(e), name="me.santisbon.iphonebridge.Error.NotReady"
+            )
+        except dbus.exceptions.DBusException:
+            raise
+        except Exception as e:
+            log.exception("%s failed", verb)
+            raise dbus.exceptions.DBusException(
+                str(e), name="me.santisbon.iphonebridge.Error.MediaFailed"
+            )
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="", out_signature="")
+    def Play(self) -> None:
+        log.info("DBus Play")
+        self._media_command("Play", lambda m: m.play())
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="", out_signature="")
+    def Pause(self) -> None:
+        log.info("DBus Pause")
+        self._media_command("Pause", lambda m: m.pause())
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="", out_signature="")
+    def Next(self) -> None:
+        log.info("DBus Next")
+        self._media_command("Next", lambda m: m.next())
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="", out_signature="")
+    def Previous(self) -> None:
+        log.info("DBus Previous")
+        self._media_command("Previous", lambda m: m.previous())
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="u", out_signature="")
+    def SetVolume(self, volume: int) -> None:
+        volume = int(volume)
+        if not 0 <= volume <= 127:
+            raise dbus.exceptions.DBusException(
+                "volume must be 0-127",
+                name="me.santisbon.iphonebridge.Error.InvalidArgs",
+            )
+        self._media_command("SetVolume", lambda m: m.set_volume(volume))
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="s", out_signature="")
+    def SetShuffle(self, value: str) -> None:
+        value = str(value)
+        if value not in SHUFFLE_VALUES:
+            raise dbus.exceptions.DBusException(
+                f"shuffle must be one of {sorted(SHUFFLE_VALUES)}",
+                name="me.santisbon.iphonebridge.Error.InvalidArgs",
+            )
+        log.info("DBus SetShuffle %s", value)
+        self._media_command("SetShuffle", lambda m: m.set_shuffle(value))
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="s", out_signature="")
+    def SetRepeat(self, value: str) -> None:
+        value = str(value)
+        if value not in REPEAT_VALUES:
+            raise dbus.exceptions.DBusException(
+                f"repeat must be one of {sorted(REPEAT_VALUES)}",
+                name="me.santisbon.iphonebridge.Error.InvalidArgs",
+            )
+        log.info("DBus SetRepeat %s", value)
+        self._media_command("SetRepeat", lambda m: m.set_repeat(value))
+
+    @dbus.service.method(MEDIA_IFACE, in_signature="", out_signature="s")
+    def GetMediaState(self) -> str:
+        """The now-playing snapshot as JSON. Never raises: with no player
+        connected the payload simply says available=false."""
+        if self.media is None:
+            return json.dumps(MediaState().to_dict())
+        return json.dumps(self.media.snapshot(), ensure_ascii=False)
+
+    @dbus.service.signal(MEDIA_IFACE, signature="a{sv}")
+    def MediaStateChanged(self, props):
+        """Emitted whenever the player, track, settings or volume change.
+        Payload is the same flat dict GetMediaState returns."""
+
+    def emit_media_state(self, state: dict) -> None:
+        """Daemon-side helper — push a media snapshot out as a signal."""
+        try:
+            self.MediaStateChanged(_variant_dict(state))
+        except Exception:
+            log.exception("MediaStateChanged emit failed")
 
     # ---- Events1 (live event feed for separate UIs) ---------------------
 

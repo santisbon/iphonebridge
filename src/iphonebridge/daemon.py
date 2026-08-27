@@ -46,6 +46,7 @@ from iphonebridge.events import (
 )
 from iphonebridge.hfp.events import CallEvent
 from iphonebridge.hfp.ofono_client import HfpManager
+from iphonebridge.media.client import MediaManager
 from iphonebridge.obex.map_events import MapEventListener
 from iphonebridge.obex.sessions import SessionError, SessionManager
 from iphonebridge.sinks import Sink
@@ -162,6 +163,7 @@ class Daemon:
         # fresh subscription comes up.
         self._ancs_uid_map: dict[int, str] = {}
         self.hfp: HfpManager | None = None
+        self.media: MediaManager | None = None
         self._contacts_refresh_id: int | None = None
         # message key -> live obex object path, and back. Rebuilt every
         # session rather than persisted: obexd renumbers these objects on
@@ -193,10 +195,7 @@ class Daemon:
         # BLE link to the iPhone (we don't yet do the LastUsedBearer=le
         # dance). Either way, the client just waits patiently for the three
         # ANCS characteristics to appear and subscribes when they do.
-        device_path = (
-            f"/org/bluez/{config.ADAPTER}"
-            f"/dev_{config.IPHONE_MAC.replace(':', '_')}"
-        )
+        device_path = config.device_path()
         self.ancs = AncsClient(
             device_path,
             on_event=self._fanout_ancs,
@@ -213,6 +212,12 @@ class Daemon:
         )
         self.hfp.start()
 
+        # AVRCP — media control via BlueZ's player objects. Dormant until
+        # the classic audio link brings them up; ObjectManager drives it.
+        self.media = MediaManager(device_path,
+                                  on_state=self._fanout_media)
+        self.media.start()
+
         # Sinks don't need the OBEX sessions — set them up now so ANCS and
         # HFP events still reach the desktop while MAP/PBAP are degraded.
         self._setup_sinks()
@@ -225,7 +230,7 @@ class Daemon:
             self._bus_name = claim_bus_name()
             self._dbus_service = MessagesService(
                 self._bus_name, self.sessions, hfp=self.hfp,
-                ancs=self.ancs,
+                ancs=self.ancs, media=self.media,
                 on_sent=self._record_sent,
                 on_refresh_contacts=lambda: self._refresh_contacts(
                     raise_on_error=True),
@@ -461,6 +466,8 @@ class Daemon:
             self.ancs.stop()
         if self.hfp is not None:
             self.hfp.stop()
+        if self.media is not None:
+            self.media.stop()
         self.sessions.close_all()
         bluez_setup.unregister_advert()
         main_loop.quit()
@@ -649,6 +656,12 @@ class Daemon:
                               sink.name, event.call_path)
         if self._dbus_service is not None:
             self._dbus_service.emit_call_state(event)
+
+    def _fanout_media(self, state: dict) -> None:
+        # No sink fan-out: media state is ephemeral, and the jsonl sink
+        # appends everything it is handed. The app is the only consumer.
+        if self._dbus_service is not None:
+            self._dbus_service.emit_media_state(state)
 
     def _signal(self, signum, _frame):
         log.info("received signal %d, stopping", signum)

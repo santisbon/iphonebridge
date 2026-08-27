@@ -78,6 +78,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE | ✅ |
 | 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions | ✅ |
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
+| 🎵 **Control playback** — play/pause, skip, volume, shuffle/repeat | AVRCP via BlueZ | ✅ |
 | 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |
@@ -92,6 +93,10 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
 - **Messages composed on the iPhone itself don't sync** — iOS exposes only your *inbox* over MAP, never the sent folder. Replies you send *from* iphonebridge are recorded into conversation history; texts you type on the phone aren't visible to any Bluetooth bridge.
 - HFP calls are **1-to-1 voice only** — no conference calls, no FaceTime (HFP carries neither).
 - Notification *bodies* are subject to the iPhone's "Show Previews" setting.
+- **Playback controls exist only while the iPhone plays audio through this
+  computer** — the Bluetooth player object rides the audio link. There is no
+  seek (AVRCP doesn't carry it), and whether shuffle/repeat take effect is
+  up to the app playing on the phone.
 - **Dismissing an app notification reaches the phone only while it is
   current.** ANCS addresses notifications per connection, so one from before
   the last BLE reconnect can't be cleared remotely — dismissing it removes it

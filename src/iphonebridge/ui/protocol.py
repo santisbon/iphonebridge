@@ -23,6 +23,7 @@ BUS_NAME = "me.santisbon.iphonebridge"
 OBJECT_PATH = "/me/santisbon/iphonebridge"
 MESSAGES_IFACE = "me.santisbon.iphonebridge.Messages1"
 CALLS_IFACE = "me.santisbon.iphonebridge.Calls1"
+MEDIA_IFACE = "me.santisbon.iphonebridge.Media1"
 EVENTS_IFACE = "me.santisbon.iphonebridge.Events1"
 
 #: Everything the QML expects to find in its root context. Kept here, and

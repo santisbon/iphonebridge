@@ -250,9 +250,8 @@ def device_has_ancs_bond() -> bool | None:
     None means the device object was not found (not paired, or a
     different MAC is configured).
     """
-    dev = "dev_" + config.IPHONE_MAC.upper().replace(":", "_")
     try:
-        props = bluez(f"/org/bluez/{config.ADAPTER}/{dev}",
+        props = bluez(config.device_path(),
                       "org.freedesktop.DBus.Properties")
         uuids = props.Get("org.bluez.Device1", "UUIDs")
     except dbus.exceptions.DBusException:
