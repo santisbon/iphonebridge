@@ -265,14 +265,68 @@ def _render(out: pathlib.Path) -> int:
         client.set_available(variant != "offline")
         QTimer.singleShot(SETTLE_MS, lambda: shoot(label))
 
+    def add_titlebar(image, title):
+        """Composite a title bar above the grab.
+
+        grabWindow() returns the scene graph only: decorations belong to
+        the window manager, and offscreen there is none. Drawn here in
+        the Breeze idiom of the target desktop — centred title, chevron
+        minimize/maximize and an ✕, all as strokes — so the captures
+        look like the windows people will actually see.
+        """
+        from PyQt6.QtCore import QPointF, Qt
+        from PyQt6.QtGui import QColor, QImage, QPainter, QPen
+        bar = 34
+        w, h = image.width(), image.height()
+        framed = QImage(w, h + bar, QImage.Format.Format_RGB32)
+        painter = QPainter(framed)
+        painter.fillRect(0, 0, w, bar, QColor("#eff0f1"))
+        painter.setPen(QColor("#d4d6d8"))
+        painter.drawLine(0, bar - 1, w, bar - 1)
+        painter.setPen(QColor("#232629"))
+        f = painter.font()
+        f.setPointSize(10)
+        painter.setFont(f)
+        painter.drawText(0, 0, w, bar - 1,
+                         Qt.AlignmentFlag.AlignCenter, title)
+        pen = QPen(QColor("#232629"))
+        pen.setWidthF(1.3)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        cy = bar / 2
+        slots = [w - 3 * 30 + i * 30 + 15 for i in range(3)]
+        r = 4.5
+        painter.drawPolyline(  # minimize: Breeze's down chevron
+            QPointF(slots[0] - r, cy - r / 2),
+            QPointF(slots[0], cy + r / 2),
+            QPointF(slots[0] + r, cy - r / 2))
+        painter.drawPolyline(  # maximize: up chevron
+            QPointF(slots[1] - r, cy + r / 2),
+            QPointF(slots[1], cy - r / 2),
+            QPointF(slots[1] + r, cy + r / 2))
+        painter.drawLine(QPointF(slots[2] - r, cy - r),
+                         QPointF(slots[2] + r, cy + r))
+        painter.drawLine(QPointF(slots[2] - r, cy + r),
+                         QPointF(slots[2] + r, cy - r))
+        painter.drawImage(0, bar, image)
+        painter.end()
+        return framed
+
     def shoot(name: str) -> None:
         path = out / f"{name}.png"
         image = win.grabWindow()
-        if image.isNull() or not image.save(str(path)):
+        if image.isNull():
             print(f"  !! {path.name}: grab failed", file=sys.stderr)
             state["failures"] += 1
         else:
-            print(f"  {path.name}  {image.width()}x{image.height()}")
+            # The window's own title, so a rename in Main.qml can never
+            # leave the captures lying.
+            image = add_titlebar(image, win.title())
+            if not image.save(str(path)):
+                print(f"  !! {path.name}: save failed", file=sys.stderr)
+                state["failures"] += 1
+            else:
+                print(f"  {path.name}  {image.width()}x{image.height()}")
         state["i"] += 1
         QTimer.singleShot(80, step)
 
