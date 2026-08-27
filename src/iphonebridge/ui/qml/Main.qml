@@ -718,8 +718,69 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.margins: 12
                         spacing: 8
+                        Button {
+                            id: emojiButton
+                            objectName: "emojiButton"
+                            implicitWidth: appTheme.fieldHeight
+                            implicitHeight: appTheme.fieldHeight
+                            enabled: composer.enabled
+                            opacity: enabled ? 1 : 0.4
+                            onClicked: emojiPicker.opened ? emojiPicker.close()
+                                                          : emojiPicker.open()
+                            background: Rectangle {
+                                radius: width / 2
+                                color: emojiButton.down ? appTheme.pressed
+                                       : emojiButton.hovered ? appTheme.hover
+                                                             : "transparent"
+                            }
+                            // A drawn smiley, not a colour emoji: chrome
+                            // stays monochrome like every other control.
+                            contentItem: Canvas {
+                                onPaint: {
+                                    var c = getContext("2d")
+                                    c.reset()
+                                    c.strokeStyle = appTheme.label2
+                                    c.fillStyle = appTheme.label2
+                                    c.lineWidth = 1.6
+                                    c.lineCap = "round"
+                                    var cx = width / 2, cy = height / 2
+                                    var r = 8.5 * appTheme.k
+                                    c.beginPath()
+                                    c.arc(cx, cy, r, 0, 2 * Math.PI)
+                                    c.stroke()
+                                    c.beginPath()
+                                    c.arc(cx, cy + r * 0.15, r * 0.55,
+                                          0.15 * Math.PI, 0.85 * Math.PI)
+                                    c.stroke()
+                                    var er = Math.max(1.1, r * 0.14)
+                                    c.beginPath()
+                                    c.arc(cx - r * 0.38, cy - r * 0.3,
+                                          er, 0, 2 * Math.PI)
+                                    c.fill()
+                                    c.beginPath()
+                                    c.arc(cx + r * 0.38, cy - r * 0.3,
+                                          er, 0, 2 * Math.PI)
+                                    c.fill()
+                                }
+                            }
+                            EmojiPicker {
+                                id: emojiPicker
+                                theme: appTheme
+                                // Above the composer, left-aligned with
+                                // the button that opens it.
+                                x: 0
+                                y: -height - Math.round(8 * appTheme.k)
+                                onPicked: emoji => {
+                                    composer.insert(
+                                        composer.cursorPosition, emoji)
+                                    bridge.noteEmojiUsed(emoji)
+                                }
+                                onClosed: composer.forceActiveFocus()
+                            }
+                        }
                         TextField {
                             id: composer
+                            objectName: "composer"
                             Layout.fillWidth: true
                             implicitHeight: appTheme.fieldHeight
                             placeholderText: bridge.linkOk ? "Message"

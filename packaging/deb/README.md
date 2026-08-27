@@ -97,9 +97,10 @@ Depends: ${python3:Depends}, ${misc:Depends},
  python3-dbus.mainloop.pyqt6,
  qml6-module-qtquick-controls, qml6-module-qtquick-layouts,
  qml6-module-qtquick-templates, qml6-module-qtquick-window,
- qt6-wayland,
+ qt6-wayland, gir1.2-ibus-1.0,
  bluez (>= 5.72), bluez-obexd
-Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme, fonts-inter
+Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme, fonts-inter,
+ ibus-data, fonts-noto-color-emoji
 Description: iPhone messages, calls, and contacts over Bluetooth
  Daemon, CLI, and Qt app bridging a paired iPhone via the standard
  Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
@@ -119,6 +120,13 @@ back to XWayland, which runs but is blurry under fractional scaling.
 desktop, where it is what makes Qt pick up GNOME's fonts, colours and
 dark-mode preference; it is also what initialises GTK inside the process
 and produces the accessibility-bus warning documented in the README.
+
+The emoji picker reads the system's emoji dictionary rather than
+shipping one: `gir1.2-ibus-1.0` (tiny, a Depends) is the binding that
+loads it, and `ibus-data` (a Recommends — GNOME and KDE both install it
+anyway, it feeds the desktop's own Meta+. picker) is the dictionary
+itself. Without it the picker shows a hint naming the package.
+`fonts-noto-color-emoji` draws the glyphs in colour.
 
 `debian/rules` (executable):
 

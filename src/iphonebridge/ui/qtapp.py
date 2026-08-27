@@ -30,6 +30,14 @@ from iphonebridge.media.events import (
     shuffle_display,
 )
 from iphonebridge.models import marketing_name
+from iphonebridge.ui.emoji import (
+    build_groups,
+    load_emoji_db,
+    load_recents,
+    note_recent,
+    save_recents,
+    search_emoji,
+)
 from iphonebridge.ui.model import ThreadStore
 from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
 from iphonebridge.ui.qtmodels import (
@@ -63,6 +71,10 @@ class Bridge(QObject):
     """What QML can call, and what it watches."""
 
     changed = pyqtSignal()
+    #: Emoji data only. Separate from `changed` deliberately: that one
+    #: fires on every status tick, and re-marshalling thousands of
+    #: emoji strings into QML each time would be pure waste.
+    emojiChanged = pyqtSignal()
     #: Transient feedback for the user — the Qt equivalent of the GTK
     #: toast overlay. Every action that can fail says so through this.
     toast = pyqtSignal(str)
@@ -100,6 +112,12 @@ class Bridge(QObject):
         self._media: dict = {}
         self._media_at = time.monotonic()
         self._phone: dict = {}
+        # Emoji database, loaded from the system dictionary on first
+        # use (the picker's first open), never shipped with the app.
+        self._emoji_db: list | None = None
+        self._emoji_groups: list = []
+        self._emoji_recents_path = config.STATE_DIR / "emoji-recents.json"
+        self._emoji_recents = load_recents(self._emoji_recents_path)
 
         for ev in client.read_events(kinds={"sms_received", "sms_sent"}):
             self.store.ingest(ev, outgoing=(ev.get("kind") == "sms_sent"))
@@ -232,6 +250,33 @@ class Bridge(QObject):
     @pyqtProperty(str, notify=changed)
     def mediaRepeatText(self) -> str:
         return repeat_display(str(self._media.get("repeat", "")))
+
+    # ---- emoji picker ----------------------------------------------------
+
+    def _emoji(self) -> list:
+        if self._emoji_db is None:
+            self._emoji_db = load_emoji_db()
+            self._emoji_groups = build_groups(self._emoji_db)
+        return self._emoji_db
+
+    @pyqtProperty(list, notify=emojiChanged)
+    def emojiGroups(self) -> list:
+        self._emoji()
+        return self._emoji_groups
+
+    @pyqtProperty(list, notify=emojiChanged)
+    def emojiRecents(self) -> list:
+        return list(self._emoji_recents)
+
+    @pyqtSlot(str, result=list)
+    def searchEmoji(self, query: str) -> list:
+        return search_emoji(self._emoji(), query)
+
+    @pyqtSlot(str)
+    def noteEmojiUsed(self, emoji: str) -> None:
+        self._emoji_recents = note_recent(self._emoji_recents, emoji)
+        save_recents(self._emoji_recents_path, self._emoji_recents)
+        self.emojiChanged.emit()
 
     def _refresh_threads(self) -> None:
         """Re-read the conversation list, then tell QML.
