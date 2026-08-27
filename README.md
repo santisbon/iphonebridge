@@ -78,7 +78,7 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE | ✅ |
 | 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions | ✅ |
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
-| 🎵 **Control playback** — play/pause, skip, volume, shuffle/repeat | AVRCP via BlueZ | ✅ |
+| 🎵 **Control playback** — album art, play/pause, skip, volume, shuffle/repeat | AVRCP via BlueZ | ✅ |
 | 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
 | 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |

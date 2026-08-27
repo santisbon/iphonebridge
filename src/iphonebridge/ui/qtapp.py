@@ -218,6 +218,10 @@ class Bridge(QObject):
             return -1
 
     @pyqtProperty(str, notify=changed)
+    def mediaArtPath(self) -> str:
+        return str(self._media.get("art_path", ""))
+
+    @pyqtProperty(str, notify=changed)
     def mediaShuffleText(self) -> str:
         return shuffle_display(str(self._media.get("shuffle", "")))
 

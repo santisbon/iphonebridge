@@ -70,6 +70,14 @@ class TestBuilder:
         st = media_state_from_bluez(FULL_PROPS, 55, position_ms=99_000)
         assert st.position_ms == 99_000
 
+    def test_art_path_rides_the_payload(self):
+        st = media_state_from_bluez(FULL_PROPS, 55,
+                                    art_path="/tmp/cover_1.img")
+        assert st.art_path == "/tmp/cover_1.img"
+        assert media_state_from_bluez(FULL_PROPS, 55).art_path == ""
+        assert media_state_from_bluez(FULL_PROPS, 55,
+                                      art_path=None).art_path == ""
+
     def test_dbus_like_string_coercion(self):
         props = {"Status": "playing", "Position": "42000",
                  "Track": {"Duration": "180000", "Title": 7}}

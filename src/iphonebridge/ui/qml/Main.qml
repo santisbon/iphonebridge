@@ -1159,6 +1159,33 @@ ApplicationWindow {
                             Layout.margins: appTheme.gutter
                             spacing: Math.round(4 * appTheme.k)
 
+                            // Cover art, fetched by the daemon over the
+                            // AVRCP image service. Absent until a track
+                            // reports a handle and the transfer lands.
+                            Rectangle {
+                                objectName: "mediaArt"
+                                visible: bridge.mediaArtPath.length > 0
+                                Layout.alignment: Qt.AlignHCenter
+                                Layout.bottomMargin:
+                                    Math.round(6 * appTheme.k)
+                                Layout.preferredWidth:
+                                    Math.round(140 * appTheme.k)
+                                Layout.preferredHeight:
+                                    Layout.preferredWidth
+                                radius: Math.round(8 * appTheme.k)
+                                color: appTheme.fill
+                                clip: true
+                                Image {
+                                    anchors.fill: parent
+                                    source: bridge.mediaArtPath.length > 0
+                                            ? "file://"
+                                              + bridge.mediaArtPath
+                                            : ""
+                                    fillMode: Image.PreserveAspectCrop
+                                    asynchronous: true
+                                }
+                            }
+
                             Label {
                                 objectName: "mediaTitle"
                                 Layout.fillWidth: true

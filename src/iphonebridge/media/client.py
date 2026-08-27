@@ -46,14 +46,20 @@ class MediaManager:
     """Follows one MediaPlayer1 and one MediaTransport1 under one device."""
 
     def __init__(self, device_path: str,
-                 on_state: Callable[[dict], None]) -> None:
+                 on_state: Callable[[dict], None],
+                 art_fetcher=None) -> None:
         self.device_path = device_path
         self.on_state = on_state
+        # Duck-typed: fetch(handle, psm, on_done) + close(). None when
+        # cover art is not wired in.
+        self.art = art_fetcher
 
         self._player_path: str | None = None
         self._player_props: dict = {}
         self._transport_path: str | None = None
         self._volume: int | None = None
+        self._art_handle: str = ""
+        self._art_path: str = ""
 
         # Base for position extrapolation and seek detection.
         self._pos_ms = 0
@@ -86,6 +92,8 @@ class MediaManager:
         self._om_matches = []
         self._drop_player(emit=False)
         self._drop_transport(emit=False)
+        if self.art is not None:
+            self.art.close()
 
     @staticmethod
     def _safe_remove(match) -> None:
@@ -132,6 +140,8 @@ class MediaManager:
             )
             log.info("AVRCP player appeared: .../%s",
                      path_s.rsplit("/", 2)[-1])
+            self._connect_art()
+            self._maybe_fetch_art()
             self._emit()
         if TRANSPORT_IFACE in ifaces and self._transport_path is None:
             self._transport_path = path_s
@@ -162,7 +172,12 @@ class MediaManager:
         self._player_match = None
         self._player_path = None
         self._player_props = {}
+        self._art_handle = ""
+        self._art_path = ""
         self._rebase_position(0)
+        # The bip session rode the same audio link the player did.
+        if self.art is not None:
+            self.art.close()
         if emit:
             self._emit()
 
@@ -181,6 +196,8 @@ class MediaManager:
             return
         keys = {str(k) for k in changed}
         self._player_props.update(changed)
+        if "Track" in keys:
+            self._maybe_fetch_art()
         if "Track" in keys and "Position" not in keys:
             # New track, no position report yet: playback restarted at 0
             # and waiting for iOS's next report would show the old spot.
@@ -230,7 +247,48 @@ class MediaManager:
         props = self._player_props if self._player_path else None
         pos = self._position_estimate() if props is not None else None
         return media_state_from_bluez(props, self._volume,
-                                      position_ms=pos).to_dict()
+                                      position_ms=pos,
+                                      art_path=self._art_path).to_dict()
+
+    # ---- cover art ------------------------------------------------------
+
+    def _obex_psm(self) -> int:
+        try:
+            return int(self._player_props.get("ObexPort", 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _connect_art(self) -> None:
+        """Open the image channel as soon as the player exists. iOS only
+        reports image handles to a controller with this channel up, so
+        connecting lazily would mean never seeing a handle at all."""
+        psm = self._obex_psm()
+        if self.art is not None and psm > 0:
+            self.art.connect(psm)
+
+    def _maybe_fetch_art(self) -> None:
+        """Start a cover fetch when the track's image handle changes."""
+        if self.art is None:
+            return
+        track = self._player_props.get("Track") or {}
+        handle = str(track.get("ImgHandle", "") or "")
+        if handle == self._art_handle:
+            return
+        self._art_handle = handle
+        self._art_path = ""
+        if not handle:
+            return
+        psm = self._obex_psm()
+        if psm <= 0:
+            return
+        self.art.fetch(handle, psm, self._on_art)
+
+    def _on_art(self, handle: str, path: str | None) -> None:
+        if handle != self._art_handle:
+            return  # track changed while the transfer ran
+        self._art_path = path or ""
+        if self._art_path:
+            self._emit()
 
     def _emit(self) -> None:
         try:

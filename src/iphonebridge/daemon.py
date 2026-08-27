@@ -46,6 +46,7 @@ from iphonebridge.events import (
 )
 from iphonebridge.hfp.events import CallEvent
 from iphonebridge.hfp.ofono_client import HfpManager
+from iphonebridge.media.art import ArtFetcher
 from iphonebridge.media.client import MediaManager
 from iphonebridge.obex.map_events import MapEventListener
 from iphonebridge.obex.sessions import SessionError, SessionManager
@@ -215,7 +216,8 @@ class Daemon:
         # AVRCP — media control via BlueZ's player objects. Dormant until
         # the classic audio link brings them up; ObjectManager drives it.
         self.media = MediaManager(device_path,
-                                  on_state=self._fanout_media)
+                                  on_state=self._fanout_media,
+                                  art_fetcher=ArtFetcher(config.IPHONE_MAC))
         self.media.start()
 
         # Sinks don't need the OBEX sessions — set them up now so ANCS and

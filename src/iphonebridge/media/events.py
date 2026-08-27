@@ -25,6 +25,7 @@ class MediaState:
     shuffle: str = ""         # "off" / "alltracks" / "group"
     repeat: str = ""          # "off" / "singletrack" / "alltracks" / "group"
     volume: int = -1          # 0-127; -1 while no transport offers one
+    art_path: str = ""        # local cover-art file; "" while none fetched
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -43,7 +44,8 @@ def _ms(value) -> int:
 
 def media_state_from_bluez(player_props: dict | None,
                            transport_volume: int | None,
-                           position_ms: int | None = None) -> MediaState:
+                           position_ms: int | None = None,
+                           art_path: str = "") -> MediaState:
     """Build a snapshot from BlueZ property dicts.
 
     Coerces through str()/int() so dbus types and plain types both work,
@@ -71,6 +73,7 @@ def media_state_from_bluez(player_props: dict | None,
         shuffle=_text(player_props.get("Shuffle")),
         repeat=_text(player_props.get("Repeat")),
         volume=volume,
+        art_path=_text(art_path),
     )
 
 

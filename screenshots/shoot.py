@@ -96,6 +96,27 @@ def _render(out: pathlib.Path) -> int:
     from PyQt6.QtQml import QQmlApplicationEngine
     from PyQt6.QtQuick import QQuickWindow
 
+    def _seed_cover() -> str:
+        """A synthetic album cover, painted rather than shipped, so the
+        Music capture shows art without a binary asset in the repo."""
+        from PyQt6.QtCore import QRectF, Qt
+        from PyQt6.QtGui import QColor, QImage, QLinearGradient, QPainter
+        p = pathlib.Path(os.environ["XDG_STATE_HOME"]) / "cover.png"
+        if not p.exists():
+            img = QImage(300, 300, QImage.Format.Format_RGB32)
+            painter = QPainter(img)
+            grad = QLinearGradient(0, 0, 300, 300)
+            grad.setColorAt(0, QColor("#e8a33d"))
+            grad.setColorAt(1, QColor("#b0524f"))
+            painter.fillRect(0, 0, 300, 300, grad)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255, 60))
+            painter.drawEllipse(QRectF(150, -40, 260, 260))
+            painter.drawEllipse(QRectF(-70, 160, 220, 220))
+            painter.end()
+            img.save(str(p))
+        return str(p)
+
     class StubClient(QObject):
         """Everything Bridge asks of DaemonClient, answered locally.
 
@@ -159,6 +180,7 @@ def _render(out: pathlib.Path) -> int:
                 "album": "Field Notes", "duration_ms": 214_000,
                 "position_ms": 83_000, "shuffle": "off",
                 "repeat": "alltracks", "volume": 55,
+                "art_path": _seed_cover(),
             })
 
         def media_play(self, on_err=None) -> None:
