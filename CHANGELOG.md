@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.15.0] — 2026-08-27
+
+### Added
+- **Phone vitals on the Status tab.** Battery percentage, updating live
+  from the phone's Bluetooth battery service (the coarse HFP level
+  fills in with a ~ when that is all there is); cellular carrier and
+  signal, drawn as four bars the way the phone's own status bar shows
+  it; and the model, translated from its identifier to the marketing
+  name ("iPhone 17 Pro") through a table generated from libirecovery's
+  device list — an identifier newer than the table displays as itself.
+  The daemon's D-Bus surface grew a `GetPhoneStatus` method and a
+  `PhoneStatusChanged` signal.
+- **Low-battery notification**, once per dip below
+  `IPHONEBRIDGE_LOW_BATTERY` (default 20%, 0 disables), with
+  hysteresis so a reading hovering at the threshold cannot ring
+  repeatedly.
+
+### Known
+- The signal-bar count mirrors what iOS sends over the hands-free
+  link, which matches the phone's displayed bars as measured; if the
+  two ever disagree at some level, that mapping is the suspect.
+
 ## [0.14.0] — 2026-08-27
 
 ### Added

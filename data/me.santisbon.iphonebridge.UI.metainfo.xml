@@ -61,6 +61,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.15.0" date="2026-08-27">
+      <description>
+        <p>The Status tab now shows the phone's vitals: battery,
+        cellular carrier and signal bars, and the model by its
+        marketing name. A desktop notification warns when the
+        phone's battery runs low.</p>
+      </description>
+    </release>
     <release version="0.14.0" date="2026-08-27">
       <description>
         <p>New Music tab: control the iPhone's playback while its audio
