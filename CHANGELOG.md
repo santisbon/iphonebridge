@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.14.0] — 2026-08-27
+
+### Added
+- **Music tab.** Control whatever the iPhone is playing, for as long as
+  its audio routes through this computer: album art, play/pause and
+  skip, a position bar, absolute volume, and shuffle/repeat. BlueZ
+  speaks the AVRCP protocol; the daemon watches its player objects and
+  fetches each track's cover over the AVRCP image channel into a small
+  on-disk cache. The artwork scales to fill the window. The daemon's
+  D-Bus surface grew a `Media1` interface for other clients.
+
+### Fixed
+- A lower-case `IPHONEBRIDGE_MAC` silently broke the daemon's ANCS
+  matching: BlueZ object paths carry the address upper-cased, and the
+  daemon was the one derivation that didn't normalise. Every device
+  path now comes from one shared helper.
+
+### Known
+- Playback controls exist only while the iPhone plays audio through
+  this computer, and the position bar is display-only — AVRCP carries
+  no seek.
+- After a daemon restart mid-song, the current track shows no cover
+  until the next track change: iOS only offers image handles once the
+  image channel is connected, and never re-announces the current track.
+- Whether shuffle and repeat take effect is up to the app playing on
+  the phone; the rows only advance when the phone confirms the change.
+
 ## [0.13.0] — 2026-08-26
 
 ### Added

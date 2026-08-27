@@ -1,3 +1,13 @@
+iphonebridge (0.14.0) unstable; urgency=medium
+
+  * New Music tab: control the iPhone's playback over AVRCP while its
+    audio plays through this computer — album art, play/pause, skip,
+    volume, and shuffle/repeat.
+  * A lower-case IPHONEBRIDGE_MAC no longer silently breaks ANCS
+    matching; every BlueZ device path now comes from one helper.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Thu, 27 Aug 2026 03:32:09 -0500
+
 iphonebridge (0.13.0) unstable; urgency=medium
 
   * Notifications can be dismissed from either end: the app clears them

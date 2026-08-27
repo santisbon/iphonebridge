@@ -61,6 +61,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.14.0" date="2026-08-27">
+      <description>
+        <p>New Music tab: control the iPhone's playback while its audio
+        plays through this computer — album art, play/pause, skip,
+        volume, and shuffle/repeat.</p>
+      </description>
+    </release>
     <release version="0.13.0" date="2026-08-26">
       <description>
         <p>Notifications can be dismissed from either end: dismissing a
