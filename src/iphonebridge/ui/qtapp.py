@@ -29,6 +29,7 @@ from iphonebridge.media.events import (
     repeat_display,
     shuffle_display,
 )
+from iphonebridge.models import marketing_name
 from iphonebridge.ui.model import ThreadStore
 from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
 from iphonebridge.ui.qtmodels import (
@@ -539,7 +540,7 @@ class Bridge(QObject):
             rows.append({"label": "Cellular", "value": value,
                          "state": "ok" if reg in ("registered", "roaming")
                          else "warn"})
-        model = str(p.get("model", ""))
+        model = marketing_name(str(p.get("model", "")))
         rows.append({"label": "Model", "value": model or "Unknown",
                      "state": "ok" if model else "idle"})
         return rows
