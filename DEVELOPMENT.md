@@ -31,8 +31,11 @@ sudo apt install python3-pyqt6 python3-pyqt6.qtqml python3-pyqt6.qtquick \
                  qml6-module-qtquick-controls qml6-module-qtquick-layouts \
                  qml6-module-qtquick-templates qml6-module-qtquick-window
 # Native Wayland (otherwise Qt falls back to XWayland and renders
-# blurry under fractional scaling) and the interface's preferred face:
-sudo apt install qt6-wayland fonts-inter
+# blurry under fractional scaling):
+sudo apt install qt6-wayland
+# For the composer's emoji picker: the binding that reads the system
+# emoji dictionary, the dictionary itself, and a colour emoji font:
+sudo apt install gir1.2-ibus-1.0 ibus-data fonts-noto-color-emoji
 # For auto-copying verification codes (Wayland):
 sudo apt install wl-clipboard
 ```

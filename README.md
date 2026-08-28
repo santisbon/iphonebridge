@@ -281,6 +281,24 @@ the first one.
 </details>
 
 <details>
+<summary><b>The emoji picker is empty</b></summary>
+
+The picker reads the desktop's own emoji dictionary rather than shipping
+one, so it needs two things: `gir1.2-ibus-1.0`, the binding that loads
+that dictionary, and `ibus-data`, the dictionary itself. GNOME and KDE
+usually install both already, because the desktop's own emoji picker
+reads the same file.
+
+```bash
+sudo apt install gir1.2-ibus-1.0 ibus-data fonts-noto-color-emoji
+```
+
+`fonts-noto-color-emoji` is what draws the glyphs in colour. The `.deb`
+depends on the binding and recommends the other two; a source checkout
+installs them itself.
+</details>
+
+<details>
 <summary><b><code>ModuleNotFoundError</code> when launching from the project venv (development workflow)</b></summary>
 
 Running `iphonebridge` or `iphonebridge-ui` with the repo's `.venv`
