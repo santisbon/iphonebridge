@@ -43,11 +43,27 @@ Popup {
             groups = bridge.emojiGroups
         catIndex = bridge.emojiRecents.length > 0 ? 0 : 1
     }
+
+    // The set above is read once, on first open, so a change of skin
+    // tone has to send it back for a fresh one. Binding on the tone
+    // itself keeps that to an integer comparison: the set is only
+    // re-read when the value actually moves, not on every insertion.
+    property int tone: bridge.emojiTone
+    onToneChanged: {
+        if (groups.length > 0)
+            groups = bridge.emojiGroups
+        if (searching)
+            results = bridge.searchEmoji(searchField.text)
+    }
     onOpened: searchField.forceActiveFocus()
     onClosed: searchField.text = ""
 
     contentItem: ColumnLayout {
         spacing: Math.round(6 * picker.theme.k)
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Math.round(6 * picker.theme.k)
 
         TextField {
             id: searchField
@@ -74,6 +90,80 @@ Popup {
             onTextChanged: picker.results =
                 text.trim().length >= 2 ? bridge.searchEmoji(text) : []
             Keys.onEscapePressed: picker.close()
+        }
+
+            // Skin tone. The button wears the tone in force; clicking it
+            // opens the six choices, neutral first.
+            Rectangle {
+                id: toneButton
+                objectName: "emojiTone"
+                Layout.preferredWidth: Math.round(30 * picker.theme.k)
+                Layout.preferredHeight: Layout.preferredWidth
+                radius: Math.round(8 * picker.theme.k)
+                color: tonePopup.opened ? picker.theme.fill
+                       : toneTap.containsMouse ? picker.theme.hover
+                                               : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: bridge.emojiToneSwatches[bridge.emojiTone + 1]
+                          || "✋"
+                    font.pointSize: picker.theme.rowSize * 1.15
+                }
+                MouseArea {
+                    id: toneTap
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: tonePopup.opened ? tonePopup.close()
+                                                : tonePopup.open()
+                }
+
+                Popup {
+                    id: tonePopup
+                    popupType: Popup.Item
+                    y: parent.height + Math.round(4 * picker.theme.k)
+                    x: -width + parent.width
+                    padding: Math.round(4 * picker.theme.k)
+                    background: Rectangle {
+                        radius: Math.round(8 * picker.theme.k)
+                        color: picker.theme.canvas
+                        border.width: 1
+                        border.color: picker.theme.separator
+                    }
+                    contentItem: Row {
+                        spacing: 1
+                        Repeater {
+                            model: bridge.emojiToneSwatches
+                            Rectangle {
+                                required property string modelData
+                                required property int index
+                                width: Math.round(34 * picker.theme.k)
+                                height: width
+                                radius: Math.round(6 * picker.theme.k)
+                                // index 0 is the neutral form, so the
+                                // tone it sets is one less.
+                                color: bridge.emojiTone === index - 1
+                                       ? picker.theme.fill
+                                       : swatchTap.containsMouse
+                                         ? picker.theme.hover : "transparent"
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: parent.modelData
+                                    font.pointSize: picker.theme.rowSize * 1.3
+                                }
+                                MouseArea {
+                                    id: swatchTap
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        bridge.setEmojiTone(parent.index - 1)
+                                        tonePopup.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Row {

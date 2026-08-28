@@ -1,11 +1,25 @@
 """ui/emoji.py — grouping, search and recents, on fixture data."""
+from typing import ClassVar
+
+import pytest
+
 from iphonebridge.ui.emoji import (
+    NEUTRAL_TONE,
+    SKIN_TONES,
+    TONE_SAMPLE,
     EmojiEntry,
+    apply_tone,
     build_groups,
+    build_tone_map,
+    load_emoji_db,
     load_recents,
+    load_tone,
     note_recent,
     save_recents,
+    save_tone,
     search_emoji,
+    strip_tone,
+    tone_swatches,
 )
 
 
@@ -88,3 +102,103 @@ class TestRecents:
         p.write_text("{not json")
         assert load_recents(p) == []
         assert load_recents(tmp_path / "missing.json") == []
+
+
+class TestSkinTones:
+    """Tone variants are looked up, never assembled from parts."""
+
+    HAND = "\U0001F44B"                      # waving hand
+    LIGHT = "\U0001F44B\U0001F3FB"
+    DARK = "\U0001F44B\U0001F3FF"
+    # A joined sequence: the modifier sits after the person, not at the
+    # end, which is why building one by appending would be wrong.
+    BEARD = "\U0001F9D4‍♂️"
+    BEARD_LIGHT = "\U0001F9D4\U0001F3FB‍♂️"
+    TWO_TONE = "\U0001FAF1\U0001F3FB‍\U0001FAF2\U0001F3FF"
+
+    DB: ClassVar[list] = [
+        entry(HAND, "waving hand", cat="People & Body"),
+        entry(LIGHT, "waving hand: light skin tone", cat="People & Body"),
+        entry(DARK, "waving hand: dark skin tone", cat="People & Body"),
+        entry(BEARD, "man: beard", cat="People & Body"),
+        entry(BEARD_LIGHT, "man: light skin tone, beard", cat="People & Body"),
+        entry(TWO_TONE, "handshake: light, dark", cat="People & Body"),
+        entry("\U0001F355", "pizza", cat="Food & Drink"),
+    ]
+
+    def test_strip_tone(self):
+        assert strip_tone(self.LIGHT) == self.HAND
+        assert strip_tone(self.BEARD_LIGHT) == self.BEARD
+        assert strip_tone(self.HAND) == self.HAND
+        assert strip_tone("") == ""
+
+    def test_map_indexes_every_single_tone_form(self):
+        m = build_tone_map(self.DB)
+        assert m[self.HAND][0] == self.LIGHT
+        assert m[self.HAND][4] == self.DARK
+        assert apply_tone(self.BEARD, 0, m) == self.BEARD_LIGHT
+
+    def test_a_variation_selector_does_not_hide_the_variants(self):
+        # "raised hand" is listed both bare and with the emoji-
+        # presentation selector, while its toned forms carry only the
+        # bare spelling. Both must still find their tones.
+        bare, vs = "\u270B", "\u270B\ufe0f"
+        db = [entry(bare, "raised hand"),
+              entry(vs, "raised hand"),
+              entry(bare + SKIN_TONES[2], "raised hand: medium skin tone")]
+        m = build_tone_map(db)
+        assert apply_tone(bare, 2, m) == bare + SKIN_TONES[2]
+        assert apply_tone(vs, 2, m) == bare + SKIN_TONES[2]
+
+    def test_two_tone_sequences_are_left_out(self):
+        m = build_tone_map(self.DB)
+        assert strip_tone(self.TWO_TONE) not in m
+
+    def test_apply_tone(self):
+        m = build_tone_map(self.DB)
+        assert apply_tone(self.HAND, 0, m) == self.LIGHT
+        assert apply_tone(self.HAND, 4, m) == self.DARK
+        # neutral leaves it alone
+        assert apply_tone(self.HAND, NEUTRAL_TONE, m) == self.HAND
+        # an emoji with no tones passes through untouched
+        assert apply_tone("\U0001F355", 2, m) == "\U0001F355"
+        # a tone this emoji does not have falls back to what was asked
+        assert apply_tone(self.HAND, 2, m) == self.HAND
+
+    def test_joined_sequence_keeps_the_modifier_inside(self):
+        m = build_tone_map(self.DB)
+        toned = apply_tone(self.BEARD, 0, m)
+        assert toned == self.BEARD_LIGHT
+        # the modifier is not simply tacked on the end
+        assert not toned.endswith(SKIN_TONES[0])
+
+    def test_swatches_are_six_wide_and_need_no_dictionary(self):
+        s = tone_swatches()
+        assert len(s) == 1 + len(SKIN_TONES)
+        assert s[0] == TONE_SAMPLE
+        assert len(set(s)) == 6
+
+    def test_swatches_match_what_the_dictionary_says(self):
+        # The selector builds its row by appending a modifier, which is
+        # only right because the sample has no joined parts. Check that
+        # against the real data where it is installed; CI has no
+        # dictionary and skips.
+        db = load_emoji_db()
+        if not db:
+            pytest.skip("no system emoji dictionary here")
+        forms = build_tone_map(db).get(TONE_SAMPLE, {})
+        assert forms, "the sample emoji should have tone variants"
+        for i, want in forms.items():
+            assert tone_swatches()[i + 1] == want
+
+    def test_tone_roundtrip_and_bad_values(self, tmp_path):
+        p = tmp_path / "tone.json"
+        save_tone(p, 3)
+        assert load_tone(p) == 3
+        save_tone(p, NEUTRAL_TONE)
+        assert load_tone(p) == NEUTRAL_TONE
+        assert load_tone(tmp_path / "missing.json") == NEUTRAL_TONE
+        p.write_text("not json")
+        assert load_tone(p) == NEUTRAL_TONE
+        p.write_text("99")
+        assert load_tone(p) == NEUTRAL_TONE

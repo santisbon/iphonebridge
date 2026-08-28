@@ -31,12 +31,17 @@ from iphonebridge.media.events import (
 )
 from iphonebridge.models import marketing_name
 from iphonebridge.ui.emoji import (
+    apply_tone,
     build_groups,
+    build_tone_map,
     load_emoji_db,
     load_recents,
+    load_tone,
     note_recent,
     save_recents,
+    save_tone,
     search_emoji,
+    tone_swatches,
 )
 from iphonebridge.ui.model import ThreadStore
 from iphonebridge.ui.protocol import QML_CONTEXT_NAMES
@@ -118,6 +123,9 @@ class Bridge(QObject):
         self._emoji_groups: list = []
         self._emoji_recents_path = config.STATE_DIR / "emoji-recents.json"
         self._emoji_recents = load_recents(self._emoji_recents_path)
+        self._emoji_tone_path = config.STATE_DIR / "emoji-tone.json"
+        self._emoji_tone = load_tone(self._emoji_tone_path)
+        self._tone_map: dict = {}
 
         for ev in client.read_events(kinds={"sms_received", "sms_sent"}):
             self.store.ingest(ev, outgoing=(ev.get("kind") == "sms_sent"))
@@ -257,20 +265,59 @@ class Bridge(QObject):
         if self._emoji_db is None:
             self._emoji_db = load_emoji_db()
             self._emoji_groups = build_groups(self._emoji_db)
+            self._tone_map = build_tone_map(self._emoji_db)
         return self._emoji_db
+
+    def _toned(self, emoji: list) -> list:
+        """A list of emoji in the chosen tone. Anything without a form in
+        that tone, which is most of them, comes back unchanged."""
+        if self._emoji_tone < 0:
+            return list(emoji)
+        return [apply_tone(e, self._emoji_tone, self._tone_map)
+                for e in emoji]
 
     @pyqtProperty(list, notify=emojiChanged)
     def emojiGroups(self) -> list:
         self._emoji()
-        return self._emoji_groups
+        return [{"name": g["name"],
+                 "icon": g["icon"],
+                 "emoji": self._toned(g["emoji"])}
+                for g in self._emoji_groups]
 
     @pyqtProperty(list, notify=emojiChanged)
     def emojiRecents(self) -> list:
+        # Stored as they were inserted, tone and all, so a tone change
+        # does not rewrite what you actually sent.
         return list(self._emoji_recents)
+
+    @pyqtProperty(int, notify=emojiChanged)
+    def emojiTone(self) -> int:
+        return self._emoji_tone
+
+    @pyqtProperty(list, notify=emojiChanged)
+    def emojiToneSwatches(self) -> list:
+        """The six choices the tone selector shows: neutral, then each
+        tone, drawn on one sample emoji.
+
+        Deliberately does not touch the dictionary. The picker's tone
+        button binds to this and exists from startup, so loading here
+        would undo the point of only reading the dictionary when the
+        picker is first opened.
+        """
+        return tone_swatches()
+
+    @pyqtSlot(int)
+    def setEmojiTone(self, tone: int) -> None:
+        tone = int(tone)
+        if tone == self._emoji_tone:
+            return
+        self._emoji_tone = tone
+        save_tone(self._emoji_tone_path, tone)
+        self.emojiChanged.emit()
 
     @pyqtSlot(str, result=list)
     def searchEmoji(self, query: str) -> list:
-        return search_emoji(self._emoji(), query)
+        return self._toned(search_emoji(self._emoji(), query))
 
     @pyqtSlot(str)
     def noteEmojiUsed(self, emoji: str) -> None:

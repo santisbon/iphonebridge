@@ -24,6 +24,12 @@ log = logging.getLogger(__name__)
 DICT_PATH = "/usr/share/ibus/dicts/emoji-en.dict"
 RECENTS_CAP = 30
 
+#: The five Unicode skin tone modifiers, lightest first, in the order a
+#: picker offers them. Index into this is what `apply_tone` calls a tone;
+#: -1 means the neutral form the dictionary lists on its own.
+SKIN_TONES = tuple(chr(cp) for cp in range(0x1F3FB, 0x1F400))
+NEUTRAL_TONE = -1
+
 
 class EmojiEntry(NamedTuple):
     emoji: str
@@ -111,7 +117,100 @@ def search_emoji(entries: list[EmojiEntry], query: str,
     return (by_name + by_keyword)[:limit]
 
 
+# ---- skin tones ---------------------------------------------------------
+
+#: Variation selectors: the invisible characters that ask for the emoji
+#: or the text rendering of a character that has both.
+_VARIATION_SELECTORS = ("️", "︎")
+
+
+def strip_tone(emoji: str) -> str:
+    """`emoji` with any skin tone modifier removed."""
+    return "".join(ch for ch in emoji if ch not in SKIN_TONES)
+
+
+def _tone_key(emoji: str) -> str:
+    """What a tone lookup files an emoji under.
+
+    Neither the tone modifier nor a variation selector belongs in the
+    key. The dictionary lists a raised hand both with and without the
+    emoji-presentation selector, and its toned forms carry only one of
+    those spellings, so a key that kept the selector would leave the
+    other spelling unable to find its own variants.
+    """
+    return "".join(ch for ch in emoji
+                   if ch not in SKIN_TONES
+                   and ch not in _VARIATION_SELECTORS)
+
+
+def build_tone_map(entries: list[EmojiEntry]) -> dict[str, dict[int, str]]:
+    """Neutral emoji -> {tone index: the emoji in that tone}.
+
+    Read out of the dictionary rather than assembled from a base and a
+    modifier. In a joined sequence the modifier belongs after the person
+    it applies to, not at the end (a bearded man in a light tone is the
+    man, then the modifier, then the join and the beard), so appending
+    one would produce a sequence that renders as two glyphs. Every valid
+    form is already an entry of its own; this indexes them.
+
+    Entries carrying two modifiers, the couples and handshakes where each
+    person has their own tone, are left out: they have no single tone to
+    file them under.
+    """
+    out: dict[str, dict[int, str]] = {}
+    for e in entries:
+        mods = [ch for ch in e.emoji if ch in SKIN_TONES]
+        if len(mods) != 1:
+            continue
+        out.setdefault(_tone_key(e.emoji), {})[SKIN_TONES.index(mods[0])] = \
+            e.emoji
+    return out
+
+
+def apply_tone(emoji: str, tone: int,
+               tone_map: dict[str, dict[int, str]]) -> str:
+    """`emoji` in the chosen tone, unchanged when it has no such form.
+
+    Most emoji have no tones at all, so this has to pass them through
+    untouched rather than treating a miss as an error.
+    """
+    if tone < 0:
+        return emoji
+    return tone_map.get(_tone_key(emoji), {}).get(tone, emoji)
+
+
+#: The emoji the tone selector is drawn on. A raised hand is one
+#: character with no joined parts, so its toned forms really are the
+#: base followed by the modifier. That is what lets `tone_swatches`
+#: build the selector without the dictionary loaded, which matters
+#: because the button carrying it exists from startup while the
+#: dictionary is not read until the picker is first opened.
+TONE_SAMPLE = "✋"
+
+
+def tone_swatches() -> list[str]:
+    """The selector's row: the neutral sample, then it in each tone."""
+    return [TONE_SAMPLE] + [TONE_SAMPLE + t for t in SKIN_TONES]
+
+
+def load_tone(path: Path) -> int:
+    """The saved tone index, or neutral when there is none."""
+    try:
+        tone = int(json.loads(Path(path).read_text()))
+    except (OSError, ValueError, TypeError):
+        return NEUTRAL_TONE
+    return tone if -1 <= tone < len(SKIN_TONES) else NEUTRAL_TONE
+
+
+def save_tone(path: Path, tone: int) -> None:
+    try:
+        Path(path).write_text(json.dumps(int(tone)))
+    except OSError:
+        log.exception("could not save the emoji skin tone")
+
+
 # ---- recently used ------------------------------------------------------
+
 
 def note_recent(recents: list[str], emoji: str,
                 cap: int = RECENTS_CAP) -> list[str]:
