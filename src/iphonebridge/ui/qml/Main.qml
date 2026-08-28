@@ -5,7 +5,13 @@ import QtQuick.Layouts
 
 ApplicationWindow {
     id: win
-    width: 940; height: 720; visible: true
+    // Sized to the Status page, the tallest of the five and the only
+    // one with a button at its bottom edge: a cut-off "Check again"
+    // reads as a missing button rather than as something to scroll
+    // to. It measures 824 logical pixels at the desktop's default
+    // font with the daemon down, which is both the state that grows
+    // the page and the state the button is for.
+    width: 940; height: 840; visible: true
     title: "iPhone Bridge"
     color: appTheme.canvas
 
