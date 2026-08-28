@@ -61,6 +61,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.16.0" date="2026-08-28">
+      <description>
+        <p>An emoji picker in the composer with search and a
+        recently-used tab, emoji drawn larger than the words in
+        messages, and a fix for uneven text on fractional-scale
+        displays.</p>
+      </description>
+    </release>
     <release version="0.15.0" date="2026-08-27">
       <description>
         <p>The Status tab now shows the phone's vitals: battery,

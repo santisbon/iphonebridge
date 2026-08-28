@@ -1,9 +1,12 @@
-iphonebridge (0.15.0) unstable; urgency=medium
+iphonebridge (0.16.0) unstable; urgency=medium
 
-  * Phone vitals on the Status tab: battery percentage, cellular carrier
-    and signal bars, and the model shown by its marketing name.
-  * A desktop notification when the iPhone's battery runs low
-    (IPHONEBRIDGE_LOW_BATTERY, default 20%).
+  * Emoji picker in the composer: search, a recently-used tab, and the
+    full system emoji set, read from the desktop's emoji dictionary.
+  * Emoji in messages are drawn larger than the words, and an
+    emoji-only message is drawn large and bubble-less.
+  * Fixed uneven, bold-looking text on fractional-scale displays by
+    rendering all text with curve rendering.
+  * The conversation and the emoji picker are a little larger.
 
- -- santisbon <santisbon@users.noreply.github.com>  Thu, 27 Aug 2026 13:09:40 -0500
+ -- santisbon <santisbon@users.noreply.github.com>  Fri, 28 Aug 2026 14:01:37 -0500
 

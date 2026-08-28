@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.16.0] — 2026-08-28
+
+### Added
+- **Emoji picker in the composer.** A smiley button next to the message
+  field opens a picker with search, a recently-used tab, and the full
+  emoji set read from the system's emoji dictionary (the `ibus-data`
+  package) — nothing hardcoded. Click to insert; it stays open for
+  repeated picks and closes on Escape or a click outside.
+- **Emoji in messages are drawn larger than the words**, and a message
+  that is nothing but emoji is drawn large and bubble-less, the way
+  Messages does it.
+
+### Fixed
+- **Text looked uneven — some letters bold, some thin — on
+  fractional-scale displays.** Qt's default native text carried subpixel
+  antialiasing that the compositor smeared when it resampled the window
+  between differently-scaled monitors. All text now uses curve rendering
+  (greyscale vector outlines, exact at any scale).
+- The composer no longer clips an emoji at its bottom edge.
+
+### Changed
+- The conversation text and the emoji picker are a little larger. The
+  app now draws text in the desktop's font at the desktop size (no
+  bundled font), so `fonts-inter` is no longer recommended.
+
 ## [0.15.0] — 2026-08-27
 
 ### Added
