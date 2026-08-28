@@ -97,6 +97,33 @@ prefixes.
 When a fix does not resolve the reported symptom, say so plainly. A correct
 fix for a real bug is still not the reported bug.
 
+## Measure the fix where the fault lives
+
+For a visual bug, a measurement taken in a path that cannot reproduce the
+fault proves nothing, green or red.
+
+- **Match the render path to the fault.** `QT_QPA_PLATFORM=offscreen` with
+  the software backend has no subpixel antialiasing and no fractional-scale
+  glyph atlas, so it cannot exhibit a subpixel or display-scaling text bug.
+  Use `QT_QUICK_BACKEND=rhi QSG_RHI_BACKEND=gl` at the display's real
+  `QT_SCALE_FACTOR` (e.g. 1.5) for that class.
+- **Build the reproducer before testing any fix.** The harness numbers
+  must match the reported artifact first — e.g. subpixel colour fringe at
+  `|R-B|` near 143 on black-on-grey glyphs. A harness that reads clean
+  where the report is broken is measuring the wrong thing.
+- **Assert the instrument caught something before trusting a number.**
+  Check the grabbed image is non-null and the text actually drew (count
+  dark pixels). A clean reading of a null or blank image is a false
+  positive, worse than a red one.
+- **Separate bad pixels from a bad panel early.** Take a screenshot on the
+  affected display and view that same file on a known-good one: if it
+  still looks wrong the fault is in the framebuffer, if it looks fine the
+  panel is showing good pixels badly. Establish which before theorising.
+- **Do not assume a capture method is faithful.** `grabWindow()` and a
+  compositor screenshot did not reproduce the live rendering here; only
+  the RHI GL offscreen render did. When captures disagree with what is on
+  screen, what is on screen is ground truth.
+
 ## Privacy
 
 Real messages, contacts and phone numbers must never reach a transcript or
@@ -110,6 +137,14 @@ a committed file.
 
 ## Qt and QML
 
+- **Every text item sets `renderType: Text.CurveRendering`.** Native text
+  (the compile-time default on the target distro) carries the desktop's
+  subpixel-RGB antialiasing, which KWin smears into uneven, randomly-bold
+  stems when it resamples the window between fractionally-scaled monitors.
+  Curve rendering is greyscale vector outlines, exact at any scale. It
+  must be per item: KDE's `qqc2-desktop-style` plugin flips the
+  process-wide default back to native after `main()`, so a global
+  `QQuickWindow.setTextRenderType` does not survive. Needs Qt 6.7+.
 - **The desktop's Quick Controls style owns parts of a control.** On the
   target desktops that is `org.kde.desktop`/`org.kde.breeze`, not Basic.
   `Menu`'s internal `ListView` carries the style's highlight item and draws
