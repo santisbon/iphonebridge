@@ -42,9 +42,9 @@ QtObject {
     // One family across every role. Apple's interface does not pair a
     // display face against a text face; it uses one design at different
     // optical sizes, so a second family here would read as a different
-    // product. Inter is the closest widely-packaged face to SF Pro — it was
-    // drawn for interfaces at small sizes — and the desktop's own sans
-    // stands in when it is absent.
+    // product. The family is the desktop's own, not a stand-in for SF
+    // Pro: this app draws text the way every other application on the
+    // desktop does, with nothing of its own in the way.
     function pick(wanted) {
         var have = Qt.fontFamilies()
         for (var i = 0; i < wanted.length; i++)
@@ -53,7 +53,16 @@ QtObject {
         return Qt.application.font.family
     }
 
-    readonly property string ui: pick(["Inter", "SF Pro Text", "Adwaita Sans"])
+    readonly property string ui: Qt.application.font.family
+    // Every text item states its renderType with KDE's own rule
+    // (qqc2-desktop-style): Qt's rendering on a fractional display
+    // scale, native on an integer one. It has to be per item: on KDE,
+    // loading Quick Controls pulls in Kirigami's desktop platform
+    // plugin, which flips the process-wide default to native after
+    // main() has run — measured live — and native snapped "l" to two
+    // solid pixels on a 1.5x display where the desktop's own apps draw
+    // it thin. Screen is the item's own screen, so a move re-decides.
+
     // The exception, and it earns itself: a command you would actually
     // type is the one thing on screen that is code, and it is the one
     // thing set in a monospaced face.
@@ -70,11 +79,14 @@ QtObject {
     readonly property real base: Qt.application.font.pointSize > 0
                                  ? Qt.application.font.pointSize : 10
 
-    readonly property real bodySize:    base * 1.25   // the message itself
-    readonly property real titleSize:   base * 1.15   // conversation name
-    readonly property real rowSize:     base * 1.05   // sender in the list
-    readonly property real subSize:     base          // previews, secondary
-    readonly property real captionSize: base * 0.9    // stamps, day rules
+    // One size: the desktop's. Hierarchy is weight and colour, never a
+    // ladder of multiples — every text item renders at exactly the size
+    // the rest of the desktop's text does.
+    readonly property real bodySize:    base   // the message itself
+    readonly property real titleSize:   base   // conversation name
+    readonly property real rowSize:     base   // sender in the list
+    readonly property real subSize:     base   // previews, secondary
+    readonly property real captionSize: base   // stamps, day rules
 
     // ---- geometry -------------------------------------------------------
     // Anything sized around text scales with it, so a larger desktop font

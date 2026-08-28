@@ -63,15 +63,16 @@ def _days_ago(dt: datetime) -> int:
     return (datetime.now().astimezone().date() - dt.date()).days
 
 
-def daystamp(value: str | None) -> str:
-    """Pango markup for the centred rule between message groups.
+def day_parts(value: str | None) -> tuple[str, str]:
+    """(day, time) for the centred rule between message groups.
 
-    Messages prints the day in bold with the time beside it, and switches
-    to relative wording for the last two days.
+    Messages prints the day in bold with the time beside it, switching
+    to relative wording for the last two days. Returned as two parts so
+    the view draws two plain labels rather than one styled-text label.
     """
     dt = _parse(value)
     if dt is None:
-        return ""
+        return ("", "")
     delta = _days_ago(dt)
     if delta == 0:
         day = "Today"
@@ -81,11 +82,22 @@ def daystamp(value: str | None) -> str:
         day = _fmt(dt, "%A")
     else:
         day = _fmt(dt, "%b %-d")
-    # html.escape rather than GLib's: the &amp;/&lt;/&gt; entities it
-    # produces are valid in both Pango markup and Qt's StyledText, so the
-    # same string serves either front end and this stays free of gi.
+    return (day, _fmt(dt, "%H:%M"))
+
+
+def daystamp(value: str | None) -> str:
+    """Pango markup form of `day_parts`, kept for its existing callers
+    and tests.
+
+    html.escape rather than GLib's: the &amp;/&lt;/&gt; entities it
+    produces are valid in both Pango markup and Qt's StyledText, so the
+    same string serves either front end and this stays free of gi.
+    """
+    day, time = day_parts(value)
+    if not day:
+        return ""
     return (f"<b>{escape(day, quote=False)}</b>  "
-            f"{escape(_fmt(dt, '%H:%M'), quote=False)}")
+            f"{escape(time, quote=False)}")
 
 
 def relative_stamp(value: str | None) -> str:

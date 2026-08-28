@@ -34,6 +34,7 @@ ColumnLayout {
             text: row.label
             color: theme.label
             font.family: theme.ui
+            renderType: Text.CurveRendering
             font.pointSize: theme.rowSize
             elide: Text.ElideRight
             Layout.fillWidth: true
@@ -43,6 +44,7 @@ ColumnLayout {
             text: row.value
             color: row.valueColor
             font.family: theme.ui
+            renderType: Text.CurveRendering
             font.pointSize: theme.rowSize
             // Rounded up, not left to the layout. A label's implicit
             // width is fractional, so its position and its width round

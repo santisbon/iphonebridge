@@ -17,13 +17,14 @@ from PyQt6.QtCore import (
     pyqtSignal,
 )
 
-from iphonebridge.ui.model import (
-    ThreadStore,
-    emoji_markup,
-    emoji_only,
-    unread_keys,
+from iphonebridge.ui.model import ThreadStore, unread_keys
+from iphonebridge.ui.util import (
+    day_parts,
+    event_ts,
+    format_ts,
+    relative_stamp,
+    same_group,
 )
-from iphonebridge.ui.util import daystamp, event_ts, format_ts, relative_stamp, same_group
 
 
 def _roles(*names: str) -> dict[int, bytes]:
@@ -99,31 +100,15 @@ class MessageListModel(QAbstractListModel):
     a run from one sender than across a change of speaker.
     """
 
-    ROLES = _roles("body", "outgoing", "dayText", "newRun", "msgKey",
-                   "emojiOnly", "bodyHtml")
+    ROLES = _roles("body", "outgoing", "dayName", "dayTime", "newRun",
+                   "msgKey")
     countChanged = pyqtSignal()
-    emojiPointSizeChanged = pyqtSignal()
 
     def __init__(self, store: ThreadStore) -> None:
         super().__init__()
         self._store = store
         self._key: str | None = None
         self._rows: list[dict] = []
-        self._emoji_pt = 0.0
-
-    @pyqtProperty(float, notify=emojiPointSizeChanged)
-    def emojiPointSize(self) -> float:
-        """Point size for emoji inside a message. The view sets it from
-        the type scale, because only the view knows what that is."""
-        return self._emoji_pt
-
-    @emojiPointSize.setter
-    def emojiPointSize(self, value: float) -> None:
-        if abs(value - self._emoji_pt) < 0.01:
-            return
-        self._emoji_pt = value
-        self.emojiPointSizeChanged.emit()
-        self.reload()
 
     def roleNames(self) -> dict[int, bytes]:
         return self.ROLES
@@ -143,16 +128,16 @@ class MessageListModel(QAbstractListModel):
         for msg in messages:
             prev_ts = prev["ts"] if prev else None
             starts_group = not same_group(prev_ts, msg["ts"])
+            day, time = day_parts(msg["ts"]) if starts_group else ("", "")
             rows.append({
                 "body": msg["body"],
                 "outgoing": msg["outgoing"],
-                # Empty string, not None: QML binds it directly.
-                "dayText": daystamp(msg["ts"]) if starts_group else "",
+                # Empty strings, not None: QML binds them directly.
+                "dayName": day,
+                "dayTime": time,
                 "newRun": starts_group or prev is None
                           or prev["outgoing"] != msg["outgoing"],
                 "msgKey": msg.get("key") or "",
-                "emojiOnly": emoji_only(msg["body"]),
-                "bodyHtml": emoji_markup(msg["body"], self._emoji_pt),
             })
             prev = msg
         return rows

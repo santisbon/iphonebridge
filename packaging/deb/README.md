@@ -99,7 +99,7 @@ Depends: ${python3:Depends}, ${misc:Depends},
  qml6-module-qtquick-templates, qml6-module-qtquick-window,
  qt6-wayland, gir1.2-ibus-1.0,
  bluez (>= 5.72), bluez-obexd
-Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme, fonts-inter,
+Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme,
  ibus-data, fonts-noto-color-emoji
 Description: iPhone messages, calls, and contacts over Bluetooth
  Daemon, CLI, and Qt app bridging a paired iPhone via the standard

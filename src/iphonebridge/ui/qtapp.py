@@ -746,6 +746,22 @@ def main() -> int:
     if not engine.rootObjects():
         log.error("QML failed to load from %s", QML_DIR)
         return 2
+
+    # Which screen Qt believes the window is on, and at what scale,
+    # logged on every change. The compositor rescales the buffer when
+    # that belief and the actual placement disagree, and rescaled text
+    # is what reads as uneven stems on a mixed-scale desktop; this line
+    # is how to tell the two apart.
+    from PyQt6 import sip
+    from PyQt6.QtQuick import QQuickWindow
+    win = sip.cast(engine.rootObjects()[0], QQuickWindow)
+
+    def _log_screen(*_):
+        scr = win.screen()
+        log.debug("window on screen %s at scale %.2f",
+                  scr.name() if scr else "?", win.devicePixelRatio())
+    win.screenChanged.connect(_log_screen)
+    _log_screen()
     return app.exec()
 
 

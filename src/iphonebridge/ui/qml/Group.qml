@@ -30,6 +30,7 @@ ColumnLayout {
         text: group.title.toUpperCase()
         color: theme.label2
         font.family: theme.ui
+        renderType: Text.CurveRendering
         font.pointSize: theme.captionSize
         font.letterSpacing: 0.7
     }
@@ -55,6 +56,7 @@ ColumnLayout {
         text: group.footer
         color: theme.label2
         font.family: theme.ui
+        renderType: Text.CurveRendering
         font.pointSize: theme.captionSize
         wrapMode: Text.Wrap
     }
@@ -67,6 +69,7 @@ ColumnLayout {
         text: group.code
         color: theme.label2
         font.family: theme.mono
+        renderType: Text.CurveRendering
         font.pointSize: theme.captionSize
         wrapMode: Text.Wrap
     }

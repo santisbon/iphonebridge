@@ -58,6 +58,7 @@ Popup {
             color: picker.theme.label
             placeholderTextColor: picker.theme.label2
             font.family: picker.theme.ui
+            renderType: Text.CurveRendering
             font.pointSize: picker.theme.subSize
             leftPadding: Math.round(10 * picker.theme.k)
             rightPadding: Math.round(10 * picker.theme.k)
@@ -165,6 +166,7 @@ Popup {
                         : "Nothing recent yet"
                 color: picker.theme.label2
                 font.family: picker.theme.ui
+                renderType: Text.CurveRendering
                 font.pointSize: picker.theme.subSize
             }
         }

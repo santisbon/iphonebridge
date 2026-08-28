@@ -77,6 +77,7 @@ Menu {
                 // announcing it, so the menu stays quiet until read.
                 color: menu.destructive ? theme.destructive : theme.label
                 font.family: theme.ui
+                renderType: Text.CurveRendering
                 font.pointSize: theme.rowSize
                 anchors.verticalCenter: parent.verticalCenter
             }

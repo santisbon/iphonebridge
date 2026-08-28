@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -40,6 +41,7 @@ ApplicationWindow {
             color: appTheme.label
             placeholderTextColor: appTheme.label2
             font.family: appTheme.ui
+            renderType: Text.CurveRendering
             font.pointSize: appTheme.bodySize
             leftPadding: 12
             rightPadding: 12
@@ -100,6 +102,7 @@ ApplicationWindow {
                             text: modelData.name
                             color: appTheme.label
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.bodySize
                             elide: Text.ElideRight
                             Layout.fillWidth: true
@@ -108,6 +111,7 @@ ApplicationWindow {
                             text: modelData.phone
                             color: appTheme.label2
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.captionSize
                         }
                     }
@@ -139,6 +143,7 @@ ApplicationWindow {
             horizontalAlignment: Text.AlignHCenter
             color: "white"
             font.family: appTheme.ui
+            renderType: Text.CurveRendering
             font.pointSize: appTheme.bodySize
         }
         Behavior on opacity { NumberAnimation { duration: 160 } }
@@ -198,6 +203,7 @@ ApplicationWindow {
                         text: tabBtn.text
                         color: appTheme.label
                         font.family: appTheme.ui
+                        renderType: Text.CurveRendering
                         font.pointSize: appTheme.rowSize
                         font.weight: tabBtn.checked ? Font.DemiBold : Font.Normal
                         horizontalAlignment: Text.AlignHCenter
@@ -220,6 +226,7 @@ ApplicationWindow {
             text: "Daemon not reachable — systemctl --user start iphonebridge"
             color: "#000000"
             font.family: appTheme.ui
+            renderType: Text.CurveRendering
             font.pointSize: appTheme.captionSize
         }
     }
@@ -387,6 +394,7 @@ ApplicationWindow {
                                             color: threadRow.ListView.isCurrentItem
                                                    ? "white" : appTheme.label
                                             font.family: appTheme.ui
+                                            renderType: Text.CurveRendering
                                             font.pointSize: appTheme.titleSize
                                             font.weight: Font.DemiBold
                                             elide: Text.ElideRight
@@ -398,6 +406,7 @@ ApplicationWindow {
                                                    ? Qt.rgba(1, 1, 1, 0.75)
                                                    : appTheme.label2
                                             font.family: appTheme.ui
+                                            renderType: Text.CurveRendering
                                             font.pointSize: appTheme.captionSize
                                         }
                                     }
@@ -407,6 +416,7 @@ ApplicationWindow {
                                                ? Qt.rgba(1, 1, 1, 0.85)
                                                : appTheme.label2
                                         font.family: appTheme.ui
+                                        renderType: Text.CurveRendering
                                         font.pointSize: appTheme.subSize
                                         elide: Text.ElideRight
                                         maximumLineCount: 1
@@ -442,6 +452,7 @@ ApplicationWindow {
                             text: bridge.threadName
                             color: appTheme.label
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.titleSize
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
@@ -465,8 +476,8 @@ ApplicationWindow {
                                     text: bridge.linkText
                                     color: appTheme.label2
                                     font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
                                     font.pointSize: appTheme.captionSize
-                                    font.letterSpacing: 0.3
                                 }
                             }
                         }
@@ -481,6 +492,7 @@ ApplicationWindow {
                             text: "To:"
                             color: appTheme.label2
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.bodySize
                         }
                         RecipientField {
@@ -500,6 +512,7 @@ ApplicationWindow {
                                 text: cancelBtn.text
                                 color: appTheme.accent
                                 font.family: appTheme.ui
+                                renderType: Text.CurveRendering
                                 font.pointSize: appTheme.bodySize
                                 verticalAlignment: Text.AlignVCenter
                             }
@@ -515,6 +528,7 @@ ApplicationWindow {
                         visible: composing && text.length > 0
                         color: appTheme.destructive
                         font.family: appTheme.ui
+                        renderType: Text.CurveRendering
                         font.pointSize: appTheme.bodySize
                         wrapMode: Text.Wrap
                     }
@@ -529,6 +543,7 @@ ApplicationWindow {
                         wrapMode: Text.Wrap
                         color: appTheme.label2
                         font.family: appTheme.ui
+                        renderType: Text.CurveRendering
                         font.pointSize: appTheme.bodySize
                         visible: !composing && bridge.threadName.length === 0
                         text: "No conversation selected\n\n"
@@ -545,6 +560,7 @@ ApplicationWindow {
                         wrapMode: Text.Wrap
                         color: appTheme.label2
                         font.family: appTheme.ui
+                        renderType: Text.CurveRendering
                         font.pointSize: appTheme.bodySize
                         visible: composing
                         text: "New message\n\n"
@@ -564,13 +580,6 @@ ApplicationWindow {
                         clip: true
                         model: messages
                         spacing: 2
-                        // Emoji are drawn at the text size and come out
-                        // too small to read at a size comfortable for a
-                        // sentence. The model needs the number; only the
-                        // view knows it.
-                        Component.onCompleted: messages.emojiPointSize =
-                                               appTheme.bodySize * 1.4
-
                         // Following the end of a growing list takes two
                         // steps, not one. On countChanged the new delegate
                         // has not been laid out yet, so contentHeight is
@@ -648,53 +657,49 @@ ApplicationWindow {
                                 onActivated: bridge.deleteMessage(model.msgKey)
                             }
 
-                            Label {
-                                visible: model.dayText.length > 0
-                                width: parent.width
-                                horizontalAlignment: Text.AlignHCenter
-                                textFormat: Text.StyledText
-                                text: model.dayText
-                                color: appTheme.label2
-                                font.family: appTheme.ui
-                                font.pointSize: appTheme.captionSize
-                                font.letterSpacing: 0.3
+                            Row {
+                                visible: model.dayName.length > 0
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                spacing: Math.round(5 * appTheme.k)
                                 topPadding: 6
                                 bottomPadding: 6
+                                Label {
+                                    text: model.dayName
+                                    color: appTheme.label2
+                                    font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
+                                    font.pointSize: appTheme.captionSize
+                                    font.weight: Font.DemiBold
+                                }
+                                Label {
+                                    text: model.dayTime
+                                    color: appTheme.label2
+                                    font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
+                                    font.pointSize: appTheme.captionSize
+                                }
                             }
                             Rectangle {
                                 anchors.right: model.outgoing ? parent.right : undefined
                                 anchors.rightMargin: appTheme.gutter
                                 x: model.outgoing ? 0 : appTheme.gutter
-                                // A message that is nothing but a couple of
-                                // emoji is drawn large and bare, the way
-                                // Messages does it: there the picture is
-                                // the message, and a bubble around it is
-                                // decoration on a decoration.
-                                readonly property bool bare: model.emojiOnly
-                                width: Math.min(bubbleText.implicitWidth + (bare ? 0 : 24),
+                                width: Math.min(bubbleText.implicitWidth + 24,
                                                 messageList.width * appTheme.bubbleMax)
-                                height: bubbleText.implicitHeight + (bare ? 2 : 14)
+                                height: bubbleText.implicitHeight + 14
                                 radius: appTheme.bubbleRadius
-                                color: bare ? "transparent"
-                                     : model.outgoing ? appTheme.accent : appTheme.bubbleIn
+                                color: model.outgoing ? appTheme.accent : appTheme.bubbleIn
                                 TextEdit {
                                     id: bubbleText
                                     anchors.centerIn: parent
-                                    width: parent.width - (parent.bare ? 0 : 24)
+                                    width: parent.width - 24
                                     wrapMode: Text.Wrap
-                                    // Rich text only where it buys the
-                                    // larger emoji. An emoji-only message
-                                    // is already scaled whole, and a span
-                                    // inside it would shrink it back.
-                                    textFormat: parent.bare ? Text.PlainText
-                                                            : Text.RichText
-                                    text: parent.bare ? model.body : model.bodyHtml
-                                    color: parent.bare ? appTheme.label
-                                         : model.outgoing ? "white"
+                                    textFormat: Text.PlainText
+                                    text: model.body
+                                    color: model.outgoing ? "white"
                                                           : appTheme.bubbleInText
                                     font.family: appTheme.ui
-                                    font.pointSize: parent.bare ? appTheme.bodySize * 2.6
-                                                                : appTheme.bodySize
+                                    renderType: Text.CurveRendering
+                                    font.pointSize: appTheme.bodySize
                                     // Selectable but not editable: copying
                                     // a verification code out of a message
                                     // was possible before and is worth
@@ -790,6 +795,7 @@ ApplicationWindow {
                             color: appTheme.label
                             placeholderTextColor: appTheme.label2
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.bodySize
                             leftPadding: 14
                             rightPadding: 14
@@ -872,6 +878,7 @@ ApplicationWindow {
                 wrapMode: Text.Wrap
                 color: appTheme.label2
                 font.family: appTheme.ui
+                renderType: Text.CurveRendering
                 font.pointSize: appTheme.bodySize
                 visible: notifications.count === 0
                 text: "No notifications yet\n\n"
@@ -906,8 +913,8 @@ ApplicationWindow {
                     text: section.toUpperCase()
                     color: appTheme.label2
                     font.family: appTheme.ui
+                    renderType: Text.CurveRendering
                     font.pointSize: appTheme.captionSize
-                    font.letterSpacing: 0.7
                 }
 
                 delegate: Rectangle {
@@ -949,6 +956,7 @@ ApplicationWindow {
                             text: "\u00d7"
                             color: appTheme.label2
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.rowSize
                         }
                         MouseArea {
@@ -973,6 +981,7 @@ ApplicationWindow {
                                 text: model.title
                                 color: appTheme.label
                                 font.family: appTheme.ui
+                                renderType: Text.CurveRendering
                                 font.pointSize: appTheme.rowSize
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
@@ -988,6 +997,7 @@ ApplicationWindow {
                                          || xArea.containsMouse ? 0 : 1
                                 color: appTheme.label2
                                 font.family: appTheme.ui
+                                renderType: Text.CurveRendering
                                 font.pointSize: appTheme.captionSize
                             }
                         }
@@ -996,6 +1006,7 @@ ApplicationWindow {
                             text: model.body
                             color: appTheme.label2
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.subSize
                             wrapMode: Text.Wrap
                             maximumLineCount: 3
@@ -1056,6 +1067,7 @@ ApplicationWindow {
                                     text: "Call"
                                     color: "white"
                                     font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
                                     font.pointSize: appTheme.rowSize
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
@@ -1098,6 +1110,7 @@ ApplicationWindow {
                                     contentItem: Text {
                                         text: "Answer"; color: "white"
                                         font.family: appTheme.ui
+                                        renderType: Text.CurveRendering
                                         font.pointSize: appTheme.captionSize
                                         font.weight: Font.DemiBold
                                         horizontalAlignment: Text.AlignHCenter
@@ -1119,6 +1132,7 @@ ApplicationWindow {
                                     contentItem: Text {
                                         text: "Hang up"; color: "white"
                                         font.family: appTheme.ui
+                                        renderType: Text.CurveRendering
                                         font.pointSize: appTheme.captionSize
                                         font.weight: Font.DemiBold
                                         horizontalAlignment: Text.AlignHCenter
@@ -1143,6 +1157,7 @@ ApplicationWindow {
                             text: "Hang up all"
                             color: appTheme.destructive
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.rowSize
                         }
                         MouseArea {
@@ -1264,6 +1279,7 @@ ApplicationWindow {
                                       ? bridge.mediaTitle : "Unknown title"
                                 color: appTheme.label
                                 font.family: appTheme.ui
+                                renderType: Text.CurveRendering
                                 font.pointSize: appTheme.rowSize
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
@@ -1279,6 +1295,7 @@ ApplicationWindow {
                                       + bridge.mediaAlbum
                                 color: appTheme.label2
                                 font.family: appTheme.ui
+                                renderType: Text.CurveRendering
                                 font.pointSize: appTheme.subSize
                                 elide: Text.ElideRight
                                 horizontalAlignment: Text.AlignHCenter
@@ -1292,6 +1309,7 @@ ApplicationWindow {
                                     text: bridge.formatMs(musicPage.posMs)
                                     color: appTheme.label2
                                     font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
                                     font.pointSize: appTheme.captionSize
                                     Layout.preferredWidth:
                                         Math.ceil(implicitWidth)
@@ -1324,6 +1342,7 @@ ApplicationWindow {
                                               bridge.mediaDurationMs)
                                     color: appTheme.label2
                                     font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
                                     font.pointSize: appTheme.captionSize
                                     Layout.preferredWidth:
                                         Math.ceil(implicitWidth)
@@ -1477,6 +1496,7 @@ ApplicationWindow {
                                     text: bridge.mediaShuffleText
                                     color: appTheme.label
                                     font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
                                     font.pointSize: appTheme.captionSize
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
@@ -1506,6 +1526,7 @@ ApplicationWindow {
                                     text: bridge.mediaRepeatText
                                     color: appTheme.label
                                     font.family: appTheme.ui
+                                    renderType: Text.CurveRendering
                                     font.pointSize: appTheme.captionSize
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
@@ -1585,6 +1606,7 @@ ApplicationWindow {
                             text: "Check again"
                             color: appTheme.accent
                             font.family: appTheme.ui
+                            renderType: Text.CurveRendering
                             font.pointSize: appTheme.rowSize
                         }
                         MouseArea {
