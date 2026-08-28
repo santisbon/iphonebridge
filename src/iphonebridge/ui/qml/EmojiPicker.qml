@@ -160,9 +160,15 @@ Popup {
                 width: parent.width - Math.round(24 * picker.theme.k)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
+                // Two packages can be the missing one: the dictionary
+                // and the binding that reads it. Naming only the first
+                // sends anyone missing the second to the wrong place.
+                // The names go on their own line so wrapping cannot
+                // break one in half and leave it uncopyable.
                 text: picker.searching ? "No matches"
                       : picker.groups.length === 0
-                        ? "No emoji data — install the ibus-data package"
+                        ? "No emoji data. Install these packages:\n"
+                          + "ibus-data and gir1.2-ibus-1.0"
                         : "Nothing recent yet"
                 color: picker.theme.label2
                 font.family: picker.theme.ui
