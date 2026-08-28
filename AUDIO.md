@@ -78,19 +78,33 @@ That matters because AAC into SBC is close to the worst pairing
 available. SBC's artifacts land in the high frequencies that the first
 AAC pass has already thinned out.
 
-To see what your own link settled on:
+To see what your own link settled on, connect the phone's audio to this
+computer, then run these three. Playing something makes the link's state
+easy to confirm, but the codec is readable either way.
 
-```bash
-# 0x00 = SBC, 0x02 = AAC
-busctl --system introspect org.bluez \
-  /org/bluez/hci0/dev_<YOUR_MAC>/fd0 org.bluez.MediaTransport1 | grep Codec
-
-# and whether an AAC plugin exists at all
-ls /usr/lib/x86_64-linux-gnu/spa-0.2/bluez5/ | grep -i aac
+```sh
+# The paired devices, with their addresses as BlueZ spells them.
+# Find your iPhone in the list.
+bluetoothctl devices
 ```
 
-An empty second result means the link cannot use AAC no matter what the
-phone offers.
+```sh
+# The codec in use: Codec reads 0 for SBC and 2 for AAC. BlueZ publishes
+# one audio transport object per connected audio link, under a path it
+# names itself, so this looks the path up rather than making you type an
+# address. State reads active while audio is flowing and idle when it is
+# not; nothing prints at all if the phone's audio is not connected here.
+for fd in $(busctl --system tree org.bluez | grep -oE '/org/bluez/\S+/fd[0-9]+'); do
+  busctl --system introspect org.bluez "$fd" org.bluez.MediaTransport1 | grep -E '\.Codec|\.State'
+done
+```
+
+```sh
+# The codec plugins installed, x86-64 path shown. Look for a filename
+# containing aac: on Debian and Ubuntu there is none, and without it the
+# link cannot use AAC whatever the phone offers.
+ls /usr/lib/x86_64-linux-gnu/spa-0.2/bluez5/
+```
 
 ### Getting AAC over Bluetooth
 
