@@ -580,6 +580,12 @@ ApplicationWindow {
                         clip: true
                         model: messages
                         spacing: 2
+                        // Emoji inside a message are drawn larger than the
+                        // words: at the reading size they are too small to
+                        // make out. The model needs the number; only the
+                        // view knows the type scale.
+                        Component.onCompleted: messages.emojiPointSize =
+                                               appTheme.bodySize * 1.4
                         // Following the end of a growing list takes two
                         // steps, not one. On countChanged the new delegate
                         // has not been laid out yet, so contentHeight is
@@ -683,23 +689,40 @@ ApplicationWindow {
                                 anchors.right: model.outgoing ? parent.right : undefined
                                 anchors.rightMargin: appTheme.gutter
                                 x: model.outgoing ? 0 : appTheme.gutter
-                                width: Math.min(bubbleText.implicitWidth + 24,
+                                // A message that is nothing but a couple of
+                                // emoji is drawn large and bare, the way
+                                // Messages does it: there the picture is
+                                // the message, and a bubble around it is
+                                // decoration on a decoration.
+                                readonly property bool bare: model.emojiOnly
+                                width: Math.min(bubbleText.implicitWidth + (bare ? 0 : 24),
                                                 messageList.width * appTheme.bubbleMax)
-                                height: bubbleText.implicitHeight + 14
+                                height: bubbleText.implicitHeight + (bare ? 2 : 14)
                                 radius: appTheme.bubbleRadius
-                                color: model.outgoing ? appTheme.accent : appTheme.bubbleIn
+                                color: bare ? "transparent"
+                                     : model.outgoing ? appTheme.accent : appTheme.bubbleIn
                                 TextEdit {
                                     id: bubbleText
                                     anchors.centerIn: parent
-                                    width: parent.width - 24
+                                    width: parent.width - (parent.bare ? 0 : 24)
                                     wrapMode: Text.Wrap
-                                    textFormat: Text.PlainText
-                                    text: model.body
-                                    color: model.outgoing ? "white"
+                                    // Rich text only where it buys the
+                                    // larger emoji. An emoji-only message
+                                    // is already scaled whole, and a plain
+                                    // message stays plain so it keeps the
+                                    // clean curve-rendered text path.
+                                    textFormat: parent.bare || !model.richBody
+                                                ? Text.PlainText
+                                                : Text.RichText
+                                    text: parent.bare || !model.richBody
+                                          ? model.body : model.bodyHtml
+                                    color: parent.bare ? appTheme.label
+                                         : model.outgoing ? "white"
                                                           : appTheme.bubbleInText
                                     font.family: appTheme.ui
                                     renderType: Text.CurveRendering
-                                    font.pointSize: appTheme.bodySize
+                                    font.pointSize: parent.bare ? appTheme.bodySize * 2.6
+                                                                : appTheme.bodySize
                                     // Selectable but not editable: copying
                                     // a verification code out of a message
                                     // was possible before and is worth

@@ -17,7 +17,12 @@ from PyQt6.QtCore import (
     pyqtSignal,
 )
 
-from iphonebridge.ui.model import ThreadStore, unread_keys
+from iphonebridge.ui.model import (
+    ThreadStore,
+    emoji_markup,
+    emoji_only,
+    unread_keys,
+)
 from iphonebridge.ui.util import (
     day_parts,
     event_ts,
@@ -101,14 +106,30 @@ class MessageListModel(QAbstractListModel):
     """
 
     ROLES = _roles("body", "outgoing", "dayName", "dayTime", "newRun",
-                   "msgKey")
+                   "msgKey", "emojiOnly", "bodyHtml", "richBody")
     countChanged = pyqtSignal()
+    emojiPointSizeChanged = pyqtSignal()
 
     def __init__(self, store: ThreadStore) -> None:
         super().__init__()
         self._store = store
         self._key: str | None = None
         self._rows: list[dict] = []
+        self._emoji_pt = 0.0
+
+    @pyqtProperty(float, notify=emojiPointSizeChanged)
+    def emojiPointSize(self) -> float:
+        """Point size for emoji inside a message. The view sets it from
+        the type scale, because only the view knows what that is."""
+        return self._emoji_pt
+
+    @emojiPointSize.setter
+    def emojiPointSize(self, value: float) -> None:
+        if abs(value - self._emoji_pt) < 0.01:
+            return
+        self._emoji_pt = value
+        self.emojiPointSizeChanged.emit()
+        self.reload()
 
     def roleNames(self) -> dict[int, bytes]:
         return self.ROLES
@@ -129,6 +150,7 @@ class MessageListModel(QAbstractListModel):
             prev_ts = prev["ts"] if prev else None
             starts_group = not same_group(prev_ts, msg["ts"])
             day, time = day_parts(msg["ts"]) if starts_group else ("", "")
+            html = emoji_markup(msg["body"], self._emoji_pt)
             rows.append({
                 "body": msg["body"],
                 "outgoing": msg["outgoing"],
@@ -138,6 +160,11 @@ class MessageListModel(QAbstractListModel):
                 "newRun": starts_group or prev is None
                           or prev["outgoing"] != msg["outgoing"],
                 "msgKey": msg.get("key") or "",
+                "emojiOnly": emoji_only(msg["body"]),
+                "bodyHtml": html,
+                # Plain text unless the markup actually enlarges an emoji;
+                # a message with no emoji stays on the plain-text path.
+                "richBody": "<span" in html,
             })
             prev = msg
         return rows
