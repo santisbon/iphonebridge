@@ -19,8 +19,8 @@ Popup {
     // Takes focus while open so typing goes to the search field and
     // Escape lands here; the opener refocuses the composer on close.
     focus: true
-    width: Math.round(360 * theme.k)
-    height: Math.round(352 * theme.k)
+    width: Math.round(392 * theme.k)
+    height: Math.round(380 * theme.k)
     padding: Math.round(8 * theme.k)
     background: Rectangle {
         radius: Math.round(10 * theme.k)
@@ -85,7 +85,7 @@ Popup {
                 property bool current: false
                 property string glyph: ""
                 signal tapped()
-                width: Math.round(32 * picker.theme.k)
+                width: Math.round(36 * picker.theme.k)
                 height: width
                 radius: Math.round(8 * picker.theme.k)
                 color: current ? picker.theme.fill
@@ -94,7 +94,7 @@ Popup {
                 Text {
                     anchors.centerIn: parent
                     text: parent.glyph
-                    font.pointSize: picker.theme.subSize
+                    font.pointSize: picker.theme.rowSize * 1.25
                 }
                 MouseArea {
                     id: tabTap
@@ -127,7 +127,7 @@ Popup {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            cellWidth: Math.round(40 * picker.theme.k)
+            cellWidth: Math.round(48 * picker.theme.k)
             cellHeight: cellWidth
             model: picker.searching ? picker.results
                    : picker.catIndex === 0 ? bridge.emojiRecents
@@ -144,7 +144,7 @@ Popup {
                 Text {
                     anchors.centerIn: parent
                     text: parent.modelData
-                    font.pointSize: picker.theme.rowSize * 1.4
+                    font.pointSize: picker.theme.rowSize * 2.2
                 }
                 MouseArea {
                     id: cellTap

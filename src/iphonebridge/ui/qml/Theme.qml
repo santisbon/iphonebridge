@@ -82,11 +82,15 @@ QtObject {
     // One size: the desktop's. Hierarchy is weight and colour, never a
     // ladder of multiples — every text item renders at exactly the size
     // the rest of the desktop's text does.
-    readonly property real bodySize:    base   // the message itself
-    readonly property real titleSize:   base   // conversation name
-    readonly property real rowSize:     base   // sender in the list
-    readonly property real subSize:     base   // previews, secondary
-    readonly property real captionSize: base   // stamps, day rules
+    // A little above the desktop size for the conversation: the message
+    // is the thing being read, so it carries a modest step, with the
+    // list and secondary text following it up. Safe to scale now that
+    // text is curve-rendered and clean at any size (see `ui` above).
+    readonly property real bodySize:    base * 1.15   // the message itself
+    readonly property real titleSize:   base * 1.1    // conversation name
+    readonly property real rowSize:     base * 1.1    // sender in the list
+    readonly property real subSize:     base * 1.05   // previews, secondary
+    readonly property real captionSize: base          // stamps, day rules
 
     // ---- geometry -------------------------------------------------------
     // Anything sized around text scales with it, so a larger desktop font

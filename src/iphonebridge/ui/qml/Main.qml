@@ -810,7 +810,13 @@ ApplicationWindow {
                             id: composer
                             objectName: "composer"
                             Layout.fillWidth: true
-                            implicitHeight: appTheme.fieldHeight
+                            // Vertically centred and tall enough for an
+                            // emoji: a colour emoji is taller than a line
+                            // of text and sits below the baseline, so a
+                            // line-height field clipped its bottom until
+                            // other text reflowed the line.
+                            implicitHeight: Math.round(46 * appTheme.k)
+                            verticalAlignment: TextInput.AlignVCenter
                             placeholderText: bridge.linkOk ? "Message"
                                                            : "Waiting for the iPhone"
                             enabled: (composing || bridge.threadName.length > 0)
@@ -819,7 +825,13 @@ ApplicationWindow {
                             placeholderTextColor: appTheme.label2
                             font.family: appTheme.ui
                             renderType: Text.CurveRendering
-                            font.pointSize: appTheme.bodySize
+                            // A field is one style run, so its emoji and
+                            // its words share a size. Split between the
+                            // bubble's reading text (bodySize) and its
+                            // enlarged inline emoji (bodySize * 1.4): the
+                            // typed emoji reads close to the sent one
+                            // without the words growing to full emoji size.
+                            font.pointSize: appTheme.bodySize * 1.2
                             leftPadding: 14
                             rightPadding: 14
                             background: Rectangle {
