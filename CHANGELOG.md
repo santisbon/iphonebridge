@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.17.0] — 2026-08-28
+
+### Added
+- **Skin tones in the emoji picker.** The button beside the search field
+  opens the six choices, neutral and the five tones; the one you pick
+  applies to every emoji that has variants, follows into what you send,
+  and is remembered between sessions. The toned forms are read from the
+  system dictionary rather than assembled, so joined sequences (a
+  bearded man, a person with a hair colour) come out as one glyph
+  instead of two.
+- **[`AUDIO.md`](AUDIO.md)**, on when to listen over Bluetooth with this
+  app and when a player running on the computer sounds better, with the
+  reasons: Bluetooth encodes the audio a second time, and no Bluetooth
+  codec carries Apple Music Lossless.
+
+### Fixed
+- The picker's no-data message named only one of the two packages it
+  needs, sending anyone missing the other to the wrong place.
+
 ## [0.16.0] — 2026-08-28
 
 ### Added

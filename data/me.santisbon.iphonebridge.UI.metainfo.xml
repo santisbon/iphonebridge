@@ -61,6 +61,12 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.17.0" date="2026-08-28">
+      <description>
+        <p>The emoji picker offers skin tones, chosen from the button
+        beside its search field and remembered between sessions.</p>
+      </description>
+    </release>
     <release version="0.16.0" date="2026-08-28">
       <description>
         <p>An emoji picker in the composer with search and a
