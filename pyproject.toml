@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iphonebridge"
-version = "0.17.0"
+version = "0.18.0"
 description = "Bluetooth bridge from iPhone to Linux desktop — SMS + notifications + contacts"
 authors = [{name = "Gabe Shatunovsky", email = "gabriel@shatunovsky.com"}]
 maintainers = [{name = "santisbon"}]

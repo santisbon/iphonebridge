@@ -62,6 +62,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.0" date="2026-08-28">
+      <description>
+        <p>The Music tab is now Now Playing: it controls podcasts and
+        audiobooks exactly as it controls music. The emoji picker shows
+        each emoji once rather than once per spelling, and names the one
+        under the cursor. The window opens taller so the Status page
+        fits.</p>
+      </description>
+    </release>
     <release version="0.17.0" date="2026-08-28">
       <description>
         <p>The emoji picker offers skin tones, chosen from the button

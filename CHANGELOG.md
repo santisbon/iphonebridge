@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.18.0] — 2026-08-28
+
+### Added
+- **The emoji picker names the emoji under the cursor**, in a strip along
+  its bottom edge. Two cells can hold the same picture and still be
+  different emoji: Norway, Bouvet Island and Svalbard fly one flag
+  between them, and the name is the only thing that separates them.
+
+### Fixed
+- **The emoji picker showed the same emoji more than once.** The system
+  dictionary lists a sequence once for every arrangement of the
+  invisible selector that asks for its emoji form, and the picker drew
+  every one of them — 397 of its cells repeated a picture already on
+  screen, 175 in People & Body alone. Each emoji now appears once.
+- **The Status page cut off its "Check again" button** at the window's
+  default size. The window opens taller.
+
+### Changed
+- **The Music tab is now Now Playing.** It addresses whichever player the
+  iPhone has in front rather than a named app, so it has always driven
+  podcasts and audiobooks exactly as it drives music. The name says so
+  now, and the empty state names them.
+- The message field's text is closer in size to the messages it sends.
+
+### Known
+- Some flags still appear more than once, because different countries fly
+  the same design: Norway, Bouvet Island and Svalbard, or France,
+  Clipperton Island and St. Martin. Hovering names them.
+
 ## [0.17.0] — 2026-08-28
 
 ### Added

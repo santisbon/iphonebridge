@@ -194,20 +194,29 @@ lintian ../iphonebridge_*_all.deb   # a clean build prints nothing
 
 ## Cutting a release
 
-Four files carry the version and must move together:
+Five files carry the version and must move together:
 
 ```
 pyproject.toml            version = "X.Y.Z"
 src/iphonebridge/__init__.py   __version__ = "X.Y.Z"
 CHANGELOG.md              new [X.Y.Z] section at the top
 debian/changelog          new entry, native versioning (no -1 suffix)
+data/me.santisbon.iphonebridge.UI.metainfo.xml   new <release> entry
 ```
+
+The man pages are deliberately not a sixth: their `.TH` version is
+substituted from `debian/changelog` at build time. The metainfo file is
+the one that gets forgotten, because nothing in the build reads it, so it
+goes stale silently — and it is what a software centre shows as the app's
+latest version and what changed in it. Check it with
+`appstreamcli validate data/me.santisbon.iphonebridge.UI.metainfo.xml`.
 
 Then, from a clean tree:
 
 ```bash
 python -m pytest tests -q && ruff check src/ tests/   # both must pass
-git add pyproject.toml src/iphonebridge/__init__.py CHANGELOG.md debian/changelog
+git add pyproject.toml src/iphonebridge/__init__.py CHANGELOG.md \
+        debian/changelog data/me.santisbon.iphonebridge.UI.metainfo.xml
 git commit -m "Release X.Y.Z"
 git tag -a vX.Y.Z -m "vX.Y.Z — one-line summary"
 git push && git push origin vX.Y.Z

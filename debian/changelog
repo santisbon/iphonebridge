@@ -1,3 +1,15 @@
+iphonebridge (0.18.0) unstable; urgency=medium
+
+  * The Music tab is now Now Playing: it controls podcasts and
+    audiobooks exactly as it controls music.
+  * The emoji picker shows each emoji once instead of once per spelling,
+    and names the one under the cursor.
+  * The window opens taller, so the Status page no longer cuts off its
+    "Check again" button.
+  * The message field's text is closer in size to the messages it sends.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Fri, 28 Aug 2026 19:54:25 -0500
+
 iphonebridge (0.17.0) unstable; urgency=medium
 
   * The emoji picker offers skin tones: pick one from the button beside
