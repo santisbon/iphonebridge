@@ -831,13 +831,17 @@ ApplicationWindow {
                             placeholderTextColor: appTheme.label2
                             font.family: appTheme.ui
                             renderType: Text.CurveRendering
-                            // A field is one style run, so its emoji and
-                            // its words share a size. Split between the
-                            // bubble's reading text (bodySize) and its
-                            // enlarged inline emoji (bodySize * 1.4): the
-                            // typed emoji reads close to the sent one
-                            // without the words growing to full emoji size.
-                            font.pointSize: appTheme.bodySize * 1.2
+                            // A field is one style run: the words and the
+                            // emoji typed into it share one size. A bubble
+                            // uses two, bodySize for words and
+                            // bodySize * 1.4 for inline emoji, so this size
+                            // has to be a compromise between them. It sits
+                            // just above bodySize, close to the words it
+                            // will send, because the words are what you
+                            // read while typing. The cost is that a typed
+                            // emoji is smaller than the same emoji once
+                            // sent.
+                            font.pointSize: appTheme.bodySize * 1.1
                             leftPadding: 14
                             rightPadding: 14
                             background: Rectangle {
