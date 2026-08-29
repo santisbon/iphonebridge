@@ -2,7 +2,7 @@
 
 # 📱🐧 iPhone Bridge for Linux
 
-**iPhone messages, notifications, calls, and music on Linux**  
+**iMessage, SMS, verification codes (auto-copied!), notifications, calls, and your phone's music/podcasts/audiobooks on Linux**  
 *No Mac relay. No cloud service. No subscription. Just Bluetooth*.
 
 [![CI](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml/badge.svg)](https://github.com/santisbon/iphonebridge/actions/workflows/ci.yml)
@@ -69,21 +69,21 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 
 ## What it does
 
-| Feature | How | Status |
-|---|---|---|
-| 📨 **Incoming SMS + iMessage** as desktop notifications | MAP MNS push | ✅ |
-| 📤 **Send SMS + iMessage** from the CLI or app | MAP `PushMessage` | ✅ |
-| 📋 **Verification codes auto-copied** to the clipboard | OTP detection | ✅ |
-| 👤 **Contact-name resolution** (1000s of contacts) | PBAP → SQLite cache | ✅ |
-| 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE | ✅ |
-| 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions | ✅ |
-| 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
-| 🎵 **Control playback** — music, podcasts, audiobooks, any app: cover art, play/pause, skip, volume, shuffle/repeat. For sound quality info see [AUDIO.md](AUDIO.md) | AVRCP via BlueZ | ✅ |
-| 🔋 **Battery, cellular signal & carrier** on the Status tab, with a low-battery alert | GATT + HFP | ✅ |
-| 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
-| 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
-| 🖥️ **Desktop app** — conversations, notification feed, call UI, Now Playing | Qt 6 / QML | ✅ |
-| ⚙️ **Runs unattended** | systemd user service | ✅ |
+| Feature | How |
+|---|---|
+| 📨 **Incoming SMS + iMessage** as desktop notifications | MAP MNS push |
+| 📤 **Send SMS + iMessage** from the CLI or app | MAP `PushMessage` |
+| 📋 **Verification codes auto-copied** to the clipboard | OTP detection |
+| 👤 **Contact-name resolution** (1000s of contacts) | PBAP → SQLite cache |
+| 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE |
+| 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions |
+| 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono |
+| 🎵 **Control playback** — music, podcasts, audiobooks, any app: cover art, play/pause, skip, volume, shuffle/repeat. For sound quality info see [AUDIO.md](AUDIO.md) | AVRCP via BlueZ |
+| 🔋 **Battery, cellular signal & carrier** on the Status tab, with a low-battery alert | GATT + HFP |
+| 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag |
+| 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app |
+| 🖥️ **Desktop app** — conversations, notification feed, call UI, Now Playing | Qt 6 / QML |
+| ⚙️ **Runs unattended** | systemd user service |
 
 ## Limitations
 
