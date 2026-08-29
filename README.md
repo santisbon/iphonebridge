@@ -21,7 +21,7 @@
 
 Any apt-based distro: Debian, Ubuntu and its flavours, Pop!_OS, Mint.
 
-1. Download, install, reboot:
+1. Download the `.deb` package, install, reboot:
     ```bash
     curl -LO "$(curl -s https://api.github.com/repos/santisbon/iphonebridge/releases/latest \
       | grep -o 'https://[^"]*_all\.deb')"
@@ -124,8 +124,6 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
   note above), so this is an iOS choice rather than a BlueZ limit. Measured on iOS 26.6.1; a delete on the phone also renumbers every
   remaining message handle, which is why history is deduplicated by content
   rather than by handle.
-
-## Requirements
 
 > ⚠️ **Adapter chipset matters for app notifications (ANCS).** Per-app notifications need a real BLE bond with the iPhone. **Intel adapters do this reliably** (AX-series, and BE200 confirmed with this project). **Realtek adapters and every USB Bluetooth dongle tested so far do *not*** — their firmware negotiates legacy keys that block the cross-transport key derivation iOS needs. SMS/iMessage/contacts (MAP/PBAP) work on any adapter; only ANCS is picky. See [bmh129/ancs4linux's hardware notes](https://github.com/bmh129/ancs4linux).
 
@@ -386,3 +384,13 @@ iphonebridge stands on the shoulders of two prior projects, both GPL-2.0:
 ## License
 
 [GPL-2.0-or-later](LICENSE) · © 2026 Gabe Shatunovsky · fork modifications © 2026 santisbon
+
+## Trademarks
+
+Apple, iPhone, iMessage, Mac, macOS, FaceTime and Apple Music are trademarks of
+Apple Inc., registered in the U.S. and other countries. IOS is a trademark or
+registered trademark of Cisco in the U.S. and other countries and is used under
+license by Apple.
+
+This project is independent and is not affiliated with, authorized by, sponsored
+by, or endorsed by Apple Inc.
