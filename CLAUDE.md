@@ -60,6 +60,15 @@ systemd **user** service.
 - **Put user-visible limitations under a Known heading.** Something people
   will notice and might otherwise file as a bug belongs in the notes.
 - **A pushed tag stays as it is.** Correct it with a follow-up release.
+- **A release is not done until the released artifact is installed here.**
+  Publishing is not the last step: install the exact `.deb` that was
+  attached to the release, restart the daemon, and say so, the same as
+  for any other change (see *Before telling anyone to test* above). What
+  is running otherwise is the previous version with the changes
+  reinstalled over it, which is not the thing anyone downloads. A real
+  version change needs a plain `sudo apt install`, not `--reinstall`;
+  confirm it took with `dpkg -l iphonebridge`, because a filtered apt
+  run can swallow the one line that says it did nothing.
 
 ## Test harnesses
 
