@@ -10,7 +10,7 @@ pybuild only packages what is under `src/`, so neither the images nor the script
 | `messages-daemon-down.png` | Same, with the daemon off the bus |
 | `notifications.png` | ANCS notification feed |
 | `calls.png` | Dialer, and an active call with Answer / Hang up |
-| `music.png` | Now playing over AVRCP, with album art and transport |
+| `music.png` | The Now Playing tab: cover art and transport over AVRCP |
 | `status.png` | Service health, the iPhone toggles, what is stored here |
 | `emoji.png` | The composer's emoji picker, open, naming the cell under the cursor |
 

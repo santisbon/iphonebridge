@@ -1,4 +1,4 @@
-"""media/events.py — the tested contract behind the Music tab.
+"""media/events.py — the tested contract behind the Now Playing tab.
 
 The dict built here is what the daemon's Media1 signal carries, and the
 D-Bus variant coercion can hold neither nested containers nor None, so

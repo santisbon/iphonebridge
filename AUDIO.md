@@ -1,17 +1,25 @@
 # Listening to Apple Music on Linux: Bluetooth or Sidra
 
-iPhone Bridge's Music tab controls playback that is happening **on the
-iPhone**, with the sound arriving over Bluetooth. That is one of two ways
-to listen to Apple Music at a Linux desktop. The other is
+iPhone Bridge's Now Playing tab controls playback that is happening **on
+the iPhone**, with the sound arriving over Bluetooth. That is one of two
+ways to listen to Apple Music at a Linux desktop. The other is
 [Sidra](https://github.com/wimpysworld/sidra), a desktop client that
 wraps `music.apple.com` and plays through the computer's own audio
 stack.
 
 They are good at different things. This page is how to choose, and why.
 
-One clarification: iPhone Bridge's Music tab sends
+One clarification: iPhone Bridge's Now Playing tab sends
 control commands only. It cannot improve or degrade the sound, because
 the audio never passes through it.
+
+This page compares the two routes for **music**, where the difference in
+sound quality is the whole question. The tab itself is not limited to
+music: AVRCP addresses whichever player the phone has in front, so
+podcasts and audiobooks are controlled the same way. For spoken audio
+the argument below mostly evaporates, because a second encode at
+Bluetooth bitrates costs speech far less than it costs music, and there
+is no lossless tier to lose.
 
 ## Which one to use
 

@@ -214,7 +214,7 @@ class Bridge(QObject):
         """
         return self._status_groups
 
-    # ---- now playing (Music tab) ----------------------------------------
+    # ---- now playing (the Now Playing tab) -------------------------------
 
     @pyqtProperty(bool, notify=changed)
     def mediaAvailable(self) -> bool:

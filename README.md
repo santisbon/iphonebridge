@@ -78,11 +78,11 @@ Windows and macOS users can get their iPhone's texts and notifications on the de
 | 🔔 **Every app's notifications** — Slack, WhatsApp, Mail… | ANCS over BLE | ✅ |
 | 🗑️ **Dismiss notifications both ways** — clear here, gone on the iPhone; clear there, gone here | ANCS actions | ✅ |
 | 📞 **Take & place phone calls** — caller ID, answer/decline, dial | HFP via oFono | ✅ |
-| 🎵 **Control playback** — album art, play/pause, skip, volume, shuffle/repeat. For sound quality info see [AUDIO.md](AUDIO.md) | AVRCP via BlueZ | ✅ |
+| 🎵 **Control playback** — music, podcasts, audiobooks, any app: cover art, play/pause, skip, volume, shuffle/repeat. For sound quality info see [AUDIO.md](AUDIO.md) | AVRCP via BlueZ | ✅ |
 | 🔋 **Battery, cellular signal & carrier** on the Status tab, with a low-battery alert | GATT + HFP | ✅ |
 | 🔁 **Read on the desktop marks it read on the iPhone** | MAP `Read` flag | ✅ |
 | 📜 **Message history** — incoming + your desktop replies | `sms-list` / the app | ✅ |
-| 🖥️ **Desktop app** — conversations, notification feed, call UI | Qt 6 / QML | ✅ |
+| 🖥️ **Desktop app** — conversations, notification feed, call UI, Now Playing | Qt 6 / QML | ✅ |
 | ⚙️ **Runs unattended** | systemd user service | ✅ |
 
 ## Limitations
@@ -98,7 +98,7 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
   computer** — the Bluetooth player object rides the audio link. There is no
   seek (AVRCP doesn't carry it), and whether shuffle/repeat take effect is
   up to the app playing on the phone.
-- **Music over Bluetooth is encoded twice**, so it does not sound as good
+- **Audio over Bluetooth is encoded twice**, so it does not sound as good
   as a player running on this computer, and no Bluetooth codec carries
   Apple Music Lossless. [`AUDIO.md`](AUDIO.md) explains when to listen
   this way and when to reach for a desktop client instead.

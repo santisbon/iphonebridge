@@ -1,6 +1,6 @@
 import QtQuick
 
-// Transport glyphs for the Music tab: play, pause, next, prev. Drawn on
+// Transport glyphs for the Now Playing tab: play, pause, next, prev. Drawn on
 // Canvas for the same reasons as ComposeMark — themed icons read as the
 // desktop, and unicode media glyphs depend on font coverage. Filled
 // triangles and bars, drawn in an 18-unit box centred on (9, 9).

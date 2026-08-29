@@ -6,7 +6,7 @@ iphonebridge-ui \- desktop app for iphonebridge
 .SH DESCRIPTION
 Graphical front end for
 .BR iphonebridge (1):
-conversations, the per\-app notification feed, calls, music playback
+conversations, the per\-app notification feed, calls, playback
 control, and service status. It is a separate process talking to the daemon over D\-Bus, so
 closing it leaves messages, notifications and calls still arriving. It
 is not single\-instance; a second invocation opens a second window.
@@ -22,10 +22,11 @@ field) with search and a recently\-used tab, reading the system's
 emoji dictionary (the ibus\-data package); Escape or a click elsewhere
 closes it.
 .PP
-The Music tab controls whatever the iPhone is playing, for as long as
-its audio routes through this computer: album art, play/pause, skip,
-volume, and shuffle/repeat. The position bar is display\-only; AVRCP
-carries no seek.
+The Now Playing tab controls whatever the iPhone is playing \- music,
+podcasts, audiobooks, any app \- for as long as its audio routes
+through this computer: cover art, play/pause, skip, volume, and
+shuffle/repeat. The position bar is display\-only; AVRCP carries no
+seek.
 .SH ENVIRONMENT
 .TP
 .B IPHONEBRIDGE_UI_DIAG

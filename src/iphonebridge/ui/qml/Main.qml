@@ -193,7 +193,11 @@ ApplicationWindow {
                 color: appTheme.fill
             }
             Repeater {
-                model: ["Messages", "Notifications", "Calls", "Music",
+                // "Now Playing" rather than "Music": AVRCP carries
+                // whatever app is playing, so the tab drives podcasts
+                // and audiobooks exactly as it drives songs. It is also
+                // what Apple calls this control on the phone itself.
+                model: ["Messages", "Notifications", "Calls", "Now Playing",
                         "Status"]
                 TabButton {
                     id: tabBtn
@@ -1217,10 +1221,13 @@ ApplicationWindow {
             }
         }
 
-        // ---- Music ---------------------------------------------------
-        // Now-playing control over AVRCP. BlueZ publishes the iPhone's
-        // player only while the classic audio link is up, so the page
-        // has an honest empty state instead of dead controls.
+        // ---- Now Playing ---------------------------------------------
+        // Transport control over AVRCP, for whatever app is playing:
+        // AVRCP addresses the phone's current player, not a particular
+        // one, so podcasts and audiobooks arrive here alongside music.
+        // BlueZ publishes that player only while the classic audio link
+        // is up, so the page has an honest empty state instead of dead
+        // controls.
         Rectangle {
             id: musicPage
             color: appTheme.sidebar
@@ -1267,8 +1274,10 @@ ApplicationWindow {
                         visible: !bridge.mediaAvailable
                         theme: appTheme
                         title: "Now playing"
-                        footer: "Controls appear while the iPhone plays "
-                                + "audio through this computer."
+                        footer: "Music, podcasts, audiobooks — whatever "
+                                + "the iPhone is playing. Controls appear "
+                                + "while its audio comes through this "
+                                + "computer."
                         GroupRow {
                             theme: appTheme
                             label: "Nothing playing"
