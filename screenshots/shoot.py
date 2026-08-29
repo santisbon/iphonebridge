@@ -41,6 +41,9 @@ REPO = HERE.parent
 
 # (tab index, output basename, variant)
 #   "offline" — daemon off the bus, so the warning banner shows
+#   "emoji"   — the composer's emoji picker, open
+# The emoji view goes last because it leaves a popup open, and nothing
+# after it would be captured without the popup on top.
 VIEWS = [
     (0, "messages", None),
     (0, "messages-daemon-down", "offline"),
@@ -48,9 +51,17 @@ VIEWS = [
     (2, "calls", None),
     (3, "music", None),
     (4, "status", None),
+    (0, "emoji", "emoji"),
 ]
 
 SETTLE_MS = 400   # after switching tab or scheme, before grabbing
+EMOJI_LOAD_MS = 1500   # the picker reads the system dictionary on first open
+
+# The interface derives every size from the desktop's font, and the
+# offscreen platform loads no platform theme, so Qt falls back to 9pt
+# where the desktops these images stand in for ask for 10. Left unpinned,
+# the captures show a layout at a size nobody runs.
+DESKTOP_POINT_SIZE = 10
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -91,10 +102,18 @@ def main(argv: list[str]) -> int:
 
 def _render(out: pathlib.Path) -> int:
     from PyQt6 import sip
-    from PyQt6.QtCore import QObject, QTimer, QUrl, pyqtSignal
+    from PyQt6.QtCore import (
+        QMetaObject,
+        QObject,
+        QPointF,
+        QTimer,
+        QUrl,
+        pyqtSignal,
+    )
     from PyQt6.QtGui import QGuiApplication
     from PyQt6.QtQml import QQmlApplicationEngine
     from PyQt6.QtQuick import QQuickWindow
+    from PyQt6.QtTest import QTest
 
     def _seed_cover() -> str:
         """A synthetic album cover, painted rather than shipped, so the
@@ -232,6 +251,10 @@ def _render(out: pathlib.Path) -> int:
     from iphonebridge.ui.qtapp import QML_DIR, Bridge, install_context
 
     app = QGuiApplication([])
+    if app.platformName() == "offscreen":
+        font = app.font()
+        font.setPointSize(DESKTOP_POINT_SIZE)
+        app.setFont(font)
     client = StubClient()
     bridge = Bridge(client)
 
@@ -255,6 +278,63 @@ def _render(out: pathlib.Path) -> int:
 
     state = {"i": 0, "failures": 0}
 
+    def walk(item, name):
+        """findChild does not reach QML delegate items: their QObject
+        parent is not their visual parent. Walk the visual tree."""
+        for child in item.childItems():
+            if child.objectName() == name:
+                return child
+            found = walk(child, name)
+            if found:
+                return found
+        return None
+
+    def centre(item):
+        return item.mapToScene(
+            QPointF(item.width() / 2, item.height() / 2)).toPoint()
+
+    def open_emoji_picker() -> None:
+        """Open the picker and rest the cursor on one cell.
+
+        The cursor is moved for real rather than by assigning the
+        picker's `hovered` property: the cell's own highlight follows the
+        pointer, and a capture that set the property would show a filled
+        name strip over an unhighlighted grid — a state the app cannot
+        actually be in.
+        """
+        picker = next(
+            (o for o in win.findChildren(QObject)
+             if "EmojiPicker" in o.metaObject().className()), None)
+        if picker is None:
+            print("  !! emoji: picker not found", file=sys.stderr)
+            state["failures"] += 1
+            return
+        QMetaObject.invokeMethod(picker, "open")
+        QTest.qWait(EMOJI_LOAD_MS)
+        # The first category rather than whatever recents happen to
+        # hold, so the capture is the same every time.
+        picker.setProperty("catIndex", 1)
+        QTest.qWait(SETTLE_MS)
+        grid = walk(win.contentItem(), "emojiGrid")
+        if grid is None or grid.property("count") == 0:
+            print("  !! emoji: no grid (is ibus-data installed?)",
+                  file=sys.stderr)
+            state["failures"] += 1
+            return
+        want = bridge.emojiGroups[0]["emoji"][10]
+        for row in grid.childItems():
+            for cell in row.childItems():
+                if cell.property("modelData") == want:
+                    QTest.mouseMove(win, centre(cell))
+                    QTest.qWait(SETTLE_MS)
+                    if not picker.property("hovered"):
+                        print("  !! emoji: the name strip stayed empty",
+                              file=sys.stderr)
+                        state["failures"] += 1
+                    return
+        print("  !! emoji: no cell to hover", file=sys.stderr)
+        state["failures"] += 1
+
     def step() -> None:
         i = state["i"]
         if i >= len(VIEWS):
@@ -263,6 +343,8 @@ def _render(out: pathlib.Path) -> int:
         tab, label, variant = VIEWS[i]
         tabs.setProperty("currentIndex", tab)
         client.set_available(variant != "offline")
+        if variant == "emoji":
+            open_emoji_picker()
         QTimer.singleShot(SETTLE_MS, lambda: shoot(label))
 
     def add_titlebar(image, title):

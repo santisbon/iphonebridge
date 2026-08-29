@@ -30,6 +30,10 @@ RECENTS_CAP = 30
 SKIN_TONES = tuple(chr(cp) for cp in range(0x1F3FB, 0x1F400))
 NEUTRAL_TONE = -1
 
+#: Variation selectors: the invisible characters that ask for the emoji
+#: or the text rendering of a character that has both.
+_VARIATION_SELECTORS = ("️", "︎")
+
 
 class EmojiEntry(NamedTuple):
     emoji: str
@@ -62,6 +66,41 @@ def load_emoji_db(path: str = DICT_PATH) -> list[EmojiEntry]:
     return out
 
 
+def fold_spellings(emoji: list[str]) -> list[str]:
+    """One cell per emoji, rather than one per way of spelling it.
+
+    The dictionary lists a sequence once for every arrangement of the
+    emoji-presentation selector it allows: the rainbow flag appears
+    twice and the transgender flag four times, all drawing the same
+    glyph. They are different code point sequences, so only a normalised
+    key tells them apart, and a grid built straight from the dictionary
+    repeats the same picture two, three or four times over.
+
+    Position is the dictionary's, taken from where the first spelling
+    fell. The spelling kept is the fully-qualified one, carrying the most
+    selectors: dropping a selector is exactly what asks a font for the
+    monochrome text form of a character that has both.
+    """
+    out: list[str] = []
+    at: dict[str, int] = {}
+    for e in emoji:
+        key = _strip_selectors(e)
+        if key not in at:
+            at[key] = len(out)
+            out.append(e)
+        elif _selectors(e) > _selectors(out[at[key]]):
+            out[at[key]] = e
+    return out
+
+
+def _selectors(emoji: str) -> int:
+    return sum(1 for ch in emoji if ch in _VARIATION_SELECTORS)
+
+
+def _strip_selectors(emoji: str) -> str:
+    return "".join(ch for ch in emoji if ch not in _VARIATION_SELECTORS)
+
+
 def build_groups(entries: list[EmojiEntry]) -> list[dict]:
     """Category groups for browsing, in the dictionary's own order.
 
@@ -81,8 +120,9 @@ def build_groups(entries: list[EmojiEntry]) -> list[dict]:
             groups[e.category] = []
             order.append(e.category)
         groups[e.category].append(e.emoji)
-    return [{"name": name, "icon": groups[name][0], "emoji": groups[name]}
-            for name in order if groups[name]]
+    folded = {name: fold_spellings(emoji) for name, emoji in groups.items()}
+    return [{"name": name, "icon": folded[name][0], "emoji": folded[name]}
+            for name in order if folded[name]]
 
 
 def search_emoji(entries: list[EmojiEntry], query: str,
@@ -114,14 +154,10 @@ def search_emoji(entries: list[EmojiEntry], query: str,
             seen.add(e.emoji)
         if len(by_name) >= limit:
             break
-    return (by_name + by_keyword)[:limit]
+    return fold_spellings(by_name + by_keyword)[:limit]
 
 
 # ---- skin tones ---------------------------------------------------------
-
-#: Variation selectors: the invisible characters that ask for the emoji
-#: or the text rendering of a character that has both.
-_VARIATION_SELECTORS = ("️", "︎")
 
 
 def strip_tone(emoji: str) -> str:
@@ -138,9 +174,7 @@ def _tone_key(emoji: str) -> str:
     those spellings, so a key that kept the selector would leave the
     other spelling unable to find its own variants.
     """
-    return "".join(ch for ch in emoji
-                   if ch not in SKIN_TONES
-                   and ch not in _VARIATION_SELECTORS)
+    return _strip_selectors(strip_tone(emoji))
 
 
 def build_tone_map(entries: list[EmojiEntry]) -> dict[str, dict[int, str]]:
@@ -177,6 +211,31 @@ def apply_tone(emoji: str, tone: int,
     if tone < 0:
         return emoji
     return tone_map.get(_tone_key(emoji), {}).get(tone, emoji)
+
+
+def build_name_map(entries: list[EmojiEntry]) -> dict[str, str]:
+    """What to call each emoji, keyed so any spelling or tone finds it.
+
+    Keyed on `_tone_key`, the same normalisation the tone map uses, so a
+    name survives both a change of skin tone and whichever spelling the
+    fold kept. Where a character has a plain name and a "…: medium skin
+    tone" one, the plain name wins: this names the character, and the
+    tone is already visible in the glyph.
+    """
+    out: dict[str, str] = {}
+    for e in entries:
+        if not e.description:
+            continue
+        key = _tone_key(e.emoji)
+        if key not in out or ("skin tone" in out[key]
+                              and "skin tone" not in e.description):
+            out[key] = e.description
+    return out
+
+
+def emoji_name(emoji: str, names: dict[str, str]) -> str:
+    """The dictionary's name for `emoji`, or "" when it has none."""
+    return names.get(_tone_key(emoji), "")
 
 
 #: The emoji the tone selector is drawn on. A raised hand is one

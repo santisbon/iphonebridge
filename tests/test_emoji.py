@@ -10,7 +10,10 @@ from iphonebridge.ui.emoji import (
     EmojiEntry,
     apply_tone,
     build_groups,
+    build_name_map,
     build_tone_map,
+    emoji_name,
+    fold_spellings,
     load_emoji_db,
     load_recents,
     load_tone,
@@ -37,6 +40,10 @@ FIXTURE = [
     entry("\U0001F3FB", "light skin tone", cat="Component"),
     entry("\U0001F355", "pizza", cat="Food & Drink", ann=("cheese",)),
     entry("?", "orphan", cat=""),
+    # Two spellings of one flag, as the dictionary lists them: with the
+    # emoji-presentation selector and without.
+    entry("\U0001F3F3\ufe0f\u200d\U0001F308", "rainbow flag", cat="Flags"),
+    entry("\U0001F3F3\u200d\U0001F308", "rainbow flag", cat="Flags"),
 ]
 
 
@@ -45,7 +52,7 @@ class TestGroups:
         groups = build_groups(FIXTURE)
         assert [g["name"] for g in groups] == [
             "Smileys & Emotion", "Animals & Nature", "People & Body",
-            "Food & Drink"]
+            "Food & Drink", "Flags"]
         assert groups[0]["icon"] == "\U0001F600"
         assert groups[2]["emoji"] == ["\U0001F44B"]
 
@@ -57,6 +64,62 @@ class TestGroups:
 
     def test_empty_input(self):
         assert build_groups([]) == []
+
+    def test_one_cell_per_flag_not_per_spelling(self):
+        flags = next(g for g in build_groups(FIXTURE)
+                     if g["name"] == "Flags")
+        assert flags["emoji"] == ["\U0001F3F3\ufe0f\u200d\U0001F308"]
+        assert flags["icon"] == "\U0001F3F3\ufe0f\u200d\U0001F308"
+
+
+class TestNames:
+    NAMES: ClassVar = build_name_map(FIXTURE)
+
+    def test_names_an_emoji(self):
+        assert emoji_name("\U0001F600", self.NAMES) == "grinning face"
+
+    def test_two_flags_that_draw_alike_have_their_own_names(self):
+        names = build_name_map([
+            entry("\U0001F1F3\U0001F1F4", "Norway", cat="Flags"),
+            entry("\U0001F1E7\U0001F1FB", "Bouvet Island", cat="Flags"),
+        ])
+        assert emoji_name("\U0001F1F3\U0001F1F4", names) == "Norway"
+        assert emoji_name("\U0001F1E7\U0001F1FB", names) == "Bouvet Island"
+
+    def test_a_toned_emoji_answers_with_the_plain_name(self):
+        # The fixture lists the light-tone waving hand before the plain
+        # one, so this also pins that order cannot decide the answer.
+        assert emoji_name("\U0001F44B\U0001F3FB", self.NAMES) == "waving hand"
+        assert emoji_name("\U0001F44B", self.NAMES) == "waving hand"
+
+    def test_either_spelling_finds_the_name(self):
+        assert emoji_name("\U0001F3F3\ufe0f\u200d\U0001F308",
+                          self.NAMES) == "rainbow flag"
+        assert emoji_name("\U0001F3F3\u200d\U0001F308",
+                          self.NAMES) == "rainbow flag"
+
+    def test_unknown_emoji_has_no_name(self):
+        assert emoji_name("\U0001F9E8", self.NAMES) == ""
+
+
+class TestFoldSpellings:
+    def test_keeps_the_fully_qualified_spelling(self):
+        bare = "\U0001F3F4\u200d\u2620"
+        full = "\U0001F3F4\u200d\u2620\ufe0f"
+        assert fold_spellings([bare, full]) == [full]
+        assert fold_spellings([full, bare]) == [full]
+
+    def test_holds_the_position_of_the_first_spelling(self):
+        bare = "\U0001F3F4\u200d\u2620"
+        full = "\U0001F3F4\u200d\u2620\ufe0f"
+        assert fold_spellings(["a", bare, "b", full]) == ["a", full, "b"]
+
+    def test_distinct_emoji_are_all_kept(self):
+        assert fold_spellings(["\U0001F600", "\U0001F415"]) == [
+            "\U0001F600", "\U0001F415"]
+
+    def test_empty(self):
+        assert fold_spellings([]) == []
 
 
 class TestSearch:
@@ -81,6 +144,10 @@ class TestSearch:
 
     def test_skin_tone_variants_never_surface(self):
         assert search_emoji(FIXTURE, "waving") == ["\U0001F44B"]
+
+    def test_one_hit_per_flag_not_per_spelling(self):
+        assert search_emoji(FIXTURE, "rainbow") == [
+            "\U0001F3F3\ufe0f\u200d\U0001F308"]
 
     def test_cap(self):
         fix = [entry(chr(0x1F400 + i), f"bug {i}") for i in range(80)]

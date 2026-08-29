@@ -12,7 +12,6 @@
 [![Platform: Linux](https://img.shields.io/badge/platform-Linux%20(GNOME%20%2F%20KDE)-lightgrey.svg)](#requirements)
 
 <img src="screenshots/messages.png" width="700" /><p>
-<img src="screenshots/music.png" width="700" />
 
 </div>
 

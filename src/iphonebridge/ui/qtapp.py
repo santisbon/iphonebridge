@@ -33,7 +33,9 @@ from iphonebridge.models import marketing_name
 from iphonebridge.ui.emoji import (
     apply_tone,
     build_groups,
+    build_name_map,
     build_tone_map,
+    emoji_name,
     load_emoji_db,
     load_recents,
     load_tone,
@@ -126,6 +128,7 @@ class Bridge(QObject):
         self._emoji_tone_path = config.STATE_DIR / "emoji-tone.json"
         self._emoji_tone = load_tone(self._emoji_tone_path)
         self._tone_map: dict = {}
+        self._emoji_names: dict = {}
 
         for ev in client.read_events(kinds={"sms_received", "sms_sent"}):
             self.store.ingest(ev, outgoing=(ev.get("kind") == "sms_sent"))
@@ -266,6 +269,7 @@ class Bridge(QObject):
             self._emoji_db = load_emoji_db()
             self._emoji_groups = build_groups(self._emoji_db)
             self._tone_map = build_tone_map(self._emoji_db)
+            self._emoji_names = build_name_map(self._emoji_db)
         return self._emoji_db
 
     def _toned(self, emoji: list) -> list:
@@ -314,6 +318,21 @@ class Bridge(QObject):
         self._emoji_tone = tone
         save_tone(self._emoji_tone_path, tone)
         self.emojiChanged.emit()
+
+    @pyqtSlot(str, result=str)
+    def emojiName(self, emoji: str) -> str:
+        """What the picker names under the cursor.
+
+        Two cells can hold the same picture and still be different
+        emoji: Norway, Bouvet Island and Svalbard fly one flag between
+        them, as do France, Clipperton Island and St. Martin. The name
+        is the only thing that separates them.
+
+        Only ever called while the picker is open, which has already
+        paid for the dictionary.
+        """
+        self._emoji()
+        return emoji_name(str(emoji), self._emoji_names)
 
     @pyqtSlot(str, result=list)
     def searchEmoji(self, query: str) -> list:

@@ -20,7 +20,7 @@ Popup {
     // Escape lands here; the opener refocuses the composer on close.
     focus: true
     width: Math.round(392 * theme.k)
-    height: Math.round(380 * theme.k)
+    height: Math.round(406 * theme.k)
     padding: Math.round(8 * theme.k)
     background: Rectangle {
         radius: Math.round(10 * theme.k)
@@ -48,6 +48,12 @@ Popup {
     // tone has to send it back for a fresh one. Binding on the tone
     // itself keeps that to an integer comparison: the set is only
     // re-read when the value actually moves, not on every insertion.
+    // The emoji under the cursor, named in the strip along the bottom.
+    // Two cells can hold the same picture and still be different emoji
+    // — Norway, Bouvet Island and Svalbard fly one flag between them —
+    // and the name is the only thing that tells them apart.
+    property string hovered: ""
+
     property int tone: bridge.emojiTone
     onToneChanged: {
         if (groups.length > 0)
@@ -56,7 +62,10 @@ Popup {
             results = bridge.searchEmoji(searchField.text)
     }
     onOpened: searchField.forceActiveFocus()
-    onClosed: searchField.text = ""
+    onClosed: {
+        searchField.text = ""
+        hovered = ""
+    }
 
     contentItem: ColumnLayout {
         spacing: Math.round(6 * picker.theme.k)
@@ -241,6 +250,13 @@ Popup {
                     anchors.fill: parent
                     hoverEnabled: true
                     onClicked: picker.picked(parent.modelData)
+                    onEntered: picker.hovered = parent.modelData
+                    // Only clears if this cell is still the one named:
+                    // moving between neighbours delivers the next
+                    // entered before this exited, and clearing then
+                    // would blank the strip the move just filled.
+                    onExited: if (picker.hovered === parent.modelData)
+                                  picker.hovered = ""
                 }
             }
 
@@ -265,6 +281,23 @@ Popup {
                 renderType: Text.CurveRendering
                 font.pointSize: picker.theme.subSize
             }
+        }
+
+        // Keeps its height whether or not it has a name in it. An empty
+        // layout item normally earns hiding, but this one fills and
+        // empties under the cursor, and hiding it would resize the grid
+        // out from under the pointer on every move.
+        Label {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Math.round(18 * picker.theme.k)
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            text: picker.hovered ? bridge.emojiName(picker.hovered) : ""
+            color: picker.theme.label2
+            font.family: picker.theme.ui
+            renderType: Text.CurveRendering
+            font.pointSize: picker.theme.captionSize
         }
     }
 }
