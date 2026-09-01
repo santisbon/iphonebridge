@@ -188,6 +188,42 @@ class TestMessagingYourself:
         assert len(store.threads) == 1
         assert len(store.messages(merged)) == 3
 
+    def test_two_shortcodes_do_not_share_a_thread(self):
+        """41411 (transit) and 242-73 (bank) are distinct senders.
+
+        Both are shorter than the seven-digit floor, so both used to
+        fold to None, leaving the event with no identity at all and
+        keying every shortcode in the log to one fallback thread.
+        """
+        from iphonebridge.ui.model import ThreadStore
+        store = ThreadStore()
+        cta, _ = store.ingest({"kind": "sms_received",
+                               "sender_phone": "41411"}, outgoing=False)
+        bank, _ = store.ingest({"kind": "sms_received",
+                                "sender_phone": "242-73"}, outgoing=False)
+        assert cta != bank
+        assert len(store.threads) == 2
+
+    def test_a_shortcode_keeps_its_own_thread_across_spellings(self):
+        from iphonebridge.ui.model import fold_number
+        assert fold_number("242-73") == fold_number("24273") == "24273"
+        assert fold_number("41411") == "41411"
+
+    def test_a_name_is_still_not_a_number(self):
+        """The seven-digit floor was there to reject labels. Accepting
+        shortcodes must not start accepting those."""
+        from iphonebridge.ui.model import fold_number
+        for label in ("Mom", "Home", "Dad", "AB123", "Verify", ""):
+            assert fold_number(label) is None, label
+
+    def test_a_shortcode_cannot_collide_with_a_phone_number(self):
+        """Shortcodes stop at six digits and phone numbers start at
+        seven, so the two spaces cannot overlap."""
+        from iphonebridge.ui.model import fold_number
+        assert fold_number("123456") == "123456"
+        assert fold_number("1234567") == "1234567"
+        assert fold_number("12") is None
+
     def test_a_chinese_mobile_is_not_a_nanp_number(self):
         """11 digits starting with 1 is also a Chinese mobile. Folding a
         bare leading 1 would put two strangers in one thread."""

@@ -48,6 +48,19 @@ def fold_number(raw: str | None) -> str | None:
     text = (raw or "").strip()
     digits = "".join(ch for ch in text if ch.isdigit())
     if len(digits) < 7:
+        # A short, purely numeric sender is a shortcode, not a phone
+        # number that failed to parse. Transit alerts arrive from 41411
+        # and bank alerts from 242-73; both are real, distinct senders.
+        # Rejecting them left each event with no identity at all, so
+        # every shortcode in the log keyed to the same fallback thread
+        # and unrelated services read as one conversation.
+        #
+        # Anything carrying a letter is still rejected, which is the
+        # case this floor was put here for: "Mom" is a name, not a
+        # number. Six digits is the ceiling because a phone number here
+        # is seven or more, so the two spaces cannot collide.
+        if 3 <= len(digits) <= 6 and not any(ch.isalpha() for ch in text):
+            return digits
         return None
     if text.startswith("+") and len(digits) == 11 and digits.startswith("1"):
         return digits[1:]
