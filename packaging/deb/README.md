@@ -230,10 +230,14 @@ gh release create vX.Y.Z -R santisbon/iphonebridge \
 
 Notes on that last command:
 
-- **`-R` is not optional.** This repo was created with `gh repo fork`,
-  which set `upstream` as gh's default repository, so a bare
-  `gh release create` targets the original project and fails. Fix it
-  permanently with `gh repo set-default santisbon/iphonebridge`.
+- **Keep `-R`.** It names the repository the release is cut against,
+  and being explicit costs nothing. This repo began as a `gh repo fork`,
+  which points gh's default repository at the project it was forked
+  from; a bare `gh release create` then targets that project and fails.
+  The default here is already `santisbon/iphonebridge`, and the fork's
+  `upstream` remote has been removed, but neither of those is visible
+  from the command, and `gh repo set-default` is per clone. A fresh
+  clone gets it wrong again. Check with `gh repo set-default --view`.
 - Attach the `.deb`. The README's install instructions point users at
   the latest release, so a release without the asset is a broken link
   for them.
