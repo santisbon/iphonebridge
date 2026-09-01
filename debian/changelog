@@ -1,3 +1,12 @@
+iphonebridge (0.18.1) unstable; urgency=medium
+
+  * Messages from different shortcodes no longer share one conversation.
+    A five- or six-digit sender was shorter than the floor that stops a
+    name being read as a number, so every shortcode fell back to the
+    same placeholder thread.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 01 Sep 2026 11:54:40 -0500
+
 iphonebridge (0.18.0) unstable; urgency=medium
 
   * The Music tab is now Now Playing: it controls podcasts and

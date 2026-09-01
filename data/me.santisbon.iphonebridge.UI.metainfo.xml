@@ -62,6 +62,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.1" date="2026-09-01">
+      <description>
+        <p>Messages from different shortcodes no longer share one
+        conversation. A five- or six-digit sender, such as a transit or
+        bank alert, was too short to be read as a number, so every one
+        of them fell back to the same thread.</p>
+      </description>
+    </release>
     <release version="0.18.0" date="2026-08-28">
       <description>
         <p>The Music tab is now Now Playing: it controls podcasts and

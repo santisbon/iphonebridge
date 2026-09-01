@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.18.1] — 2026-09-01
+
+### Fixed
+- **Messages from different shortcodes shared one conversation.** Texts
+  from a five- or six-digit sender — transit alerts, bank alerts,
+  verification codes — were not merged by resemblance: they were given
+  no identity at all. The number was shorter than the seven-digit floor
+  that keeps a label like "Mom" from being read as a phone number, so
+  every shortcode in the log fell back to the same placeholder thread
+  and unrelated services read as one conversation. A short, purely
+  numeric sender is now identified by its own digits, and how it is
+  punctuated ("242-73" and "24273") no longer splits it. Existing
+  conversations come apart on their own the next time the app starts;
+  nothing is migrated.
+
 ## [0.18.0] — 2026-08-28
 
 ### Added
