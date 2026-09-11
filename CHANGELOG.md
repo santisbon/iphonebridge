@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.18.2] — 2026-09-11
+
+### Fixed
+- **`doctor` reported per-app notifications available while the app's
+  Status tab said Not detected.** BlueZ keeps the ANCS service UUID from
+  the phone's last LE session, so doctor read the grant as live while the
+  phone was reconnected over classic Bluetooth only, with nothing to carry
+  ANCS. Doctor now also requires the ANCS characteristics to exist under
+  the phone right now, the same condition the daemon waits for, and names
+  the state it finds: not paired, no ANCS on the bond, disconnected,
+  connected over classic Bluetooth only (run `iphonebridge ancs-enable`),
+  or live.
+
+### Changed
+- The documentation described the ANCS grant as an allow-notifications
+  prompt that had replaced the third Bluetooth toggle. iOS now offers it
+  as a third toggle again, **Share System Notifications**; the docs,
+  `ancs-enable` and doctor describe both, and the README covers the case
+  of that toggle being on while the Status tab reads Not detected.
+
+### Known
+- The Status tab still labels the row **Show System Notifications**,
+  where the phone's toggle now reads **Share System Notifications**.
+
 ## [0.18.1] — 2026-09-01
 
 ### Fixed

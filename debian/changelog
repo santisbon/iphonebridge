@@ -1,3 +1,14 @@
+iphonebridge (0.18.2) unstable; urgency=medium
+
+  * doctor no longer reports per-app notifications available while the
+    phone is connected over classic Bluetooth only. It now requires the
+    ANCS characteristics to be present, as the daemon does, and names
+    the state it finds.
+  * Docs describe the ANCS grant as iOS now offers it: a third Bluetooth
+    toggle, Share System Notifications, or on some versions a prompt.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Fri, 11 Sep 2026 15:34:09 -0500
+
 iphonebridge (0.18.1) unstable; urgency=medium
 
   * Messages from different shortcodes no longer share one conversation.

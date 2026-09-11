@@ -62,6 +62,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.18.2" date="2026-09-11">
+      <description>
+        <p>The doctor command no longer reports per-app notifications
+        available while the phone is connected over classic Bluetooth
+        only, a state the app's Status tab already reported as Not
+        detected. The documentation now describes the ANCS grant as iOS
+        offers it: a third Bluetooth toggle, Share System
+        Notifications.</p>
+      </description>
+    </release>
     <release version="0.18.1" date="2026-09-01">
       <description>
         <p>Messages from different shortcodes no longer share one
