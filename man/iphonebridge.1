@@ -26,8 +26,9 @@ unit uses this; run it directly only for debugging.
 .B doctor
 Check prerequisites: configuration, the adapter's Class of Device,
 obexd, the state directory, BLE advertising (a live register/release
-probe) and whether the iPhone's bond exposes ANCS. Exits non\-zero if a
-required check fails.
+probe), whether the iPhone's bond exposes ANCS, and whether the LE link
+that carries ANCS is up right now. Exits non\-zero if a required check
+fails.
 .TP
 .B pair-setup
 First\-run wizard: pick a paired iPhone, write the local configuration,
@@ -84,8 +85,9 @@ session at a time.
 .B ancs-enable
 Enable per\-app notifications. Steers the next connection to the iPhone
 over BLE by setting BlueZ's experimental PreferredBearer control, then
-reconnects; answer the allow\-notifications prompt that appears on the
-phone. Requires "Experimental = true" in /etc/bluetooth/main.conf and
+reconnects; turn on the "Share System Notifications" toggle the phone
+then offers for this computer, or answer Allow if it asks with a prompt
+instead. Requires "Experimental = true" in /etc/bluetooth/main.conf and
 an adapter capable of a BLE bond with the iPhone (Intel chipsets are;
 Realtek and USB dongles are not).
 .TP

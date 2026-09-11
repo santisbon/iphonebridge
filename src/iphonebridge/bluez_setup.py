@@ -27,6 +27,7 @@ import dbus.exceptions
 import dbus.service
 
 from iphonebridge import config
+from iphonebridge.ancs.constants import ANCS_CHAR_UUIDS
 from iphonebridge.bus import bluez, system_bus
 
 log = logging.getLogger(__name__)
@@ -141,7 +142,7 @@ def _on_advert_error(e: dbus.exceptions.DBusException) -> None:
     _advert_registered = False
     log.error("RegisterAdvertisement failed: %s: %s", name, e.get_dbus_message())
     log.error("  → Without this advertisement iOS won't offer the "
-              "'Show System Notifications' toggle, so ANCS stays dark.")
+              "'Share System Notifications' toggle, so ANCS stays dark.")
     log.error("  → MAP and PBAP are unaffected; messages and contacts "
               "still work.")
 
@@ -243,21 +244,55 @@ def probe_advert(timeout_s: int = 10) -> tuple[bool, str]:
     return result == "ok", "" if result == "ok" else result
 
 
-def device_has_ancs_bond() -> bool | None:
-    """Whether the paired iPhone's device object carries the ANCS GATT
-    service UUID — the sign the BLE bond formed and iOS granted ANCS.
+# Where ANCS stands for the paired iPhone, as ancs_state() reports it.
+ANCS_NO_DEVICE = "no-device"        # device object not found
+ANCS_NO_BOND = "no-bond"            # bond never exposed the ANCS service
+ANCS_DISCONNECTED = "disconnected"  # granted, but the phone is not connected
+ANCS_NO_LE = "no-le"                # granted and connected, but not over LE
+ANCS_LIVE = "live"                  # the three characteristics exist now
 
-    None means the device object was not found (not paired, or a
-    different MAC is configured).
+
+def ancs_state() -> str:
+    """Report ANCS for the paired iPhone as one of the ANCS_* values.
+
+    The device's UUID list says whether iOS ever granted ANCS to this
+    bond, but BlueZ keeps it from the last LE session, so it reads the
+    same with the phone on LE now as with the phone reconnected over
+    BR/EDR only. ANCS is a GATT service, so what matters is whether its
+    three characteristic objects exist under the device right now — the
+    same thing the daemon's ANCS client waits for, which is why this
+    agrees with the app's Status tab where the UUID check did not.
     """
+    dev_path = config.device_path()
     try:
-        props = bluez(config.device_path(),
-                      "org.freedesktop.DBus.Properties")
+        props = bluez(dev_path, "org.freedesktop.DBus.Properties")
         uuids = props.Get("org.bluez.Device1", "UUIDs")
+        connected = bool(props.Get("org.bluez.Device1", "Connected"))
     except dbus.exceptions.DBusException:
-        return None
+        return ANCS_NO_DEVICE
     wanted = config.ANCS_SOLICIT_UUID.lower()
-    return any(str(u).lower() == wanted for u in uuids)
+    if not any(str(u).lower() == wanted for u in uuids):
+        return ANCS_NO_BOND
+    if not connected:
+        return ANCS_DISCONNECTED
+    return ANCS_LIVE if _ancs_chars_present(dev_path) else ANCS_NO_LE
+
+
+def _ancs_chars_present(dev_path: str) -> bool:
+    """True when all three ANCS characteristics exist under dev_path."""
+    try:
+        managed = bluez("/", "org.freedesktop.DBus.ObjectManager"
+                        ).GetManagedObjects()
+    except dbus.exceptions.DBusException:
+        return False
+    prefix = dev_path + "/"
+    found = set()
+    for path, ifaces in managed.items():
+        char = ifaces.get("org.bluez.GattCharacteristic1")
+        if char is None or not str(path).startswith(prefix):
+            continue
+        found.add(str(char.get("UUID", "")).lower())
+    return ANCS_CHAR_UUIDS <= found
 
 
 # ---- one-shot startup ---------------------------------------------------

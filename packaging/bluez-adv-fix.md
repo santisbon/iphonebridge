@@ -33,7 +33,7 @@ enforce exact mgmt payload length reject the command with
 `org.bluez.Error.Failed`, and no advertisement can ever be registered —
 by any application, with any payload, on any adapter.
 
-Without the ANCS-soliciting advertisement, iOS never offers the *Show
+Without the ANCS-soliciting advertisement, iOS never offers the *Share
 System Notifications* toggle, so ANCS stays dark. MAP and PBAP don't use
 LE advertising, which is why messages and contacts keep working.
 
@@ -135,9 +135,9 @@ then:
 iphonebridge ancs-enable
 ```
 
-which reconnects the iPhone over BLE — answer the
-**allow-notifications prompt** that appears on the phone (current iOS
-asks this way rather than showing a third Bluetooth toggle). Seeing ANCS
+which reconnects the iPhone over BLE — turn on the **Share System
+Notifications** toggle the phone then offers for this computer (some iOS
+versions ask with an allow-notifications prompt instead). Seeing ANCS
 still down immediately after the rebuild is expected, not a sign the fix
 failed — the two checks above are what prove the fix took.
 

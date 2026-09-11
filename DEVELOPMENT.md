@@ -129,8 +129,9 @@ On the iPhone: **Settings → Bluetooth → tap the ⓘ next to your computer �
 - **Show Message Notifications** — gates SMS/iMessage (MAP)
 - **Sync Contacts** — gates contacts (PBAP)
 
-(Per-app notifications are granted separately: current iOS asks through an
-allow-notifications prompt during step 7, not a toggle here.)
+(Per-app notifications are granted separately, in step 7: once the LE link
+is up, iOS adds a third toggle here, **Share System Notifications**, or on
+some versions asks with an allow-notifications prompt instead.)
 
 > The toggles need both halves of the setup above: the A/V Hands-Free class from step 4, and the ANCS-soliciting BLE advertisement the daemon registers at startup. If they aren't there, confirm `iphonebridge doctor` reports the class as OK, then forget + re-pair — iOS reads the class at pairing time and caches it.
 
@@ -160,8 +161,14 @@ iphonebridge ancs-enable
 
 `ancs-enable` disconnects, sets BlueZ's `Device1.PreferredBearer` to
 `le`, reconnects, and waits for the phone's ANCS service to appear. The
-iPhone then shows an **allow-notifications prompt** — answer Allow, and
-notifications start flowing. You only do this once.
+iPhone then offers the grant: a third toggle, **Share System
+Notifications**, under Settings → Bluetooth → ⓘ (turn it on), or on some
+iOS versions an **allow-notifications prompt** (answer Allow).
+Notifications start flowing and the app's Status tab reads *Working* for
+it. You only do this once per pairing: BlueZ stores the bearer preference
+with the bond, and a forget + re-pair drops it with the bond. The phone is
+then back on classic-only, where the toggle stays on and the Status tab
+reads *Not detected* until you run it again.
 
 If `ancs-enable` reports the ANCS service never appeared, the bond
 likely predates a capable setup: **forget + re-pair** first (both ends),

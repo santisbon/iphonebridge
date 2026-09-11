@@ -52,6 +52,6 @@ Design rationale and the empirical Bluetooth findings that shaped it are in [`sp
 - **MAP (Message Access Profile)**: read SMS/iMessage, get real-time pushes of new ones (via its notification channel, **MNS**), and send. Gated by the iPhone's *Show Message Notifications* toggle.
 - **bMessage**: the wire format MAP wraps each message in; the sender lives in an embedded vCard (`TEL` for phone senders, `EMAIL` for iMessage-via-Apple-ID senders).
 - **PBAP (Phone Book Access Profile)**: pull the iPhone's contacts. Gated by *Sync Contacts*. Feeds the SQLite cache that resolves names.
-- **ANCS (Apple Notification Center Service)**: Apple's BLE service carrying every app's notifications. Granted per device by iOS — current iOS asks through an allow-notifications prompt on the phone — and needs a true BLE bond plus an LE connection; the picky one (see Troubleshooting).
+- **ANCS (Apple Notification Center Service)**: Apple's BLE service carrying every app's notifications. Granted per device by iOS, through a **Share System Notifications** toggle on the phone (some iOS versions ask with an allow-notifications prompt instead), and needs a true BLE bond plus an LE connection; the picky one (see Troubleshooting).
 - **HFP (Hands-Free Profile)**: take and place calls. **oFono** is the telephony daemon that speaks HFP; PipeWire's oFono backend carries the call audio.
 - **btmgmt**: BlueZ's low-level management CLI; needs root. Used for exactly one thing here: setting the CoD.

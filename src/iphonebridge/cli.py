@@ -88,8 +88,11 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
     # BlueZ path the daemon needs at startup, so it catches a broken
     # advertising stack (notably BlueZ 5.85's oversized
     # MGMT_OP_ADD_EXT_ADV_DATA, rejected by strict kernels) without the
-    # daemon running. The bond check reads whether iOS actually granted
-    # ANCS to this pairing — the part only a re-pair can change.
+    # daemon running. The device check reads whether iOS granted ANCS to
+    # this pairing — the part only a re-pair can change — and whether
+    # the link that carries it is up right now, which is what the app's
+    # Status tab reports; the grant alone reads true with the phone
+    # reconnected over classic Bluetooth and nothing flowing.
     if cod is not None:
         advert_ok, why = bluez_setup.probe_advert()
         if advert_ok:
@@ -97,7 +100,7 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
         else:
             log.error("BLE advertising broken: RegisterAdvertisement → %s",
                       why)
-            log.error("    Without it iOS never offers 'Show System "
+            log.error("    Without it iOS never offers 'Share System "
                       "Notifications', so ANCS cannot work.")
             if why == "org.bluez.Error.Failed":
                 log.error("    On BlueZ 5.85 this is a known packaging bug — "
@@ -105,19 +108,30 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
                           "(https://github.com/santisbon/iphonebridge).")
             ok = False
 
-        bond = bluez_setup.device_has_ancs_bond()
-        if bond:
-            log.info("iPhone bond exposes ANCS — per-app notifications "
-                     "available")
-        elif bond is None:
+        state = bluez_setup.ancs_state()
+        if state == bluez_setup.ANCS_LIVE:
+            log.info("iPhone bond exposes ANCS and the LE link is up — "
+                     "per-app notifications available")
+        elif state == bluez_setup.ANCS_NO_DEVICE:
             log.warning("iPhone not found on the adapter — pair it, then "
                         "re-run doctor")
-        else:
+        elif state == bluez_setup.ANCS_NO_BOND:
             log.warning("Paired, but the bond does not expose ANCS. "
                         "Messages and contacts are unaffected.")
             log.warning("    → iphonebridge ancs-enable  (and if that "
                         "reports no ANCS service, forget + re-pair first "
                         "— see README, Troubleshooting)")
+        elif state == bluez_setup.ANCS_DISCONNECTED:
+            log.warning("iPhone bond exposes ANCS, but the phone is not "
+                        "connected right now.")
+        else:
+            log.warning("iPhone bond exposes ANCS, but the phone is "
+                        "connected over classic Bluetooth only, so per-app "
+                        "notifications are not flowing. Messages and "
+                        "contacts are unaffected.")
+            log.warning("    → iphonebridge ancs-enable  (reconnects over "
+                        "LE; 'Share System Notifications' must be on for "
+                        "this computer in the phone's Bluetooth settings)")
 
     if ok:
         typer.echo(typer.style("All checks passed.", fg=typer.colors.GREEN))
@@ -357,10 +371,11 @@ def ancs_enable(
 
     Steers the next connection to the iPhone over BLE by setting BlueZ's
     Device1.PreferredBearer to "le", then reconnects. Over that LE link
-    iOS meets the daemon's ANCS solicitation and asks, on the phone,
-    whether to allow notifications — answer Allow there. The property is
-    experimental in BlueZ, so bluetoothd must run with
-    [General] Experimental = true in /etc/bluetooth/main.conf.
+    iOS meets the daemon's ANCS solicitation and offers the grant on the
+    phone: a "Share System Notifications" toggle for this computer in
+    its Bluetooth settings, or on some iOS versions an allow-notifications
+    prompt. The property is experimental in BlueZ, so bluetoothd must
+    run with [General] Experimental = true in /etc/bluetooth/main.conf.
 
     Editing the stored bond's LastUsedBearer (this command's previous
     approach) does not survive contact with a live iPhone: the phone
@@ -432,8 +447,10 @@ def ancs_enable(
         uuids = props.Get("org.bluez.Device1", "UUIDs")
         if any(str(u).lower() == wanted for u in uuids):
             typer.echo(typer.style(
-                "ANCS service visible — answer the allow-notifications "
-                "prompt on the iPhone if it is showing.",
+                "ANCS service visible — on the iPhone, turn on 'Share "
+                "System Notifications' for this computer (Settings → "
+                "Bluetooth → ⓘ), or answer Allow if it asks with a "
+                "prompt instead.",
                 fg=typer.colors.GREEN))
             break
         time.sleep(1)

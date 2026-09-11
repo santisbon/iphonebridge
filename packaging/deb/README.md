@@ -383,10 +383,10 @@ Then:
 iphonebridge ancs-enable
 ```
 
-reconnects the iPhone over BLE; the phone then shows an
-**allow-notifications prompt** (on current iOS this appears instead of a
-third Bluetooth toggle) — answer Allow, and `iphonebridge doctor` should
-report the bond exposing ANCS.
+reconnects the iPhone over BLE; the phone then offers a third toggle,
+**Share System Notifications** (some iOS versions ask with an
+allow-notifications prompt instead) — turn it on, and `iphonebridge
+doctor` should report the bond exposing ANCS with the LE link up.
 
 The connection cycling in this step can crash bystander BlueZ user
 daemons; `mpris-proxy` (media keys for Bluetooth audio) has segfaulted

@@ -146,7 +146,9 @@ systemctl --user {start,stop,restart} iphonebridge
 <details>
 <summary><b>App notifications (ANCS) not working</b></summary>
 
-ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, forget the iPhone on both ends and re-pair. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone shows an **allow-notifications prompt** (on current iOS this replaces the third Bluetooth toggle) — answer Allow there.
+ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, forget the iPhone on both ends and re-pair. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
+
+If that toggle is on but the app's Status tab reads *Not detected* for it, the phone is connected over classic Bluetooth only. ANCS is carried over LE, and the phone reconnects over classic by default, so the grant is there with nothing to carry it; `iphonebridge doctor` reports it as "connected over classic Bluetooth only". Run `iphonebridge ancs-enable` again. BlueZ stores the bearer preference with the pairing, so a forget + re-pair drops it along with the bond.
 
 Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
 
@@ -229,9 +231,10 @@ into `Forbidden`.
 <summary><b><code>Forbidden</code> errors in the log</b></summary>
 
 An iPhone toggle is off. Check **Settings → Bluetooth → ⓘ → Show Message
-Notifications / Sync Contacts**. (ANCS permission is separate: current iOS
-grants it through an allow-notifications prompt, re-triggered by
-`iphonebridge ancs-enable`, not through a toggle there.)
+Notifications / Sync Contacts**. (ANCS is separate: its **Share System
+Notifications** toggle, or the allow-notifications prompt some iOS versions
+show instead, is offered once `iphonebridge ancs-enable` has brought up an
+LE link, and it never produces `Forbidden`.)
 </details>
 
 <details>
