@@ -313,3 +313,11 @@ class NotificationListModel(QAbstractListModel):
                 self.countChanged.emit()
                 return True
         return False
+
+    def clear(self) -> None:
+        if not self._rows:
+            return
+        self.beginResetModel()
+        self._rows.clear()
+        self.endResetModel()
+        self.countChanged.emit()

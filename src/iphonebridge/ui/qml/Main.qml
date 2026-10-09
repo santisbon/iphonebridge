@@ -936,11 +936,14 @@ ApplicationWindow {
             }
 
             ListView {
+                id: noteList
+                objectName: "noteList"
                 // Explicit edges, not anchors.fill: fill would override
                 // the width below and stretch the cards across the window.
                 anchors.top: parent.top
-                anchors.bottom: parent.bottom
+                anchors.bottom: clearCard.top
                 anchors.topMargin: appTheme.gutter
+                anchors.bottomMargin: appTheme.gutter
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: Math.min(parent.width - 2 * appTheme.gutter,
                                 Math.round(620 * appTheme.k))
@@ -948,7 +951,18 @@ ApplicationWindow {
                 spacing: Math.round(6 * appTheme.k)
                 model: notifications
                 visible: notifications.count > 0
-                ScrollBar.vertical: ScrollBar {}
+                // Beside the cards, not over them. An attached bar sits
+                // inside the view's right edge, and the desktop style's
+                // bar is a 14 px track that took half of each card's ✕;
+                // a click meant for the ✕ landed on the track and paged
+                // the list. Reparented into the gutter, the way Qt's
+                // ScrollBar docs place a bar outside its Flickable.
+                ScrollBar.vertical: ScrollBar {
+                    parent: noteList.parent
+                    anchors.top: noteList.top
+                    anchors.bottom: noteList.bottom
+                    anchors.left: noteList.right
+                }
 
                 // Consecutive notifications from one app sit under its
                 // name, the way Notification Center stacks them.
@@ -1010,6 +1024,7 @@ ApplicationWindow {
                         }
                         MouseArea {
                             id: xArea
+                            objectName: "dismissNotification"
                             anchors.fill: parent
                             hoverEnabled: true
                             onClicked: bridge.dismissNotification(model.eid)
@@ -1063,6 +1078,37 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                     }
+                }
+            }
+
+            // Clear all: the same red card "Hang up all" is on the Calls
+            // tab. Fixed under the list rather than scrolling with it,
+            // so a long feed does not hide it. Immediate, as Notification
+            // Center's Clear All is; each card also reaches the phone
+            // where it still can.
+            Rectangle {
+                id: clearCard
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: appTheme.gutter
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: noteList.width
+                height: Math.round(40 * appTheme.k)
+                radius: Math.round(10 * appTheme.k)
+                color: clearArea.pressed ? appTheme.pressed : appTheme.canvas
+                visible: notifications.count > 0
+                Label {
+                    anchors.centerIn: parent
+                    text: "Clear all"
+                    color: appTheme.destructive
+                    font.family: appTheme.ui
+                    renderType: Text.CurveRendering
+                    font.pointSize: appTheme.rowSize
+                }
+                MouseArea {
+                    id: clearArea
+                    objectName: "clearNotifications"
+                    anchors.fill: parent
+                    onClicked: bridge.dismissAllNotifications()
                 }
             }
         }

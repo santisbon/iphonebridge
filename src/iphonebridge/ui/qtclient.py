@@ -46,6 +46,7 @@ class DaemonClient(QObject):
     messageSeen = pyqtSignal(object)
     ancsNotification = pyqtSignal(object)
     ancsDismissed = pyqtSignal(object)
+    ancsCleared = pyqtSignal(object)
     callStateChanged = pyqtSignal(object)
     mediaStateChanged = pyqtSignal(object)
     phoneStatusChanged = pyqtSignal(object)
@@ -74,6 +75,7 @@ class DaemonClient(QObject):
             "message-seen": self.messageSeen,
             "ancs-notification": self.ancsNotification,
             "ancs-dismissed": self.ancsDismissed,
+            "ancs-cleared": self.ancsCleared,
             "phone-status": self.phoneStatusChanged,
         }
         # add_signal_receiver works even before the daemon is up — delivery
@@ -149,6 +151,13 @@ class DaemonClient(QObject):
         self._call(MESSAGES_IFACE, "DismissNotification", eid,
                    on_ok=(lambda r: on_ok(str(r))) if on_ok else None,
                    on_err=on_err, timeout=20)
+
+    def dismiss_all_notifications(self, on_ok=None, on_err=None) -> None:
+        """Dismiss every notification. on_ok(count): how many left
+        history; the feed empties on the AncsCleared signal."""
+        self._call(MESSAGES_IFACE, "DismissAllNotifications",
+                   on_ok=(lambda r: on_ok(int(r))) if on_ok else None,
+                   on_err=on_err, timeout=30)
 
     def profile_status(self, on_ok, on_err=None) -> None:
         """Per-profile liveness: {"map","pbap","ancs"} -> bool."""

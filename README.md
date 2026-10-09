@@ -105,7 +105,8 @@ These are limits of the Bluetooth stack at one end or the other, not bugs:
 - **Dismissing an app notification reaches the phone only while it is
   current.** ANCS addresses notifications per connection, so one from before
   the last BLE reconnect can't be cleared remotely — dismissing it removes it
-  from this computer only. Either way it always leaves the app.
+  from this computer only. Either way it always leaves the app. **Clear all**
+  follows the same rule for every card at once.
 - **Read state mostly travels one way.** Opening a conversation here marks
   those messages read on the iPhone, for any message obexd still exports;
   older ones have no object path left to address and are marked read on this

@@ -142,6 +142,7 @@ class Bridge(QObject):
         client.ancsNotification.connect(self._on_ancs)
         client.ancsDismissed.connect(
             lambda ev: self.notifications.remove_eid(str((ev or {}).get("eid", ""))))
+        client.ancsCleared.connect(lambda _ev: self.notifications.clear())
         client.availabilityChanged.connect(lambda _ok: self._refresh_status())
         client.callStateChanged.connect(self._on_call_state)
         client.mediaStateChanged.connect(self._on_media_state)
@@ -475,6 +476,15 @@ class Bridge(QObject):
         self._client.dismiss_notification(
             eid, None,
             lambda err: self.toast.emit(f"Dismiss failed: {err}"))
+
+    @pyqtSlot()
+    def dismissAllNotifications(self) -> None:
+        """Every card at once, on the same path as one: the daemon drops
+        them from history, tells the phone about the live ones, and the
+        feed empties when its AncsCleared comes back."""
+        self._client.dismiss_all_notifications(
+            None,
+            lambda err: self.toast.emit(f"Clear all failed: {err}"))
 
     # ---- media controls --------------------------------------------------
 

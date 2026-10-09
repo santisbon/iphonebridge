@@ -12,7 +12,7 @@ import struct
 
 from iphonebridge.ancs.constants import ActionID, CommandID, EventFlag, EventID
 from iphonebridge.ancs.parsers import Notification, build_perform_action
-from iphonebridge.events import drop_ancs_by_seen_at
+from iphonebridge.events import drop_all_ancs, drop_ancs_by_seen_at
 
 
 class TestNegativeActionPacket:
@@ -99,3 +99,73 @@ class TestLogRemoval:
                        '{"kind": "ancs_notification", "seen_at": "T1"}\n')
         assert drop_ancs_by_seen_at(log, {"T1"}) == 1
         assert log.read_text() == "not json\n"
+
+
+class TestClearAll:
+    """Clear all takes every notification and nothing else, and reports
+    which ones it took so popups and front ends can follow."""
+
+    write = staticmethod(TestLogRemoval.write)
+    kinds = staticmethod(TestLogRemoval.kinds)
+
+    def test_drops_every_notification_and_names_them(self, tmp_path):
+        log = tmp_path / "events.jsonl"
+        self.write(log, [
+            {"kind": "sms_received", "seen_at": "T1", "body": "keep"},
+            {"kind": "ancs_notification", "seen_at": "T2", "title": "a"},
+            {"kind": "call_missed", "seen_at": "T3"},
+            {"kind": "ancs_notification", "seen_at": "T4", "title": "b"},
+        ])
+        assert drop_all_ancs(log) == ["T2", "T4"]
+        assert self.kinds(log) == ["sms_received", "call_missed"]
+
+    def test_nothing_to_clear(self, tmp_path):
+        log = tmp_path / "events.jsonl"
+        self.write(log, [{"kind": "sms_received", "seen_at": "T1"}])
+        assert drop_all_ancs(log) == []
+        assert self.kinds(log) == ["sms_received"]
+
+    def test_daemon_tells_the_phone_sinks_and_the_bus(self, tmp_path, monkeypatch):
+        from iphonebridge import config
+        from iphonebridge.daemon import Daemon
+        log = tmp_path / "events.jsonl"
+        self.write(log, [
+            {"kind": "ancs_notification", "seen_at": "T1", "title": "old"},
+            {"kind": "ancs_notification", "seen_at": "T2", "title": "live"},
+            {"kind": "sms_received", "seen_at": "T3", "body": "keep"},
+        ])
+        monkeypatch.setattr(config, "EVENTS_JSONL", log)
+
+        asked, gone, cleared, dismissed = [], [], [], []
+
+        class Ancs:
+            def dismiss(self, uid):
+                asked.append(uid)
+                return uid == 7      # 9 declared no negative action
+
+        class Sink:
+            name = "probe"
+
+            def handle_ancs_dismissed(self, eid, uid):
+                gone.append((eid, uid))
+
+        class Bus:
+            def emit_ancs_cleared(self, n):
+                cleared.append(n)
+
+            def emit_ancs_dismissed(self, eid):
+                dismissed.append(eid)
+
+        d = Daemon.__new__(Daemon)
+        d._ancs_uid_map = {7: "T2", 9: "T9"}
+        d._ancs_uid_content = {7: (), 9: ()}
+        d.ancs = Ancs()
+        d.sinks = [Sink()]
+        d._dbus_service = Bus()
+
+        assert d._dismiss_all_ancs() == 2
+        assert sorted(asked) == [7, 9]
+        assert d._ancs_uid_map == {} and d._ancs_uid_content == {}
+        assert gone == [("T1", None), ("T2", None)]
+        assert cleared == [2] and dismissed == []
+        assert self.kinds(log) == ["sms_received"]

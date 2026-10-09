@@ -36,6 +36,7 @@ from iphonebridge.events import (
     SeenEvent,
     SmsEvent,
     deleted_keys,
+    drop_all_ancs,
     drop_ancs_by_seen_at,
     drop_duplicate_ancs,
     drop_events_by_key,
@@ -263,7 +264,8 @@ class Daemon:
                     raise_on_error=True),
                 on_delete_local=self._delete_local,
                 on_mark_read=self.mark_read,
-                on_dismiss_ancs=self._dismiss_ancs)
+                on_dismiss_ancs=self._dismiss_ancs,
+                on_dismiss_all_ancs=self._dismiss_all_ancs)
             log.info("DBus service ready: me.santisbon.iphonebridge")
         except Exception:
             log.exception("DBus service registration failed — continuing "
@@ -645,8 +647,33 @@ class Daemon:
         log.info("ANCS notification dismissed on the phone")
         self._remove_ancs_locally(eid, uid)
 
+    def _dismiss_all_ancs(self) -> int:
+        """Every notification at once, each the way _dismiss_ancs does
+        one: the phone is told about the live ones that carry a negative
+        action, and all of them leave history and every sink. One
+        AncsCleared signal stands in for the per-card AncsDismissed.
+        Returns how many left history."""
+        live = list(self._ancs_uid_map)
+        self._ancs_session_reset()
+        if self.ancs is not None:
+            sent = sum(1 for uid in live if self.ancs.dismiss(uid))
+            if sent:
+                log.info("ANCS negative action sent for %d of %d live "
+                         "notifications", sent, len(live))
+        eids = drop_all_ancs(config.EVENTS_JSONL)
+        for eid in eids:
+            self._tell_sinks_dismissed(eid, None)
+        if self._dbus_service is not None:
+            self._dbus_service.emit_ancs_cleared(len(eids))
+        return len(eids)
+
     def _remove_ancs_locally(self, eid: str, uid: int | None) -> None:
         drop_ancs_by_seen_at(config.EVENTS_JSONL, {eid})
+        self._tell_sinks_dismissed(eid, uid)
+        if self._dbus_service is not None:
+            self._dbus_service.emit_ancs_dismissed(eid)
+
+    def _tell_sinks_dismissed(self, eid: str, uid: int | None) -> None:
         for sink in self.sinks:
             handler = getattr(sink, "handle_ancs_dismissed", None)
             if handler is not None:
@@ -655,8 +682,6 @@ class Daemon:
                 except Exception:
                     log.exception("sink %s dismiss failed",
                                   getattr(sink, "name", sink))
-        if self._dbus_service is not None:
-            self._dbus_service.emit_ancs_dismissed(eid)
 
     def _ancs_session_reset(self) -> None:
         """A fresh BLE connection numbers its notifications from scratch."""

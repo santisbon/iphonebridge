@@ -150,6 +150,7 @@ def _render(out: pathlib.Path) -> int:
         messageSeen = pyqtSignal(object)
         ancsNotification = pyqtSignal(object)
         ancsDismissed = pyqtSignal(object)
+        ancsCleared = pyqtSignal(object)
         callStateChanged = pyqtSignal(object)
         mediaStateChanged = pyqtSignal(object)
         phoneStatusChanged = pyqtSignal(object)
@@ -196,6 +197,9 @@ def _render(out: pathlib.Path) -> int:
                    "manufacturer": "Apple Inc."})
 
         def dismiss_notification(self, eid, on_ok=None, on_err=None) -> None:
+            pass
+
+        def dismiss_all_notifications(self, on_ok=None, on_err=None) -> None:
             pass
 
         def get_media_state(self, on_ok, on_err=None) -> None:

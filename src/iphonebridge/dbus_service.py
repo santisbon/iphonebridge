@@ -36,7 +36,12 @@ Events1 (live event feed for separate UIs):
   • MarkRead(as) -> u       — mark messages read here and on the phone
   • MessageSeen(dict)       [signal] — a message's read-state changed
   • AncsNotification(dict)  [signal] — a per-app ANCS notification
+  • AncsDismissed(dict)     [signal] — one notification dismissed, either end
+  • AncsCleared(dict)       [signal] — every notification dismissed at once
   • PhoneStatusChanged(dict) [signal] — battery/cellular/identity change
+
+Messages1 also carries DismissNotification(s) → s and
+DismissAllNotifications() → u, the two ways a notification leaves.
 
 Designed to be simple/synchronous. PushMessage typically completes in
 <2s on iOS 26.5 over the existing daemon session.
@@ -109,6 +114,7 @@ class MessagesService(dbus.service.Object):
         on_delete_local=None,
         on_mark_read=None,
         on_dismiss_ancs=None,
+        on_dismiss_all_ancs=None,
     ):
         super().__init__(bus_name, OBJECT_PATH)
         self.sessions = sessions
@@ -121,6 +127,10 @@ class MessagesService(dbus.service.Object):
         # removes a notification locally and, when its uid is still live,
         # performs the ANCS negative action on the iPhone.
         self._on_dismiss_ancs = on_dismiss_ancs
+        # on_dismiss_all_ancs() -> int — daemon hook that removes every
+        # notification locally, performs the negative action for the
+        # ones still live, and returns how many left history.
+        self._on_dismiss_all_ancs = on_dismiss_all_ancs
         # on_sent(recipient, body, transfer_path) — daemon hook to record a
         # message we just sent (logs it to history + the event feed).
         self._on_sent = on_sent
@@ -530,6 +540,36 @@ class MessagesService(dbus.service.Object):
             raise dbus.exceptions.DBusException(
                 str(e), name="me.santisbon.iphonebridge.Error.DismissFailed"
             )
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="u")
+    def DismissAllNotifications(self) -> int:
+        """Dismiss every notification: each leaves history and the feed,
+        and the ones still current on the phone are dismissed there as
+        well. Returns how many were removed from history."""
+        log.info("DBus DismissAllNotifications called")
+        if self._on_dismiss_all_ancs is None:
+            raise dbus.exceptions.DBusException(
+                "daemon exposed no dismiss hook",
+                name="me.santisbon.iphonebridge.Error.NotReady",
+            )
+        try:
+            return int(self._on_dismiss_all_ancs())
+        except Exception as e:
+            log.exception("DismissAllNotifications failed")
+            raise dbus.exceptions.DBusException(
+                str(e), name="me.santisbon.iphonebridge.Error.DismissFailed"
+            )
+
+    @dbus.service.signal(EVENTS_IFACE, signature="a{sv}")
+    def AncsCleared(self, props):
+        """Emitted when every notification was dismissed at once.
+        Payload: {"count": how many left history}."""
+
+    def emit_ancs_cleared(self, count: int) -> None:
+        try:
+            self.AncsCleared(_variant_dict({"count": int(count)}))
+        except Exception:
+            log.exception("AncsCleared emit failed")
 
     @dbus.service.signal(EVENTS_IFACE, signature="a{sv}")
     def AncsDismissed(self, props):

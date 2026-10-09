@@ -2,7 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+- **Clear all** at the foot of the Notifications tab dismisses every
+  card at once: each one leaves history and the feed, and the ones
+  still current on the phone are dismissed there too, exactly as a
+  single ✕ does. No confirmation, as in Notification Center.
+
 ### Fixed
+- **The ✕ on a notification card could not be clicked on KDE.** The
+  desktop style draws the list's scrollbar as a 14 px track over the
+  cards' right edge, where the ✕ sits, so a click meant for the ✕
+  landed on the track and paged the list. The scrollbar now sits in
+  the gutter beside the cards.
 - **The Notifications tab filled with copies of every notification.**
   Each time the phone's BLE link dropped and came back, the daemon
   subscribed to the ANCS characteristics again without letting go of

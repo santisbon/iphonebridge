@@ -368,6 +368,22 @@ def drop_ancs_by_seen_at(path, eids: set[str]) -> int:
                    and e.get("seen_at") in eids))
 
 
+def drop_all_ancs(path) -> list[str]:
+    """Rewrite the event log without any notification. Returns the
+    seen_at stamps of the ones removed, in file order, so popups and
+    front ends can be told which cards are gone."""
+    eids: list[str] = []
+
+    def drop(e: dict) -> bool:
+        if e.get("kind") != "ancs_notification":
+            return False
+        eids.append(str(e.get("seen_at") or ""))
+        return True
+
+    _rewrite_without(path, drop)
+    return eids
+
+
 ANCS_DUPLICATE_WINDOW = timedelta(seconds=60)
 """How close two logged copies of one notification must be to count as
 the same delivery. One ANCS delivery is a single uid from a single
