@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **The Notifications tab filled with copies of every notification.**
+  Each time the phone's BLE link dropped and came back, the daemon
+  subscribed to the ANCS characteristics again without letting go of
+  the previous subscription. With N subscriptions stacked, every
+  notification was delivered N times, its details requested N times,
+  and each of the N replies handled N times: N² copies per
+  notification, logged and shown. The daemon now drops the old
+  subscription when the characteristics go away and before every new
+  one, and on startup it compacts copies an earlier version already
+  logged, keeping the first of each.
+- **A notification the phone re-sent unchanged became a second row.**
+  iOS re-announces a notification under the same uid when its app
+  touches it. The daemon now ignores a re-send whose app, title and
+  body match what it already delivered for that uid in the current
+  BLE session.
+
 ## [0.18.2] — 2026-09-11
 
 ### Fixed

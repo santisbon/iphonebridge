@@ -37,6 +37,7 @@ from iphonebridge.events import (
     SmsEvent,
     deleted_keys,
     drop_ancs_by_seen_at,
+    drop_duplicate_ancs,
     drop_events_by_key,
     logged_messages,
     mark_logged_read,
@@ -164,6 +165,11 @@ class Daemon:
         # uids are per-connection, so the client resets this every time a
         # fresh subscription comes up.
         self._ancs_uid_map: dict[int, str] = {}
+        # ANCS uid -> (app, title, subtitle, body) as last delivered. iOS
+        # re-sends a notification under its uid when the source app
+        # touches it, often with nothing changed; that is not a new
+        # notification and must not become a second row.
+        self._ancs_uid_content: dict[int, tuple] = {}
         self.hfp: HfpManager | None = None
         self.media: MediaManager | None = None
         self.phone: PhoneMonitor | None = None
@@ -187,6 +193,16 @@ class Daemon:
         log.info("=== iphonebridge starting ===")
         config.ensure_dirs()
 
+        # Versions up to 0.18.2 logged every per-app notification N^2
+        # times after N BLE reconnections (see drop_duplicate_ancs). The
+        # app replays the whole log into its Notifications tab, so a log
+        # those versions wrote shows the copies until it is compacted.
+        # Nothing is live yet, so no uid mapping can be invalidated here.
+        dropped = drop_duplicate_ancs(config.EVENTS_JSONL)
+        if dropped:
+            log.info("Compacted %d duplicate notification rows out of the "
+                     "event log", dropped)
+
         if not bluez_setup.prepare():
             log.warning(
                 "bluez_setup.prepare reported issues — continuing anyway, "
@@ -204,7 +220,7 @@ class Daemon:
             device_path,
             on_event=self._fanout_ancs,
             on_removed=self._on_ancs_removed,
-            on_session_reset=self._ancs_uid_map.clear,
+            on_session_reset=self._ancs_session_reset,
         )
         self.ancs.start()
 
@@ -642,9 +658,21 @@ class Daemon:
         if self._dbus_service is not None:
             self._dbus_service.emit_ancs_dismissed(eid)
 
+    def _ancs_session_reset(self) -> None:
+        """A fresh BLE connection numbers its notifications from scratch."""
+        self._ancs_uid_map.clear()
+        self._ancs_uid_content.clear()
+
     def _fanout_ancs(self, event: AncsEvent) -> None:
-        self._ancs_uid_map[event.notification_id] = \
-            event.seen_at.isoformat()
+        uid = event.notification_id
+        content = (event.app_id, event.title, event.subtitle, event.body)
+        if (uid in self._ancs_uid_map
+                and self._ancs_uid_content.get(uid) == content):
+            log.debug("ANCS uid %d re-sent unchanged; already delivered",
+                      uid)
+            return
+        self._ancs_uid_map[uid] = event.seen_at.isoformat()
+        self._ancs_uid_content[uid] = content
         for sink in self.sinks:
             try:
                 handler = getattr(sink, "handle_ancs", None)

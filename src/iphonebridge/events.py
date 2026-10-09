@@ -157,18 +157,17 @@ def record_deleted_keys(path, keys) -> None:
             f.write(k + "\n")
 
 
-def drop_events_by_key(path, keys: set[str]) -> int:
-    """Rewrite the event log without the given messages. Returns the count
-    removed.
+def _rewrite_without(path, drop) -> int:
+    """Rewrite the event log without the events `drop(event)` selects, in
+    file order. Returns the count removed.
 
     The log is append-only in normal operation, so this is the one place
-    that rewrites it. Events appended while the rewrite runs are carried
-    over, and the swap is atomic.
+    that rewrites it. Lines that are not JSON are kept as they are, events
+    appended while the rewrite runs are carried over, and the swap is
+    atomic. Nothing is written when nothing is dropped.
     """
     import json
     import os
-    if not keys:
-        return 0
     try:
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
@@ -181,8 +180,7 @@ def drop_events_by_key(path, keys: set[str]) -> int:
         except json.JSONDecodeError:
             kept.append(line)
             continue
-        if (e.get("kind") in ("sms_received", "sms_sent")
-                and event_key(e) in keys):
+        if drop(e):
             removed += 1
             continue
         kept.append(line)
@@ -198,6 +196,17 @@ def drop_events_by_key(path, keys: set[str]) -> int:
             f.writelines(now[len(lines):])
     os.replace(tmp, path)
     return removed
+
+
+def drop_events_by_key(path, keys: set[str]) -> int:
+    """Rewrite the event log without the given messages. Returns the count
+    removed. See _rewrite_without for the rewrite's guarantees."""
+    if not keys:
+        return 0
+    return _rewrite_without(
+        path,
+        lambda e: (e.get("kind") in ("sms_received", "sms_sent")
+                   and event_key(e) in keys))
 
 
 def logged_sms_keys(path) -> set[str]:
@@ -351,38 +360,56 @@ def drop_ancs_by_seen_at(path, eids: set[str]) -> int:
     arrival and never changes. Same atomic carry-over rewrite as
     drop_events_by_key.
     """
-    import json
-    import os
     if not eids:
         return 0
-    try:
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-    except OSError:
-        return 0
-    kept, removed = [], 0
-    for line in lines:
-        try:
-            e = json.loads(line)
-        except json.JSONDecodeError:
-            kept.append(line)
-            continue
-        if e.get("kind") == "ancs_notification" and e.get("seen_at") in eids:
-            removed += 1
-            continue
-        kept.append(line)
-    if not removed:
-        return 0
-    tmp = str(path) + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.writelines(kept)
-    with open(path, encoding="utf-8") as f:
-        now = f.readlines()
-    if len(now) > len(lines):          # appended mid-rewrite
-        with open(tmp, "a", encoding="utf-8") as f:
-            f.writelines(now[len(lines):])
-    os.replace(tmp, path)
-    return removed
+    return _rewrite_without(
+        path,
+        lambda e: (e.get("kind") == "ancs_notification"
+                   and e.get("seen_at") in eids))
+
+
+ANCS_DUPLICATE_WINDOW = timedelta(seconds=60)
+"""How close two logged copies of one notification must be to count as
+the same delivery. One ANCS delivery is a single uid from a single
+phone; the copies a stacked subscription produced landed within a
+second of each other, and a genuine re-notification from an app arrives
+as a new uid."""
+
+
+def drop_duplicate_ancs(path, window: timedelta = ANCS_DUPLICATE_WINDOW) -> int:
+    """Rewrite the event log without repeated copies of one notification.
+    Returns the count removed.
+
+    Two ancs_notification events are copies when they carry the same
+    phone, uid, app, title, subtitle and body and their seen_at stamps
+    lie within `window` of the first copy kept. The first copy stays,
+    so the stamp the app and the daemon address it by survives. Events
+    without a readable seen_at are never dropped.
+
+    Versions up to 0.18.2 subscribed to the ANCS characteristics again
+    on every BLE reconnection without unsubscribing first, which logged
+    every notification N^2 times after N reconnections. The daemon runs
+    this once at startup so a log written by one of those versions
+    comes clean.
+    """
+    first_seen: dict[tuple, datetime] = {}
+
+    def drop(e: dict) -> bool:
+        if e.get("kind") != "ancs_notification":
+            return False
+        at = _as_instant(e.get("seen_at"))
+        if at is None:
+            return False
+        key = (e.get("device_path"), e.get("notification_id"),
+               e.get("app_id"), e.get("title"), e.get("subtitle"),
+               e.get("body"))
+        kept = first_seen.get(key)
+        if kept is not None and abs(at - kept) <= window:
+            return True
+        first_seen[key] = at
+        return False
+
+    return _rewrite_without(path, drop)
 
 
 def mark_logged_read(path, keys) -> int:

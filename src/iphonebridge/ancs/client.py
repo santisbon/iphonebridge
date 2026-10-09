@@ -91,8 +91,15 @@ class AncsClient:
         self._app_name_cache: dict[str, str] = {}
         self._pending_app_lookups: dict[str, list[NotificationAttributes]] = {}
 
-        # Signal subscriptions we need to clean up on stop()
+        # ObjectManager subscriptions: live for the whole client, removed
+        # in stop().
         self._signal_matches: list = []
+        # Notification Source / Data Source subscriptions: live for one
+        # GATT session. They must go when the characteristics do, or the
+        # next session stacks a second pair on the same paths and every
+        # notification is delivered N times, requested N times, and the N
+        # replies are each seen N times: N^2 copies of one notification.
+        self._char_matches: list = []
 
     @property
     def active(self) -> bool:
@@ -136,6 +143,7 @@ class AncsClient:
 
     def stop(self) -> None:
         log.info("ANCS client stopping")
+        self._unsubscribe()
         for m in self._signal_matches:
             try:
                 m.remove()
@@ -153,6 +161,19 @@ class AncsClient:
                 except dbus.exceptions.DBusException:
                     pass
         self._ns_path = self._ds_path = self._cp_path = None
+
+    def _unsubscribe(self) -> None:
+        """Forget the current GATT session: drop the NS/DS signal receivers
+        and anything keyed on its uids. Idempotent."""
+        for m in self._char_matches:
+            try:
+                m.remove()
+            except Exception:
+                pass
+        self._char_matches = []
+        # An attribute request outstanding on a dead connection will never
+        # be answered, and its uid means something else next session.
+        self._pending_app_lookups.clear()
         self._notify_started = False
 
     # ---- ObjectManager event handlers -----------------------------------
@@ -183,7 +204,10 @@ class AncsClient:
         for attr in ("_ns_path", "_ds_path", "_cp_path"):
             if getattr(self, attr) == path_s:
                 setattr(self, attr, None)
-                self._notify_started = False
+                # BlueZ re-creates the characteristics at the same paths
+                # on the next connection, so a receiver left matching on
+                # this path would fire again alongside the new one.
+                self._unsubscribe()
                 log.warning("ANCS char gone: %s", path_s)
 
     def _try_subscribe(self) -> None:
@@ -207,7 +231,10 @@ class AncsClient:
             log.warning("ANCS StartNotify failed: %s", e.get_dbus_name())
             return
 
-        self._signal_matches.append(
+        # Never stack: whatever the previous session left behind goes
+        # first, even if its removal was never signalled.
+        self._unsubscribe()
+        self._char_matches.append(
             system_bus.add_signal_receiver(
                 self._on_ns_changed,
                 dbus_interface="org.freedesktop.DBus.Properties",
@@ -215,7 +242,7 @@ class AncsClient:
                 path=self._ns_path,
             )
         )
-        self._signal_matches.append(
+        self._char_matches.append(
             system_bus.add_signal_receiver(
                 self._on_ds_changed,
                 dbus_interface="org.freedesktop.DBus.Properties",
