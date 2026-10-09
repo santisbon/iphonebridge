@@ -62,6 +62,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.19.0" date="2026-10-09">
+      <description>
+        <p>A Clear all button at the foot of the Notifications tab
+        dismisses every notification at once, on the phone too where
+        it still can. The dismiss button on a notification card no
+        longer sits under the scrollbar on KDE. The daemon no longer
+        shows every notification many times over after Bluetooth
+        reconnections, and on startup it removes the copies an
+        earlier version already logged.</p>
+      </description>
+    </release>
     <release version="0.18.2" date="2026-09-11">
       <description>
         <p>The doctor command no longer reports per-app notifications

@@ -1,3 +1,17 @@
+iphonebridge (0.19.0) unstable; urgency=medium
+
+  * Clear all at the foot of the Notifications tab dismisses every
+    card at once, on the phone too where it still can.
+  * The dismiss button on a notification card sat under the desktop
+    style's scrollbar on KDE; the scrollbar now sits beside the cards.
+  * The daemon no longer stacks ANCS subscriptions on every BLE
+    reconnection, which logged and showed every notification N^2
+    times. On startup it compacts copies an earlier version logged.
+  * A notification the phone re-sends unchanged under its uid is no
+    longer shown twice.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Fri, 09 Oct 2026 19:05:00 -0500
+
 iphonebridge (0.18.2) unstable; urgency=medium
 
   * doctor no longer reports per-app notifications available while the

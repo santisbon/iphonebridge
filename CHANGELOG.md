@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.19.0] — 2026-10-09
 
 ### Added
 - **Clear all** at the foot of the Notifications tab dismisses every
@@ -29,6 +29,12 @@
   touches it. The daemon now ignores a re-send whose app, title and
   body match what it already delivered for that uid in the current
   BLE session.
+
+### Known
+- The startup compaction keeps copies of one notification logged more
+  than a minute apart, since a later Bluetooth connection can reuse a
+  uid for something new. A log written by an earlier version may keep
+  a few such repeats; dismiss them by hand or with Clear all.
 
 ## [0.18.2] — 2026-09-11
 
