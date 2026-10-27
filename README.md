@@ -270,9 +270,15 @@ own sessions and closes them again.
 <details>
 <summary><b>Calls don't connect, or there's no call audio</b></summary>
 
-If `systemctl status ofono` shows `core-dump`, the distro's ofonod crashed (seen once when the modem powered during HFP registration): `sudo systemctl restart ofono`, then restart the daemon.
+If `systemctl status ofono` shows `core-dump` or `status=6/ABRT`, the distro's ofonod crashed when the modem powered during HFP registration: `sudo systemctl restart ofono`. The daemon picks the restarted oFono up by itself. Ubuntu's `ofono.service` doesn't restart oFono after a crash; a systemd drop-in makes it:
 
-HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HFP profile. Run `iphonebridge hfp-enable`, then `sudo systemctl restart ofono`, reconnect the iPhone, and restart the daemon. If `journalctl -u ofono` shows `RegisterProfile … UUID already registered`, the start order is wrong — restart oFono again after WirePlumber is up.
+```bash
+sudo mkdir -p /etc/systemd/system/ofono.service.d
+printf '[Service]\nRestart=on-failure\nRestartSec=2\n' | sudo tee /etc/systemd/system/ofono.service.d/iphonebridge.conf
+sudo systemctl daemon-reload
+```
+
+HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HFP profile. Run `iphonebridge hfp-enable`, then `sudo systemctl restart ofono`, and reconnect the iPhone. If `journalctl -u ofono` shows `RegisterProfile … UUID already registered`, the start order is wrong — restart oFono again after WirePlumber is up.
 
 If the daemon logs `could not power the HFP modem (Operation failure due to timeout)` and `journalctl -u bluetooth` shows `Unable to connect hfp_hf`, BlueZ's own Hands-Free client took the iPhone's Hands-Free link. On BlueZ 5.86 and later, `-E` or `[General] Experimental = true` in `/etc/bluetooth/main.conf` turns that client (the plugin `hfp`) on. Keep it off with a systemd drop-in that runs bluetoothd with `-E --noplugin=hfp`, which also keeps the experimental interfaces per-app notifications need (`/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`):
 

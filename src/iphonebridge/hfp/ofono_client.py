@@ -103,6 +103,7 @@ class HfpManager:
         self._modem_path: str | None = None
         self._vcm_hooked = False
 
+        self._name_watch = None               # org.ofono owner changes
         self._mgr_matches: list = []          # ModemAdded / ModemRemoved
         self._modem_sub = None                # modem PropertyChanged
         self._vcm_matches: list = []          # CallAdded / CallRemoved
@@ -113,17 +114,30 @@ class HfpManager:
     # ---- lifecycle ------------------------------------------------------
 
     def start(self) -> None:
+        """Follow oFono's bus name: attach whenever oFono is running, and
+        detach when it goes away, so an oFono that starts late, crashes or
+        is restarted is picked up without restarting the daemon."""
+        if self._name_watch is not None:
+            return
+        # Calls back from the main loop with the current owner ("" when oFono
+        # is down), then on every change.
+        self._name_watch = system_bus.watch_name_owner(OFONO, self._on_owner)
+
+    def _on_owner(self, owner: str) -> None:
+        self._detach()
+        if owner:
+            self._attach()
+        else:
+            log.warning("oFono is not running — HFP calls unavailable until "
+                        "it starts (`iphonebridge hfp-enable` sets it up)")
+
+    def _attach(self) -> None:
         try:
-            # get_object() activates the name, so an absent oFono raises here
-            # rather than at GetModems() — both must sit inside the guard.
             mgr = dbus.Interface(system_bus.get_object(OFONO, "/"), _MGR_IFACE)
             modems = mgr.GetModems()
         except dbus.exceptions.DBusException as e:
-            log.warning(
-                "oFono not available (%s) — HFP calls disabled. "
-                "Run `iphonebridge hfp-enable`, then restart the daemon.",
-                e.get_dbus_name(),
-            )
+            log.warning("oFono not available (%s) — HFP calls unavailable",
+                        e.get_dbus_name())
             return
         self._mgr_matches.append(
             mgr.connect_to_signal("ModemAdded", self._on_modem_added))
@@ -133,6 +147,16 @@ class HfpManager:
             self._on_modem_added(path, props)
         log.info("HFP manager started (oFono); modem=%s", self._modem_path)
 
+    def _detach(self) -> None:
+        """Drop everything bound to the oFono instance that is gone: the
+        proxies were bound to its unique name, so a restarted oFono needs
+        fresh ones."""
+        for m in self._mgr_matches:
+            _safe_remove(m)
+        self._mgr_matches = []
+        if self._modem_path is not None:
+            self._on_modem_removed(self._modem_path)
+
     @property
     def ready(self) -> bool:
         """True while oFono's voice-call manager for the iPhone is hooked,
@@ -141,6 +165,9 @@ class HfpManager:
 
     def stop(self) -> None:
         log.info("HFP manager stopping")
+        if self._name_watch is not None:
+            self._name_watch.cancel()
+            self._name_watch = None
         for m in self._mgr_matches:
             _safe_remove(m)
         self._mgr_matches = []
