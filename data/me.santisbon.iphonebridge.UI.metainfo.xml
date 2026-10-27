@@ -62,6 +62,12 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.5" date="2026-10-27">
+      <description>
+        <p>Calls come back by themselves after the oFono telephony service
+        restarts or crashes; the daemon no longer needs a restart.</p>
+      </description>
+    </release>
     <release version="0.20.4" date="2026-10-27">
       <description>
         <p>Messages and contacts come up sooner after the iPhone's toggles

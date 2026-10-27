@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.20.5] — 2026-10-27
+
+### Fixed
+- **Calls stayed unavailable after oFono restarted or crashed, until the
+  daemon was restarted.** The daemon looked for oFono only when it
+  started, and gave up when oFono wasn't running then. It now follows
+  oFono's D-Bus name: it picks oFono up whenever oFono starts, and drops
+  the iPhone's modem, ending any tracked calls, when oFono goes away.
+- The README's calls troubleshooting gives a systemd drop-in that
+  restarts oFono after a crash, which Ubuntu's `ofono.service` doesn't do.
+
 ## [0.20.4] — 2026-10-27
 
 ### Added

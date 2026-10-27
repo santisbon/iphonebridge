@@ -1,3 +1,10 @@
+iphonebridge (0.20.5) unstable; urgency=medium
+
+  * The daemon follows oFono's D-Bus name, so calls come back after oFono
+    restarts or crashes without restarting the daemon.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 27 Oct 2026 14:04:04 -0500
+
 iphonebridge (0.20.4) unstable; urgency=medium
 
   * GetStatus reports hfp (call control) and avrcp (media control) next to
