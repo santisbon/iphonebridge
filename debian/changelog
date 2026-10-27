@@ -1,3 +1,12 @@
+iphonebridge (0.20.1) unstable; urgency=medium
+
+  * The daemon, doctor and ancs-enable find the iPhone's BlueZ object by
+    its address. An iPhone BlueZ first saw over LE has an object named
+    after a random address, which per-app notifications, media controls
+    and the battery level never found.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 27 Oct 2026 12:00:01 -0500
+
 iphonebridge (0.20.0) unstable; urgency=medium
 
   * The daemon runs as /usr/libexec/iphonebridge/iphonebridge-daemon,

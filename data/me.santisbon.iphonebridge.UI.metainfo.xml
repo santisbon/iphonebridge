@@ -62,6 +62,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.1" date="2026-10-27">
+      <description>
+        <p>Per-app notifications, media controls and the battery level
+        work for an iPhone that BlueZ first saw over Bluetooth LE,
+        which the daemon could not find before.</p>
+      </description>
+    </release>
     <release version="0.20.0" date="2026-10-27">
       <description>
         <p>The daemon runs confined by an AppArmor profile and no

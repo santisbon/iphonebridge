@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.20.1] — 2026-10-27
+
+### Fixed
+- **Per-app notifications, media controls and the phone's battery level
+  never reached an iPhone that BlueZ first saw over Bluetooth LE.** BlueZ
+  names a device's D-Bus object after the address it first saw, and an
+  iPhone advertising over LE uses a random one. After pairing, BlueZ
+  reports the iPhone's public address but keeps the random path, while
+  the daemon built the path from the public address and watched an
+  object that didn't exist. `doctor` reported "iPhone not found on the
+  adapter" and `ancs-enable` reported the iPhone not found. The daemon,
+  `doctor` and `ancs-enable` now find the iPhone's object by its
+  address. A pairing the iPhone starts, which the install steps now ask
+  for, is likely to produce such a path.
+
 ## [0.20.0] — 2026-10-27
 
 ### Changed
