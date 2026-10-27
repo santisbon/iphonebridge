@@ -1,3 +1,3 @@
 """iphonebridge — Bluetooth bridge from a paired iPhone to Linux desktop."""
 
-__version__ = "0.20.2"
+__version__ = "0.20.3"

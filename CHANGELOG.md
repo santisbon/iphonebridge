@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.20.3] — 2026-10-27
 
 ### Fixed
 - **Calls failed after following the per-app notifications setup on
