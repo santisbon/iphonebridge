@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.20.4] — 2026-10-27
+
+### Added
+- **The daemon's `GetStatus` reports calls and media control.** Its JSON
+  answer gains `hfp` (oFono's call control for the iPhone is ready) and
+  `avrcp` (the iPhone's media player is connected), next to `map`,
+  `pbap` and `ancs`, so a setup script can wait until every feature
+  works.
+
+### Changed
+- **Messages and contacts come up sooner after the toggles are turned
+  on.** While the iPhone refuses them, the daemon retries every 10
+  seconds for the first 5 minutes, then every 60 seconds as before.
+  After a fresh pairing, iOS accepted them 3 minutes 10 seconds after
+  the daemon started, and the 60-second retry added up to a minute on
+  top.
+
 ## [0.20.3] — 2026-10-27
 
 ### Fixed

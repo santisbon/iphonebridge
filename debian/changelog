@@ -1,3 +1,12 @@
+iphonebridge (0.20.4) unstable; urgency=medium
+
+  * GetStatus reports hfp (call control) and avrcp (media control) next to
+    map, pbap and ancs.
+  * While the iPhone refuses messages and contacts, the daemon retries
+    every 10 seconds for the first 5 minutes, then every 60 seconds.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 27 Oct 2026 13:43:12 -0500
+
 iphonebridge (0.20.3) unstable; urgency=medium
 
   * The per-app notifications setup and ancs-enable's advice turn on

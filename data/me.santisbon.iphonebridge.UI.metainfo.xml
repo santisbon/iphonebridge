@@ -62,6 +62,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.4" date="2026-10-27">
+      <description>
+        <p>Messages and contacts come up sooner after the iPhone's toggles
+        are turned on, and the daemon reports whether calls and media
+        control work, so setup can wait until everything does.</p>
+      </description>
+    </release>
     <release version="0.20.3" date="2026-10-27">
       <description>
         <p>The per-app notifications setup no longer breaks calls on BlueZ
