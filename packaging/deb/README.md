@@ -282,13 +282,22 @@ breaks the new pairing. Linux: the Bluetooth panel's Remove/Forget or
 `bluetoothctl remove <MAC>`. iPhone: Settings, Bluetooth, tap the info
 icon next to the computer, Forget This Device.
 
-Then pair. Keep the iPhone on its Settings, Bluetooth screen; iOS is
-only discoverable while that screen is open. Confirm the matching
-6-digit code on both sides.
+Then start the pairing **on the iPhone**, with the computer discoverable
+and a Bluetooth agent (the program that shows and confirms the 6-digit
+code) running on the computer:
 
-- KDE Plasma: System Settings, Bluetooth, Add New Device
-- GNOME: Settings, Bluetooth, tap the iPhone under Other Devices
-- CLI: `bluetoothctl` then `scan on`, `pair <MAC>`, `trust <MAC>`, `quit`
+- KDE Plasma: keep System Settings, Bluetooth open on the computer
+- GNOME: keep Settings, Bluetooth open on the computer
+- CLI: `bluetoothctl`, then `agent on`, `default-agent`, `pairable on`,
+  `discoverable on`
+
+On the iPhone, open Settings, Bluetooth and tap the computer under Other
+Devices. Confirm the matching 6-digit code on both sides; with
+`bluetoothctl`, also answer `yes` to its Authorize service questions,
+then run `trust <MAC>` and `quit`. A pairing the iPhone starts gives the
+bond the Low Energy keys per-app notifications need (step 8): on an Intel
+BE200 adapter, a pairing the computer started stored classic Bluetooth
+keys only.
 
 ### 4. First-run wizard
 
@@ -356,10 +365,20 @@ Adapter-dependent: Intel chipsets (AX-series, BE200) can form the BLE
 bond this needs; Realtek and USB dongles cannot. Two prerequisites, in
 order:
 
-1. BlueZ's experimental interfaces, for the bearer control this uses:
-   `[General] Experimental = true` in `/etc/bluetooth/main.conf`, then
-   `sudo systemctl restart bluetooth` and
-   `systemctl --user restart iphonebridge`.
+1. BlueZ's experimental interfaces, with BlueZ's own Hands-Free client
+   off. A systemd drop-in runs bluetoothd with `-E --noplugin=hfp`:
+
+   ```sh
+   sudo mkdir -p /etc/systemd/system/bluetooth.service.d
+   printf '[Service]\nExecStart=\nExecStart=/usr/libexec/bluetooth/bluetoothd -E --noplugin=hfp\n' \
+     | sudo tee /etc/systemd/system/bluetooth.service.d/iphonebridge.conf
+   sudo systemctl daemon-reload
+   sudo systemctl restart bluetooth
+   systemctl --user restart iphonebridge
+   ```
+
+   `-E` turns on BlueZ's experimental interfaces, which `ancs-enable`'s bearer control needs. On BlueZ 5.86 and later it also turns on BlueZ's own Hands-Free client (the plugin `hfp`), which connects to the iPhone by itself and takes the Hands-Free link oFono needs for calls; `--noplugin=hfp` keeps it off. The drop-in leaves the bluez package's `/etc/bluetooth/main.conf` as shipped. `/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`. A `[General] Experimental = true` line in `/etc/bluetooth/main.conf` can stay: the drop-in still keeps the `hfp` plugin off.
+
 2. A bond with LE keys. A pairing made per step 3 on a capable adapter
    already has them; if in doubt, forget on both ends and re-pair (then
    re-enable the step 5 toggles).

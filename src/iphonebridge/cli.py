@@ -372,7 +372,9 @@ def ancs_enable(
     phone: a "Share System Notifications" toggle for this computer in
     its Bluetooth settings, or on some iOS versions an allow-notifications
     prompt. The property is experimental in BlueZ, so bluetoothd must
-    run with [General] Experimental = true in /etc/bluetooth/main.conf.
+    run with -E; a systemd drop-in adds it with --noplugin=hfp, which
+    keeps BlueZ's own Hands-Free client off so oFono gets the iPhone's
+    Hands-Free link.
 
     Editing the stored bond's LastUsedBearer (this command's previous
     approach) does not survive contact with a live iPhone: the phone
@@ -411,8 +413,12 @@ def ancs_enable(
             fg=typer.colors.RED))
         typer.echo("Either BlueZ's experimental interfaces are off; turn them "
                    "on, then re-run this command:")
-        typer.echo("  sudo sed -i '/^\\[General\\]/a Experimental = true' "
-                   "/etc/bluetooth/main.conf")
+        typer.echo("  sudo mkdir -p /etc/systemd/system/bluetooth.service.d")
+        typer.echo("  printf '[Service]\\nExecStart=\\nExecStart="
+                   "/usr/libexec/bluetooth/bluetoothd -E --noplugin=hfp\\n' \\")
+        typer.echo("    | sudo tee /etc/systemd/system/bluetooth.service.d/"
+                   "iphonebridge.conf")
+        typer.echo("  sudo systemctl daemon-reload")
         typer.echo("  sudo systemctl restart bluetooth")
         typer.echo("  systemctl --user restart iphonebridge")
         typer.echo("Or the bond has no Low Energy keys: forget the device on "

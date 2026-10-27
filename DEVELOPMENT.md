@@ -164,14 +164,19 @@ iOS's permission.
 One-time setup:
 
 ```bash
-# BlueZ's experimental interfaces, for the bearer control this uses
-sudo sed -i '/^\[General\]/a Experimental = true' /etc/bluetooth/main.conf
+# BlueZ's experimental interfaces, with BlueZ's own Hands-Free client off
+sudo mkdir -p /etc/systemd/system/bluetooth.service.d
+printf '[Service]\nExecStart=\nExecStart=/usr/libexec/bluetooth/bluetoothd -E --noplugin=hfp\n' \
+  | sudo tee /etc/systemd/system/bluetooth.service.d/iphonebridge.conf
+sudo systemctl daemon-reload
 sudo systemctl restart bluetooth
 systemctl --user restart iphonebridge
 
 # Steer the next connection over BLE
 iphonebridge ancs-enable
 ```
+
+`-E` turns on BlueZ's experimental interfaces, which `ancs-enable`'s bearer control needs. On BlueZ 5.86 and later it also turns on BlueZ's own Hands-Free client (the plugin `hfp`), which connects to the iPhone by itself and takes the Hands-Free link oFono needs for calls; `--noplugin=hfp` keeps it off. The drop-in leaves the bluez package's `/etc/bluetooth/main.conf` as shipped. `/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`. A `[General] Experimental = true` line in `/etc/bluetooth/main.conf` can stay: the drop-in still keeps the `hfp` plugin off.
 
 `ancs-enable` disconnects, sets BlueZ's `Device1.PreferredBearer` to
 `le`, reconnects, and waits for the phone's ANCS service to appear. The
@@ -185,7 +190,7 @@ then back on classic-only, where the toggle stays on and the Status tab
 reads *Not detected* until you run it again.
 
 If `ancs-enable` reports the ANCS service never appeared, or that BlueZ
-offers no PreferredBearer control while Experimental is on, the bond has no
+offers no PreferredBearer control while the drop-in is in place, the bond has no
 LE keys: **forget + re-pair** first (both ends), starting the pairing on the
 iPhone as in step 3, then re-run it.
 

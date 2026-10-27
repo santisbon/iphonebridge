@@ -148,7 +148,20 @@ systemctl --user {start,stop,restart} iphonebridge
 <details>
 <summary><b>App notifications (ANCS) not working</b></summary>
 
-ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, or the computer started it, forget the iPhone on both ends and re-pair, starting the pairing from the iPhone. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
+ANCS needs a BLE bond and an LE connection. First turn on BlueZ's experimental interfaces with BlueZ's own Hands-Free client off, through a systemd drop-in:
+
+```bash
+sudo mkdir -p /etc/systemd/system/bluetooth.service.d
+printf '[Service]\nExecStart=\nExecStart=/usr/libexec/bluetooth/bluetoothd -E --noplugin=hfp\n' \
+  | sudo tee /etc/systemd/system/bluetooth.service.d/iphonebridge.conf
+sudo systemctl daemon-reload
+sudo systemctl restart bluetooth
+systemctl --user restart iphonebridge
+```
+
+`-E` turns on BlueZ's experimental interfaces, which `ancs-enable`'s bearer control needs. On BlueZ 5.86 and later it also turns on BlueZ's own Hands-Free client (the plugin `hfp`), which connects to the iPhone by itself and takes the Hands-Free link oFono needs for calls; `--noplugin=hfp` keeps it off. The drop-in leaves the bluez package's `/etc/bluetooth/main.conf` as shipped. `/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`. A `[General] Experimental = true` line in `/etc/bluetooth/main.conf` can stay: the drop-in still keeps the `hfp` plugin off.
+
+If the pairing is old, or the computer started it, forget the iPhone on both ends and re-pair, starting the pairing from the iPhone. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
 
 If that toggle is on but the app's Status tab reads *Not detected* for it, the phone is connected over classic Bluetooth only. ANCS is carried over LE, and the phone reconnects over classic by default, so the grant is there with nothing to carry it; `iphonebridge doctor` reports it as "connected over classic Bluetooth only". Run `iphonebridge ancs-enable` again. BlueZ stores the bearer preference with the pairing, so a forget + re-pair drops it along with the bond.
 
@@ -260,6 +273,25 @@ own sessions and closes them again.
 If `systemctl status ofono` shows `core-dump`, the distro's ofonod crashed (seen once when the modem powered during HFP registration): `sudo systemctl restart ofono`, then restart the daemon.
 
 HFP needs oFono, and oFono must start *after* WirePlumber so it can claim the HFP profile. Run `iphonebridge hfp-enable`, then `sudo systemctl restart ofono`, reconnect the iPhone, and restart the daemon. If `journalctl -u ofono` shows `RegisterProfile … UUID already registered`, the start order is wrong — restart oFono again after WirePlumber is up.
+
+If the daemon logs `could not power the HFP modem (Operation failure due to timeout)` and `journalctl -u bluetooth` shows `Unable to connect hfp_hf`, BlueZ's own Hands-Free client took the iPhone's Hands-Free link. On BlueZ 5.86 and later, `-E` or `[General] Experimental = true` in `/etc/bluetooth/main.conf` turns that client (the plugin `hfp`) on. Keep it off with a systemd drop-in that runs bluetoothd with `-E --noplugin=hfp`, which also keeps the experimental interfaces per-app notifications need (`/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`):
+
+```bash
+sudo mkdir -p /etc/systemd/system/bluetooth.service.d
+printf '[Service]\nExecStart=\nExecStart=/usr/libexec/bluetooth/bluetoothd -E --noplugin=hfp\n' \
+  | sudo tee /etc/systemd/system/bluetooth.service.d/iphonebridge.conf
+sudo systemctl daemon-reload
+sudo systemctl restart bluetooth
+systemctl --user restart iphonebridge
+```
+
+`iphonebridge ancs-enable` moves the iPhone to Bluetooth LE, and the iPhone can come back over classic Bluetooth without the Hands-Free link (calls) or AV Remote Control (media controls). Connect both profiles, with your iPhone's address in place of `<MAC>`, then restart the daemon:
+
+```bash
+bluetoothctl connect <MAC> 0000111f-0000-1000-8000-00805f9b34fb
+bluetoothctl connect <MAC> 0000110e-0000-1000-8000-00805f9b34fb
+systemctl --user restart iphonebridge
+```
 </details>
 
 <details>

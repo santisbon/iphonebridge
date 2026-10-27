@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Calls failed after following the per-app notifications setup on
+  BlueZ 5.86 and later.** The setup said to set `Experimental = true`
+  in `/etc/bluetooth/main.conf`, which also turns on BlueZ's own
+  Hands-Free client (the plugin `hfp`); that client connects to the
+  iPhone by itself and takes the Hands-Free link oFono needs, so the
+  HFP modem timed out powering on. The setup, and the advice
+  `ancs-enable` prints, now use a systemd drop-in that runs bluetoothd
+  with `-E --noplugin=hfp`. The calls troubleshooting also covers
+  reconnecting calls and media controls after `ancs-enable`.
+- **The deb install steps said to start the pairing from the
+  computer**, which gave a bond without the Low Energy keys per-app
+  notifications need on an Intel BE200 adapter. They now start it on the
+  iPhone, as the README and DEVELOPMENT.md already did.
+
 ## [0.20.2] — 2026-10-27
 
 ### Changed
