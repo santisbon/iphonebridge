@@ -1,6 +1,7 @@
 data/me.santisbon.iphonebridge.UI.desktop      usr/share/applications/
 data/icons/me.santisbon.iphonebridge.UI.svg    usr/share/icons/hicolor/scalable/apps/
 data/me.santisbon.iphonebridge.UI.metainfo.xml usr/share/metainfo/
-systemd/set-le-bearer.sh                       usr/libexec/iphonebridge/
-debian/sudoers-cod                             etc/sudoers.d/
-debian/sudoers-ancs                            etc/sudoers.d/
+systemd/iphonebridge-daemon                    usr/libexec/iphonebridge/
+systemd/iphonebridge-cod.service               usr/lib/systemd/system/
+systemd/50-iphonebridge-cod.rules              usr/share/polkit-1/rules.d/
+apparmor/iphonebridge                          etc/apparmor.d/

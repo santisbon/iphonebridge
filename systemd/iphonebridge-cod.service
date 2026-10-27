@@ -1,0 +1,17 @@
+[Unit]
+Description=Set the Bluetooth adapter's class to A/V Hands-Free for iphonebridge
+Documentation=https://github.com/santisbon/iphonebridge
+After=bluetooth.service
+Requisite=bluetooth.service
+
+# Started by the iphonebridge user daemon over D-Bus whenever the adapter's
+# class is wrong: iOS offers the message and contacts toggles only to an
+# A/V Hands-Free device. Setting the class needs root, which the daemon
+# doesn't have. polkit's rule in 50-iphonebridge-cod.rules lets a local
+# user start this one unit.
+[Service]
+Type=oneshot
+# btmgmt adds stdin to its epoll loop, and a service's stdin, /dev/null,
+# can't be polled: without a pipe on stdin, btmgmt waits forever.
+ExecStart=/bin/sh -c 'echo | exec /usr/bin/btmgmt class 4 8'
+TimeoutStartSec=15

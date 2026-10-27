@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+"""The daemon's own path, so AppArmor confines the daemon and not the CLI.
+
+AppArmor attaches a profile by the path of the program run, and
+/usr/bin/iphonebridge is also the CLI (pair-setup, doctor, ancs-enable).
+The user unit runs this file instead, and the profile in
+/etc/apparmor.d/iphonebridge attaches to this path.
+"""
+import sys
+
+from iphonebridge.cli import app
+
+app(["run", *sys.argv[1:]])

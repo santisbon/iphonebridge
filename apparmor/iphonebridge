@@ -1,0 +1,78 @@
+# AppArmor profile for the iphonebridge daemon. The daemon parses whatever a
+# paired phone sends over Bluetooth (messages, contacts, notifications), so
+# this confines it for when a crafted message takes it over. The CLI and the
+# app run /usr/bin/iphonebridge and /usr/bin/iphonebridge-ui and stay
+# unconfined; the user unit runs the daemon from its own path.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile iphonebridge /usr/libexec/iphonebridge/iphonebridge-daemon {
+  include <abstractions/base>
+  include <abstractions/python>
+
+  # Python puts the script's folder on its module path.
+  /usr/libexec/iphonebridge/ r,
+  /usr/libexec/iphonebridge/iphonebridge-daemon r,
+  /usr/bin/python3.[0-9]* ix,
+  /usr/lib/python3/dist-packages/** r,
+
+  /etc/machine-id r,
+
+  owner @{HOME}/.config/iphonebridge/ r,
+  owner @{HOME}/.config/iphonebridge/** r,
+  owner @{HOME}/.local/state/iphonebridge/ rw,
+  owner @{HOME}/.local/state/iphonebridge/** rwk,
+
+  # MAP and PBAP transfers: the daemon creates the file, obexd writes it.
+  owner /tmp/ibridge_*.bmsg rw,
+  owner /tmp/iphonebridge_pb_*/ rw,
+  owner /tmp/iphonebridge_pb_*/** rw,
+  # Python's tempfile checks that /tmp is writable with a file of 8 random characters.
+  owner /tmp/???????? rw,
+  # Covers BlueZ's mpris-proxy downloads when it holds the iPhone's one image channel.
+  owner /tmp/session[0-9]*-* r,
+
+  # Verification codes go to the clipboard through wl-copy.
+  /usr/bin/wl-copy ix,
+  owner @{run}/user/@{uid}/wayland-[0-9]* rw,
+
+  # systemd's private socket reaches every call the session bus rules below deny, without passing through them.
+  /run/dbus/system_bus_socket rw,
+  owner @{run}/user/@{uid}/bus rw,
+  deny @{run}/user/@{uid}/systemd/** rw,
+
+  network bluetooth,
+  unix,
+
+  # python-dbus sends to a service's unique name (":1.42"), not its well-known
+  # name, so these rules match object paths rather than peer names.
+  dbus send bus={system,session} interface=org.freedesktop.DBus.Introspectable member=Introspect,
+  dbus send bus={system,session} path=/org/freedesktop/DBus interface=org.freedesktop.DBus,
+
+  # BlueZ: the adapter, the iPhone, its GATT notifications (ANCS) and its media player.
+  dbus send bus=system path=/org/bluez{,/**},
+  dbus send bus={system,session} path=/ interface=org.freedesktop.DBus.ObjectManager member=GetManagedObjects,
+  # oFono: the iPhone's hands-free modem and its calls.
+  dbus send bus=system path=/ interface=org.ofono.Manager member=GetModems,
+  dbus send bus=system path=/hfp/org/bluez/**,
+  # Starts the one root unit that sets the adapter's class; polkit allows no other unit.
+  dbus send bus=system path=/org/freedesktop/systemd1 interface=org.freedesktop.systemd1.Manager
+       member=StartUnit,
+  dbus receive bus=system,
+
+  # obexd: the message (MAP) and contacts (PBAP) sessions and their transfers.
+  dbus send bus=session path=/org/bluez/obex{,/**},
+  dbus send bus=session path=/org/freedesktop/Notifications interface=org.freedesktop.Notifications,
+  # RestartUnit is for obexd; nothing here can start a new unit or command.
+  dbus send bus=session path=/org/freedesktop/systemd1 interface=org.freedesktop.systemd1.Manager
+       member=RestartUnit,
+  dbus send bus=session path=/org/freedesktop/systemd1/job/* interface=org.freedesktop.DBus.Properties
+       member=Get,
+  # The daemon's own service, which the app talks to, and its signals.
+  dbus bind bus=session name=me.santisbon.iphonebridge,
+  dbus send bus=session path=/me/santisbon/iphonebridge{,/**},
+  dbus receive bus=session,
+
+  include if exists <local/iphonebridge>
+}

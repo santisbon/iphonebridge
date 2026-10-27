@@ -8,8 +8,8 @@ Two ways to install. A `.deb` package (see `README.md`) and from source. Pick **
 
 <summary> Install from source </summary>
 
-The rest of this section walks through it: venv, symlinks, sudoers
-installers, and a path-substituted systemd unit. The package names in step 1
+The rest of this section walks through it: venv, symlinks, the root unit
+that sets the adapter class, and a path-substituted systemd unit. The package names in step 1
 are Debian-family. On non-apt distros, e.g. **Fedora, Arch, openSUSE**  
 install your distro's equivalents of BlueZ, `bluez-obexd`, dbus-python, PyGObject
 (the daemon's main loop), and PyQt6 with its QtQuick/QML runtime modules (the app). 
@@ -63,14 +63,23 @@ ln -sf "$(pwd)/.venv/bin/iphonebridge-ui" ~/.local/bin/iphonebridge-ui
 
 #### 3 · Pair your iPhone
 
-Pair normally with your desktop's Bluetooth panel, or with `bluetoothctl`:
+Start the pairing **on the iPhone**, with the computer discoverable and a
+Bluetooth agent (the program that shows and confirms the 6-digit code)
+running on the computer:
 
-- **GNOME** — Settings → Bluetooth → tap the iPhone under *Other Devices*
-- **KDE Plasma** — System Settings → Bluetooth → *Add New Device* (same button in the tray applet)
-- **CLI** — `bluetoothctl` → `scan on`, `pair <MAC>`, `trust <MAC>`, `quit`
+- **GNOME** — keep Settings → Bluetooth open on the computer
+- **KDE Plasma** — keep System Settings → Bluetooth open on the computer
+- **CLI** — run `bluetoothctl`, then `agent on`, `default-agent`, `pairable on`, `discoverable on`
 
-Keep the iPhone on its **Settings → Bluetooth** screen while you pair; iOS is only
-discoverable while that screen is open. Confirm the matching 6-digit code on both sides.
+Then on the iPhone, open **Settings → Bluetooth** and tap the computer under
+*Other Devices*. Confirm the matching 6-digit code on both sides; with
+`bluetoothctl`, also answer `yes` to its *Authorize service* questions, then
+run `trust <MAC>` and `quit`.
+
+The side that starts the pairing matters for per-app notifications (step 7).
+On an Intel BE200 adapter, a pairing the computer started stored classic
+Bluetooth keys only, and a pairing the iPhone started stored the Low Energy
+keys too.
 
 If this iPhone was paired to this computer before, remove the old bond on **both**
 ends first (Linux: the Bluetooth panel's Remove/Forget, or `bluetoothctl remove <MAC>`;
@@ -89,20 +98,24 @@ It finds your iPhone among paired devices, writes `~/.config/iphonebridge/local.
 
 iOS only offers the message and contacts toggles to a device whose Bluetooth
 Class-of-Device is **A/V Hands-Free** (major 4, minor 8). Your adapter ships as
-*Computer*, and changing that needs root, so grant the daemon one narrowly
-scoped rule:
+*Computer*, and changing that needs root. The daemon doesn't run as root: it
+starts the system unit `iphonebridge-cod.service`, which runs
+`btmgmt class 4 8`, and a polkit rule lets a local user start that one unit.
+Install the unit and the rule (the `.deb` installs the same two files):
 
 ```bash
-sudo bash systemd/install-cod-sudoers.sh
+sudo install -m 644 systemd/iphonebridge-cod.service /etc/systemd/system/
+sudo install -m 644 systemd/50-iphonebridge-cod.rules /etc/polkit-1/rules.d/
+sudo systemctl daemon-reload
 ```
 
-It unlocks exactly `btmgmt class 4 8` for your user and nothing else. The daemon
-re-applies the class on every start, which matters because it resets on reboot
-and on `systemctl restart bluetooth`.
+The daemon starts the unit on every start when the class is wrong, which
+matters because the class resets on reboot and on `systemctl restart
+bluetooth`. Check the current value any time with `iphonebridge doctor`.
 
-Don't want a sudoers rule? Run `sudo btmgmt class 4 8` by hand instead, and
-again after each reboot. Check the current value any time with
-`iphonebridge doctor`.
+A from-source daemon runs unconfined: the AppArmor profile in
+`apparmor/iphonebridge` attaches only to the `.deb`'s
+`/usr/libexec/iphonebridge/iphonebridge-daemon`.
 
 #### 5 · Install the daemon as a service
 
@@ -145,8 +158,9 @@ Two behaviours that look like faults but aren't:
 #### 7 · (Optional) Enable per-app notifications — ANCS
 
 ANCS needs three things: a bond with LE keys (cross-transport key
-derivation during pairing provides them on a capable adapter — Intel;
-Realtek and USB dongles cannot), an LE connection, and iOS's permission.
+derivation during a pairing the iPhone starts provides them on a capable
+adapter — Intel; Realtek and USB dongles cannot), an LE connection, and
+iOS's permission.
 One-time setup:
 
 ```bash
@@ -170,9 +184,10 @@ with the bond, and a forget + re-pair drops it with the bond. The phone is
 then back on classic-only, where the toggle stays on and the Status tab
 reads *Not detected* until you run it again.
 
-If `ancs-enable` reports the ANCS service never appeared, the bond
-likely predates a capable setup: **forget + re-pair** first (both ends),
-then re-run it.
+If `ancs-enable` reports the ANCS service never appeared, or that BlueZ
+offers no PreferredBearer control while Experimental is on, the bond has no
+LE keys: **forget + re-pair** first (both ends), starting the pairing on the
+iPhone as in step 3, then re-run it.
 
 *Forget* means dropping the bond on **both** ends; one-sided forgetting leaves a
 stale half-bond that breaks the re-pair. On the iPhone: **Settings → Bluetooth →
@@ -298,7 +313,7 @@ integration can be default per process, so `ui/qtbus.py` raises on import if
 | Shared — `config.py` | Restart the daemon *and* reopen the app |
 | Daemon bus — `bus.py` | `systemctl --user restart iphonebridge` (the app doesn't import it) |
 | `systemd/iphonebridge.service` | Re-run the install from step 5, then `systemctl --user daemon-reload`, then restart |
-| `systemd/sudoers-*`, `set-le-bearer.sh`, or an installer | Re-run the matching installer — `install-cod-sudoers.sh` for the CoD rule, `install-ancs-sudoers.sh` for the ANCS rule + helper |
+| `systemd/iphonebridge-cod.service` or `systemd/50-iphonebridge-cod.rules` | Re-run the two `sudo install` commands from step 4, then `sudo systemctl daemon-reload` |
 | `data/*.desktop` or the icon | Re-run the install snippet under *Adding it to your app launcher* — a plain copy loses the `Exec` rewrite |
 
 `ui/` is Qt only. The GTK front end it replaced was deleted once the Qt UI

@@ -49,7 +49,7 @@ run()  {
 }
 
 if (( ! YES && ! DRY )); then
-    echo "This removes the iphonebridge package, its sudoers rules and group,"
+    echo "This removes the iphonebridge package, its AppArmor profile and polkit rule,"
     if (( KEEP_DATA )); then echo "and the Linux side of the pairing. Message history is kept."
     else echo "your message history and contacts cache, and the Linux side of the pairing."
     fi
@@ -61,12 +61,12 @@ step 1/7 "Stopping the daemon"
 run systemctl --user stop iphonebridge
 
 step 2/7 "Purging the package (sudo)"
-# purge, not remove: the sudoers rules are conffiles and only purge deletes them
+# purge, not remove: the AppArmor profile is a conffile and only purge deletes it
 run sudo apt-get purge -y iphonebridge
 run sudo apt-get autoremove -y
 
-step 3/7 "Removing the iphonebridge group (sudo)"
-run sudo delgroup iphonebridge
+step 3/7 "Removing the iphonebridge group of releases before 0.20.0 (sudo)"
+run sudo delgroup --system iphonebridge
 
 if (( KEEP_DATA )); then
     step 4/7 "Keeping per-user data (--keep-data)"

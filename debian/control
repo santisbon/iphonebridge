@@ -3,7 +3,7 @@ Section: comm
 Priority: optional
 Maintainer: santisbon <santisbon@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13), dh-python, python3-all,
- python3-setuptools, pybuild-plugin-pyproject
+ python3-setuptools, pybuild-plugin-pyproject, dh-apparmor
 Standards-Version: 4.6.2
 Homepage: https://github.com/santisbon/iphonebridge
 
@@ -16,7 +16,7 @@ Depends: ${python3:Depends}, ${misc:Depends},
  qml6-module-qtquick-controls, qml6-module-qtquick-layouts,
  qml6-module-qtquick-templates, qml6-module-qtquick-window,
  qt6-wayland, gir1.2-ibus-1.0,
- bluez (>= 5.72), bluez-obexd
+ bluez (>= 5.72), bluez-obexd, polkitd
 Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme,
  ibus-data, fonts-noto-color-emoji
 Description: iPhone messages, calls, and contacts over Bluetooth
@@ -24,6 +24,7 @@ Description: iPhone messages, calls, and contacts over Bluetooth
  Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
  service, no subscription.
  .
- Ships the systemd user unit, desktop entry, and the sudoers rules
- (group iphonebridge) for the two privileged operations: setting the
- adapter Class-of-Device and the ANCS BLE-bearer edit.
+ Ships the systemd user unit, the desktop entry, and the AppArmor
+ profile that confines the daemon. The one privileged operation, setting
+ the adapter's Class-of-Device, runs in a root system unit that a polkit
+ rule lets the daemon start.

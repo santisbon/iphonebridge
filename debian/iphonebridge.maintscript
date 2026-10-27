@@ -1,0 +1,3 @@
+# The sudoers rules went away in 0.20.0, when the daemon stopped running sudo.
+rm_conffile /etc/sudoers.d/iphonebridge-cod 0.20.0~
+rm_conffile /etc/sudoers.d/iphonebridge-ancs 0.20.0~

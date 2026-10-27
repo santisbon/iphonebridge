@@ -68,12 +68,9 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
             log.info("Adapter CoD = 0x%06x (A/V Hands-Free)  OK", cod)
         else:
             log.warning("Adapter CoD = 0x%06x — not A/V Hands-Free. "
-                        "Set it manually:", cod)
-            log.warning("    sudo btmgmt class %d %d",
-                        config.COD_MAJOR, config.COD_MINOR)
-            log.warning("    To make the daemon set it: package install → "
-                        "`sudo adduser $USER iphonebridge`, then reboot; "
-                        "from source → `sudo bash systemd/install-cod-sudoers.sh`")
+                        "The daemon sets it on start through "
+                        "iphonebridge-cod.service; set it now with:", cod)
+            log.warning("    systemctl start iphonebridge-cod")
             ok = False
 
     # State dir writable
@@ -407,14 +404,19 @@ def ancs_enable(
     try:
         was = str(props.Get("org.bluez.Device1", "PreferredBearer"))
     except dbus.exceptions.DBusException:
+        # BlueZ shows the property only with Experimental on, and only for
+        # a device it knows over both classic Bluetooth and LE.
         typer.echo(typer.style(
-            "BlueZ is hiding the PreferredBearer control (it is an "
-            "experimental interface).", fg=typer.colors.RED))
-        typer.echo("Enable it, then re-run this command:")
+            "BlueZ offers no PreferredBearer control for the iPhone.",
+            fg=typer.colors.RED))
+        typer.echo("Either BlueZ's experimental interfaces are off; turn them "
+                   "on, then re-run this command:")
         typer.echo("  sudo sed -i '/^\\[General\\]/a Experimental = true' "
                    "/etc/bluetooth/main.conf")
         typer.echo("  sudo systemctl restart bluetooth")
         typer.echo("  systemctl --user restart iphonebridge")
+        typer.echo("Or the bond has no Low Energy keys: forget the device on "
+                   "both ends, start the pairing from the iPhone, and re-run.")
         raise typer.Exit(code=3) from None
 
     device = iface("org.bluez.Device1")
@@ -458,8 +460,9 @@ def ancs_enable(
         typer.echo(typer.style(
             "Connected, but the ANCS service has not appeared yet.",
             fg=typer.colors.YELLOW))
-        typer.echo("If the pairing predates BLE bonding, forget the device "
-                   "on both ends, re-pair, and re-run this command.")
+        typer.echo("If the bond has no Low Energy keys, forget the device on "
+                   "both ends, start the pairing from the iPhone, and re-run "
+                   "this command.")
 
     typer.echo("\nWatch the daemon pick it up:")
     typer.echo("  journalctl --user -u iphonebridge -f | grep -i ancs")

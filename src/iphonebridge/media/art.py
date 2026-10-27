@@ -6,6 +6,12 @@ inside its AVRCP record, whose L2CAP PSM BlueZ surfaces as the player's
 `ObexPort`. obexd speaks the protocol; this class only drives its client
 API: one session, `Image1.Get` per handle, a small on-disk cache.
 
+The iPhone opens one image channel per computer. When another client
+holds it (BlueZ's mpris-proxy, which fetches the same covers for its MPRIS
+players), the iPhone refuses a second one, so the fetcher copies the cover
+that client downloads instead: mpris-proxy writes each one to
+<tmp dir>/<its obexd session's name>-<image handle>.
+
 Everything is asynchronous. Fetches are triggered from BlueZ signal
 callbacks on the daemon's GLib loop, and an OBEX transfer takes long
 enough that blocking there would stall every other subsystem.
@@ -14,6 +20,8 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -26,6 +34,7 @@ from iphonebridge.bus import session_bus
 log = logging.getLogger(__name__)
 
 OBEX_BUS = "org.bluez.obex"
+BIP_AVRCP_UUID = "0000111a-0000-1000-8000-00805f9b34fb"
 _CACHE_KEEP = 8  # covers kept on disk; enough to flip between tracks
 
 #: Fetch outcome callback: (handle, path-or-None).
@@ -66,6 +75,7 @@ class ArtFetcher:
         self._busy = False
         self._psm = 0
         self._retry_armed = False
+        self._borrowing = ""   # handle whose cover another client downloads
         # The daemon restarts obexd whenever it rebuilds its MAP/PBAP
         # sessions, which kills this session with no signal to us — and
         # iOS stops offering image handles the moment the channel drops.
@@ -94,6 +104,7 @@ class ArtFetcher:
     def fetch(self, handle: str, psm: int, on_done: DoneCb) -> None:
         """Get the cover for `handle`, from cache or the phone."""
         self._psm = int(psm)
+        self._borrowing = ""
         target = _art_file(handle)
         if target.is_file() and target.stat().st_size > 0:
             on_done(handle, str(target))
@@ -107,12 +118,13 @@ class ArtFetcher:
         if self._session_path is None:
             self._create_session(psm,
                                  lambda: self._get(handle, target, on_done),
-                                 lambda: self._done(on_done, handle, None))
+                                 lambda: self._borrow(handle, target, on_done))
         else:
             self._get(handle, target, on_done)
 
     def close(self) -> None:
         self._psm = 0   # no reconnect behind a deliberate close
+        self._borrowing = ""
         path, self._session_path = self._session_path, None
         if path is None:
             return
@@ -145,7 +157,12 @@ class ArtFetcher:
         def retry() -> bool:
             self._retry_armed = False
             if self._session_path is None and self._psm > 0:
-                self.connect(self._psm)
+                if self._foreign_session() is not None:
+                    # iOS refuses a second image channel; try again once
+                    # the other client lets go of its own.
+                    self._arm_retry()
+                else:
+                    self.connect(self._psm)
             return False
 
         GLib.timeout_add_seconds(10, retry)
@@ -180,6 +197,68 @@ class ArtFetcher:
             self.address,
             {"Target": "bip-avrcp", "PSM": dbus.UInt16(psm)},
             timeout=30, reply_handler=created, error_handler=failed)
+
+    def _foreign_session(self) -> str | None:
+        """Another client's image session to this iPhone in obexd, if any."""
+        try:
+            objects = dbus.Interface(
+                session_bus.get_object(OBEX_BUS, "/"),
+                "org.freedesktop.DBus.ObjectManager").GetManagedObjects()
+        except dbus.exceptions.DBusException:
+            return None
+        for path, ifaces in objects.items():
+            props = ifaces.get("org.bluez.obex.Session1")
+            if (props is not None and str(path) != self._session_path
+                    and str(props.get("Target", "")).lower() == BIP_AVRCP_UUID
+                    and str(props.get("Destination", "")).upper()
+                    == self.address.upper()):
+                return str(path)
+        return None
+
+    def _borrow(self, handle: str, target: Path, on_done: DoneCb) -> None:
+        """Copy the cover another client downloads over its image session.
+
+        That client fetches on its own schedule, and iOS reuses an image
+        handle for tracks that share artwork, so no new fetch would come
+        for this handle: wait until its cover appears, the track's handle
+        changes, or the fetcher closes."""
+        if self._foreign_session() is None:
+            self._done(on_done, handle, None)
+            return
+        # Another fetch may start while this one waits.
+        self._busy = False
+        self._borrowing = handle
+        log.info("image channel held by another client; waiting for its "
+                 "cover of %s", handle)
+        from gi.repository import GLib
+
+        def poll() -> bool:
+            if self._borrowing != handle:
+                return False
+            # The session's name changes whenever obexd restarts.
+            session = self._foreign_session()
+            if session is None:
+                return True
+            src = Path(tempfile.gettempdir()) / f"{session.rsplit('/', 1)[-1]}-{handle}"
+            # The other client renames the file into place once complete.
+            if not (src.is_file() and src.stat().st_size > 0):
+                return True
+            self._borrowing = ""
+            tmp = target.with_suffix(".part")
+            try:
+                shutil.copyfile(src, tmp)
+                os.replace(tmp, target)
+            except OSError as e:
+                log.warning("could not copy %s: %s", src.name, e)
+                tmp.unlink(missing_ok=True)
+                on_done(handle, None)
+                return False
+            _prune(target)
+            on_done(handle, str(target))
+            return False
+
+        if poll():
+            GLib.timeout_add_seconds(1, poll)
 
     def _get(self, handle: str, target: Path, on_done: DoneCb) -> None:
         tmp = target.with_suffix(".part")

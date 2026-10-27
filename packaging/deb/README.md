@@ -1,8 +1,9 @@
 # Building the .deb
 
 One package installs everything: the daemon, the CLI, the Qt app, the
-systemd user unit, the desktop entry and icon, and the privileged pieces
-(sudoers rules and the ANCS helper) that ruled sandboxed formats out.
+systemd user unit, the desktop entry and icon, the daemon's AppArmor
+profile, and the root unit and polkit rule that set the adapter's class.
+The system-level pieces are what ruled sandboxed formats out.
 Target: Debian-family distros (Pop!_OS, Kubuntu, Debian).
 
 Anatomy, once: the user-facing build command is `dpkg-buildpackage`. It
@@ -18,53 +19,53 @@ does the rest.
 | `src/iphonebridge/` (incl. `ui/qml/`) | `/usr/lib/python3/dist-packages/iphonebridge/` |
 | entry points from `pyproject.toml` | `/usr/bin/iphonebridge`, `/usr/bin/iphonebridge-ui` |
 | `systemd/iphonebridge.service` (placeholder substituted) | `/usr/lib/systemd/user/iphonebridge.service` |
+| `systemd/iphonebridge-daemon`, the daemon's own entry point | `/usr/libexec/iphonebridge/iphonebridge-daemon` |
+| `apparmor/iphonebridge`, the daemon's AppArmor profile | `/etc/apparmor.d/iphonebridge` |
+| `systemd/iphonebridge-cod.service`, the root unit that sets the adapter's class | `/usr/lib/systemd/system/iphonebridge-cod.service` |
+| `systemd/50-iphonebridge-cod.rules`, the polkit rule that lets a local user start that unit | `/usr/share/polkit-1/rules.d/50-iphonebridge-cod.rules` |
 | `data/me.santisbon.iphonebridge.UI.desktop` (as-is: `Exec=iphonebridge-ui` is on PATH now) | `/usr/share/applications/` |
 | `data/icons/me.santisbon.iphonebridge.UI.svg` | `/usr/share/icons/hicolor/scalable/apps/` |
 | `data/me.santisbon.iphonebridge.UI.metainfo.xml` | `/usr/share/metainfo/` |
-| CoD sudoers rule, group-based (see below) | `/etc/sudoers.d/iphonebridge-cod` |
-| ANCS sudoers rule + `systemd/set-le-bearer.sh` | `/etc/sudoers.d/iphonebridge-ancs`, `/usr/libexec/iphonebridge/set-le-bearer` |
 | `man/*.1` via `debian/iphonebridge.manpages` | `/usr/share/man/man1/` |
 
-## Code changes required first (done)
+## How the daemon is confined
 
-These were the gaps between the from-source install and a system
-package; all four are implemented in the repo now. Kept here as the
-record of why:
+The daemon parses whatever the paired phone sends: messages, contacts,
+notifications. AppArmor confines it, so a crafted message that takes it
+over reaches only what the profile allows.
 
-1. **Group-based sudoers.** The repo templates grant a single username,
-   rendered at install time. A system package serves all users, so the
-   shipped rules grant a group instead:
+- **Its own path.** `/usr/bin/iphonebridge` is also the CLI, and AppArmor
+  attaches a profile by the path of the program run. The user unit runs
+  `/usr/libexec/iphonebridge/iphonebridge-daemon` instead, and the
+  profile attaches to that path, so the CLI and the app stay unconfined.
+- **No sudo.** Setting the adapter's class needs root. The daemon starts
+  `iphonebridge-cod.service` over D-Bus (`StartUnit` on the system bus)
+  when the class is wrong; the unit runs `btmgmt class 4 8` as root, and
+  the polkit rule lets a local user start that one unit. The profile
+  allows no other program to run except `wl-copy`.
+- **D-Bus by path.** python-dbus sends to a service's unique name
+  (`:1.42`), not its well-known name, so the profile's rules match object
+  paths and interfaces: BlueZ under `/org/bluez`, oFono's modems under
+  `/hfp/org/bluez`, obexd under `/org/bluez/obex`, notifications, and the
+  daemon's own `/me/santisbon/iphonebridge`. On the session bus, the one
+  systemd call allowed is `RestartUnit`, for obexd; systemd's private
+  socket is denied, because it reaches systemd's whole API without passing
+  through the D-Bus rules.
+- **Files.** Read and write only `~/.local/state/iphonebridge/`, read
+  `~/.config/iphonebridge/`, and the OBEX transfer files in `/tmp`.
+- **systemd's sandbox settings are not used.** `ProtectSystem=`,
+  `ProtectHome=` and `PrivateTmp=` need a mount namespace, which a user
+  unit gets only inside a user namespace; Ubuntu restricts those, so
+  systemd skips the settings. The unit sets `NoNewPrivileges`,
+  `RestrictSUIDSGID`, `LockPersonality` and `UMask=0077`, which work
+  without one.
 
-   ```
-   %iphonebridge ALL=(root) NOPASSWD: /usr/bin/btmgmt class 4 8
-   ```
-
-   `bluez_setup.py` needs no change (it just runs `sudo -n`); only the
-   rule files change, and `postinst` creates the group. Users add
-   themselves once: `sudo adduser $USER iphonebridge`, then reboot.
-   A plain re-login is not enough: user services inherit groups from the
-   systemd user manager, which keeps its old groups as long as any
-   session survives the logout (a terminal multiplexer, an SSH session,
-   an agent). Reboot, or terminate every session.
-2. **Unit placeholder.** `systemd/iphonebridge.service` contains
-   `@INSTALL_DIR@`. The deb build substitutes `ExecStart=/usr/bin/iphonebridge run`
-   (a `sed` in `debian/rules`, or a static `debian/iphonebridge.user.service`).
-3. **Package data.** `pyproject.toml` needs the bundled UI files declared
-   so non-editable installs ship them. The QML is the easiest one to miss:
-   without it the app installs and starts but cannot draw anything.
-
-   ```toml
-   [tool.setuptools.package-data]
-   "iphonebridge.ui" = ["qml/*.qml"]
-   ```
-
-   Check it landed in a built package with
-   `dpkg-deb -c ../iphonebridge_*_all.deb | grep '\.qml'`.
-4. **Setup hints in messages.** `pair-setup` and `doctor` print repo
-   paths like `sudo bash systemd/install-cod-sudoers.sh`. Installed from
-   a deb, the right hint is `sudo adduser $USER iphonebridge`. Gate the
-   message on whether the sudoers file already exists, or make it name
-   both paths.
+The profile was written from what AppArmor logged in complain mode while
+messages, a reply, contacts, calls, media and cover art were used on
+Ubuntu 26.10 with an iPhone 17 Pro, on 2026-10-27, and then checked in
+enforce mode with no denials. Rules for one machine go in
+`/etc/apparmor.d/local/iphonebridge`, which the profile includes if it
+exists.
 
 ## The debian/ directory
 
@@ -73,9 +74,8 @@ Top-level `debian/` exists in the repo with these files, plus
 required, lintian errors without it) and `debian/source/format`
 containing `3.0 (native)`. Native format means the version has no
 Debian revision: the package is `iphonebridge_<version>_all.deb`, not
-`<version>-1`. `debian/rules` also renames the sudoers files at install
-time (dh_install keeps source basenames) and disables pybuild's test
-run (`PYBUILD_DISABLE = test`); tests run in CI.
+`<version>-1`. `debian/rules` also disables pybuild's test run
+(`PYBUILD_DISABLE = test`); tests run in CI.
 
 `debian/control`:
 
@@ -85,7 +85,7 @@ Section: comm
 Priority: optional
 Maintainer: santisbon <santisbon@users.noreply.github.com>
 Build-Depends: debhelper-compat (= 13), dh-python, python3-all,
- python3-setuptools, pybuild-plugin-pyproject
+ python3-setuptools, pybuild-plugin-pyproject, dh-apparmor
 Standards-Version: 4.6.2
 Homepage: https://github.com/santisbon/iphonebridge
 
@@ -98,7 +98,7 @@ Depends: ${python3:Depends}, ${misc:Depends},
  qml6-module-qtquick-controls, qml6-module-qtquick-layouts,
  qml6-module-qtquick-templates, qml6-module-qtquick-window,
  qt6-wayland, gir1.2-ibus-1.0,
- bluez (>= 5.72), bluez-obexd
+ bluez (>= 5.72), bluez-obexd, polkitd
 Recommends: ofono, wl-clipboard, qt6-gtk-platformtheme,
  ibus-data, fonts-noto-color-emoji
 Description: iPhone messages, calls, and contacts over Bluetooth
@@ -106,9 +106,10 @@ Description: iPhone messages, calls, and contacts over Bluetooth
  Bluetooth profiles MAP, PBAP, ANCS, and HFP. No Mac relay, no cloud
  service, no subscription.
  .
- Ships the systemd user unit, desktop entry, and the sudoers rules
- (group iphonebridge) for the two privileged operations: setting the
- adapter Class-of-Device and the ANCS BLE-bearer edit.
+ Ships the systemd user unit, the desktop entry, and the AppArmor
+ profile that confines the daemon. The one privileged operation, setting
+ the adapter's Class-of-Device, runs in a root system unit that a polkit
+ rule lets the daemon start.
 ```
 
 Two of those are about the desktop the app lands on rather than the app
@@ -128,20 +129,22 @@ anyway, it feeds the desktop's own Meta+. picker) is the dictionary
 itself. Without it the picker shows a hint naming the package.
 `fonts-noto-color-emoji` draws the glyphs in colour.
 
-`debian/rules` (executable):
+`debian/rules` (executable) points the user unit at the daemon's own
+path, installs and loads the AppArmor profile with `dh_apparmor`, and
+keeps dh_installsystemd from starting `iphonebridge-cod.service` at
+installation:
 
 ```makefile
-#!/usr/bin/make -f
-export PYBUILD_NAME = iphonebridge
-
-%:
-	dh $@ --with python3 --buildsystem=pybuild
-
 override_dh_install:
 	dh_install
-	sed 's|@INSTALL_DIR@/.venv/bin/iphonebridge|/usr/bin/iphonebridge|' \
+	mkdir -p debian/iphonebridge/usr/lib/systemd/user
+	sed "s|@INSTALL_DIR@/.venv/bin/iphonebridge run|/usr/libexec/iphonebridge/iphonebridge-daemon|" \
 	  systemd/iphonebridge.service \
 	  > debian/iphonebridge/usr/lib/systemd/user/iphonebridge.service
+	dh_apparmor --profile-name=iphonebridge -piphonebridge
+
+override_dh_installsystemd:
+	dh_installsystemd --no-start iphonebridge-cod.service
 ```
 
 `debian/install`:
@@ -150,31 +153,18 @@ override_dh_install:
 data/me.santisbon.iphonebridge.UI.desktop      usr/share/applications/
 data/icons/me.santisbon.iphonebridge.UI.svg    usr/share/icons/hicolor/scalable/apps/
 data/me.santisbon.iphonebridge.UI.metainfo.xml usr/share/metainfo/
-systemd/set-le-bearer.sh                       usr/libexec/iphonebridge/
-debian/sudoers-cod                             etc/sudoers.d/
-debian/sudoers-ancs                            etc/sudoers.d/
+systemd/iphonebridge-daemon                    usr/libexec/iphonebridge/
+systemd/iphonebridge-cod.service               usr/lib/systemd/system/
+systemd/50-iphonebridge-cod.rules              usr/share/polkit-1/rules.d/
+apparmor/iphonebridge                          etc/apparmor.d/
 ```
 
-(`debian/sudoers-cod` and `debian/sudoers-ancs` are the group-based
-rules from step 1; mode 0440 via `debian/postinst` or
-`dh_fixperms` overrides. Validate with `visudo -cf` in the build.)
-
-`debian/postinst` (creates the group, and reloads each logged-in user's
-systemd manager so the rewritten user unit is not served from cache):
-
-```sh
-#!/bin/sh
-set -e
-if [ "$1" = "configure" ]; then
-    getent group iphonebridge >/dev/null || addgroup --system iphonebridge
-fi
-#DEBHELPER#
-if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
-    for _ib_user in $(loginctl list-users --no-legend 2>/dev/null | awk '{print $2}'); do
-        systemctl --machine="${_ib_user}@.host" --user daemon-reload >/dev/null 2>&1 || true
-    done
-fi
-```
+`debian/postinst` reloads each logged-in user's systemd manager, so the
+rewritten user unit is not served from cache. On an upgrade from 0.19.0
+or earlier it also deletes the `iphonebridge` group, which granted the
+two passwordless sudo rules those versions shipped;
+`debian/iphonebridge.maintscript` deletes the two sudoers files
+(`/etc/sudoers.d/iphonebridge-cod` and `iphonebridge-ancs`).
 
 `debian/changelog`: hand-written; keep in sync with `CHANGELOG.md`
 manually (or use `dch` from `devscripts`). Native versioning: the
@@ -184,7 +174,7 @@ version alone, no `-1` suffix. Bump it in the same commit as
 ## Build
 
 ```bash
-sudo apt install debhelper dh-python pybuild-plugin-pyproject python3-all lintian
+sudo apt install debhelper dh-python dh-apparmor pybuild-plugin-pyproject python3-all lintian
 ```
 
 ```bash
@@ -266,26 +256,23 @@ user cannot read, such as a home directory (Ubuntu homes are mode 750). This can
 
 Both are harmless.  
 
-### 2. Authorize and start the daemon
+### 2. Start the daemon
 
 ```bash
-sudo adduser $USER iphonebridge # then reboot
+systemctl --user start iphonebridge
 ```
 
-A plain re-login is not enough and you must reboot: user services inherit
-groups from the systemd user manager, which keeps its old groups as long
-as any session survives the logout (a terminal multiplexer, SSH, an
-agent). No enable step is needed: debhelper's maintainer scripts enable the
-user unit globally at install time, so the daemon starts at every
-user's login. After the reboot it is already running; to start it
-without a reboot, `systemctl --user start iphonebridge`. A user who
-does not want it can opt out with `systemctl --user mask iphonebridge`
-(plain disable is overridden by the global enablement).
+No enable step is needed: debhelper's maintainer scripts enable the user
+unit globally at install time, so the daemon starts at every user's
+login from now on. A user who does not want it can opt out with
+`systemctl --user mask iphonebridge` (plain disable is overridden by the
+global enablement).
 
 The daemon sets the adapter's Bluetooth class (A/V Hands-Free) on every
-start; iOS only offers the message and contacts toggles to a device with
-that class. Without the toggles yet, the daemon logs `DEGRADED mode`,
-stays running, and retries every 60s. That is expected at this point.
+start, through `iphonebridge-cod.service`; iOS only offers the message
+and contacts toggles to a device with that class. Without the toggles
+yet, the daemon logs `DEGRADED mode`, stays running, and retries every
+60s. That is expected at this point.
 
 ### 3. Pair the iPhone
 
@@ -395,7 +382,8 @@ on it. Messages and contacts are unaffected; restore it with
 
 Compared to the from-source install, the venv, the `~/.local/bin`
 symlinks, the unit path substitution, the desktop-entry rewrite, and the
-per-user sudoers installers all disappear; the package ships them.
+system pieces for the adapter's class all disappear; the package ships
+them.
 
 ### Reinstall
 
@@ -450,12 +438,12 @@ exist — `--global` covers enable and disable only — so the reload
 iterates over `loginctl list-users`. Anyone logging in later starts a
 fresh manager that reads the unit anyway.)
 
-What survives an upgrade, so none of it needs redoing: your group
-membership (postinst only creates the group if missing, so no second
-reboot), the pairing, and everything in your home directory — the iPhone
-MAC in `~/.config/iphonebridge`, message history and the contacts cache
-in `~/.local/state/iphonebridge`. The sudoers rules are conffiles, so
-dpkg replaces them when untouched and prompts if you edited them.
+What survives an upgrade, so none of it needs redoing: the pairing, and
+everything in your home directory — the iPhone MAC in
+`~/.config/iphonebridge`, message history and the contacts cache in
+`~/.local/state/iphonebridge`. The AppArmor profile is a conffile, so
+dpkg replaces it when untouched and prompts if you edited it; put local
+rules in `/etc/apparmor.d/local/iphonebridge` instead.
 
 ## Uninstall completely
 
@@ -478,8 +466,9 @@ itself for the steps that need root. It asks before doing anything, and
 `--dry-run` prints every command without changing a thing.
 
 It stops the daemon, purges the package (purge rather than remove: the
-sudoers rules are conffiles, and only purge deletes them), drops the
-`iphonebridge` group, deletes your config and state, removes the
+AppArmor profile is a conffile, and only purge deletes it), deletes the
+`iphonebridge` group that versions up to 0.19.0 created, deletes your
+config and state, removes the
 call-audio setup, unpairs the iPhone on the Linux side, and clears the
 desktop icon and menu caches (per-user caches outlive the package and
 otherwise leave a broken window icon behind).

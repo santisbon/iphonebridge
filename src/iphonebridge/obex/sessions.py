@@ -7,7 +7,6 @@ for its lifetime, reopening only on observed failure.
 from __future__ import annotations
 
 import logging
-import subprocess
 import time
 from dataclasses import dataclass
 
@@ -15,7 +14,7 @@ import dbus
 import dbus.exceptions
 
 from iphonebridge import config
-from iphonebridge.bus import obex
+from iphonebridge.bus import obex, session_bus
 
 log = logging.getLogger(__name__)
 
@@ -51,8 +50,29 @@ def _client() -> dbus.Interface:
 def _restart_obexd() -> None:
     """Restart user obex.service to clear stale state — see spike/RESULTS.md §2."""
     log.info("restarting user obex.service for a clean state")
-    subprocess.run(["systemctl", "--user", "restart", "obex.service"],
-                   check=False)
+    # A D-Bus call rather than `systemctl --user`, which talks over
+    # systemd's private socket: the daemon's AppArmor profile denies that
+    # socket, because it reaches all of systemd without passing D-Bus rules.
+    try:
+        job = dbus.Interface(
+            session_bus.get_object("org.freedesktop.systemd1",
+                                   "/org/freedesktop/systemd1"),
+            "org.freedesktop.systemd1.Manager").RestartUnit(
+                "obex.service", "replace")
+    except dbus.exceptions.DBusException as e:
+        log.warning("could not restart obex.service: %s", e.get_dbus_message())
+        return
+    # systemctl waited for the restart job to finish; the job's object
+    # disappears from the bus when it has.
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            session_bus.get_object("org.freedesktop.systemd1", job).Get(
+                "org.freedesktop.systemd1.Job", "Id",
+                dbus_interface="org.freedesktop.DBus.Properties")
+        except dbus.exceptions.DBusException:
+            break
+        time.sleep(0.1)
     time.sleep(1.0)
 
 

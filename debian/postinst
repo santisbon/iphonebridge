@@ -1,7 +1,11 @@
 #!/bin/sh
 set -e
-if [ "$1" = "configure" ]; then
-    getent group iphonebridge >/dev/null || addgroup --system iphonebridge
+if [ "$1" = "configure" ] && dpkg --compare-versions "$2" lt-nl 0.20.0~; then
+    # Up to 0.19.0 the iphonebridge group granted two passwordless sudo
+    # rules. Both rules are gone, so the group grants nothing.
+    if getent group iphonebridge >/dev/null; then
+        delgroup --system iphonebridge >/dev/null 2>&1 || true
+    fi
 fi
 #DEBHELPER#
 if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then

@@ -1,0 +1,13 @@
+// Installed by the iphonebridge package. Lets a local user start
+// iphonebridge-cod.service, the root unit that sets the Bluetooth adapter's
+// class to A/V Hands-Free; the iphonebridge user daemon starts it when the
+// class is wrong. Only "start" of that one unit is allowed: the unit runs
+// one fixed command and takes no arguments.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "iphonebridge-cod.service" &&
+        action.lookup("verb") == "start" &&
+        subject.local) {
+        return polkit.Result.YES;
+    }
+});

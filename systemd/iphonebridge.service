@@ -21,10 +21,18 @@ TimeoutStopSec=10
 # Keep journald logs
 StandardOutput=journal
 StandardError=journal
-# Sandboxing: this is a user service; we deliberately don't drop privileges
-# beyond what systemd-user already provides because we need DBus access to
-# org.bluez (system bus) and org.bluez.obex / org.freedesktop.Notifications
-# (session bus).
+# Confinement comes from AppArmor: the package's profile in
+# /etc/apparmor.d/iphonebridge attaches to the daemon's own path,
+# /usr/libexec/iphonebridge/iphonebridge-daemon. systemd's file system
+# sandboxing (ProtectSystem=, ProtectHome=, PrivateTmp=) needs a mount
+# namespace, which a user unit only gets inside a user namespace; Ubuntu
+# restricts those, so systemd silently skips the settings. These work
+# without one:
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# Message history and the contacts cache are readable by this user only.
+UMask=0077
 
 [Install]
 WantedBy=default.target

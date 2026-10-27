@@ -94,12 +94,14 @@ def run_wizard(*, restart_after: bool = True) -> int:
     if not devices:
         typer.echo(typer.style("No paired Bluetooth devices found.\n",
                                fg=typer.colors.YELLOW))
-        typer.echo("Pair your iPhone first. Three options:")
-        typer.echo("  • GNOME: Settings → Bluetooth → tap your iPhone under Other Devices")
-        typer.echo("  • KDE Plasma: System Settings → Bluetooth → Add New Device")
-        typer.echo("  • CLI: bluetoothctl  →  scan on, pair <MAC>, trust <MAC>, exit")
-        typer.echo("\nKeep the iPhone on its Settings → Bluetooth screen while pairing;")
-        typer.echo("iOS is only discoverable while that screen is open.")
+        typer.echo("Pair your iPhone first, starting the pairing on the iPhone")
+        typer.echo("(per-app notifications need the Low Energy keys that gives).")
+        typer.echo("Make this computer discoverable, with something to confirm the code:")
+        typer.echo("  • GNOME: keep Settings → Bluetooth open")
+        typer.echo("  • KDE Plasma: keep System Settings → Bluetooth open")
+        typer.echo("  • CLI: bluetoothctl → agent on, default-agent, pairable on, discoverable on")
+        typer.echo("\nOn the iPhone: Settings → Bluetooth → tap this computer under")
+        typer.echo("Other Devices, and confirm the 6-digit code on both sides.")
         typer.echo("\nThen run `iphonebridge pair-setup` again.")
         return 1
 
@@ -158,12 +160,8 @@ def run_wizard(*, restart_after: bool = True) -> int:
                            fg=typer.colors.WHITE, bold=True))
     typer.echo("")
     typer.echo("If the toggles aren't visible yet, the adapter's CoD likely")
-    typer.echo("isn't set to A/V Hands-Free yet. Authorize the daemon to set it:")
-    typer.echo(typer.style("  package install:  sudo adduser $USER iphonebridge  (then reboot)",
-                           fg=typer.colors.WHITE))
-    typer.echo(typer.style("  from source:      sudo bash systemd/install-cod-sudoers.sh",
-                           fg=typer.colors.WHITE))
-    typer.echo("and make sure the daemon has started at least once after.")
+    typer.echo("isn't A/V Hands-Free yet. The daemon sets it when it starts;")
+    typer.echo("`iphonebridge doctor` shows the adapter's class.")
 
     if restart_after:
         if typer.confirm("\nRestart the iphonebridge daemon now to pick up the new MAC?",

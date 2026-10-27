@@ -1,23 +1,26 @@
 
 
-def test_set_cod_gives_btmgmt_a_pipe_stdin(monkeypatch):
-    """btmgmt hangs forever if stdin is /dev/null (epoll EPERM); the run
-    call must pass input="" so stdin is a pipe. Regression guard."""
+def test_set_cod_starts_the_root_unit(monkeypatch):
+    """The daemon sets the CoD by starting iphonebridge-cod.service over
+    D-Bus, never by running sudo, and succeeds once the adapter reports
+    A/V Hands-Free."""
     from iphonebridge import bluez_setup
 
-    seen = {}
+    started = []
 
-    def fake_run(cmd, **kwargs):
-        seen.update(kwargs)
-        class R:
-            returncode = 0
-            stdout = "Set Dev Class succeeded"
-            stderr = ""
-        return R()
+    class Manager:
+        def StartUnit(self, unit, mode):
+            started.append((unit, mode))
 
-    monkeypatch.setattr(bluez_setup.subprocess, "run", fake_run)
+    monkeypatch.setattr(bluez_setup.dbus, "Interface",
+                        lambda obj, iface: Manager())
+    monkeypatch.setattr(bluez_setup.system_bus, "get_object",
+                        lambda *a: object(), raising=False)
+    cods = iter([0x0c010c, 0x240408])
+    monkeypatch.setattr(bluez_setup, "current_cod", lambda: next(cods))
+    monkeypatch.setattr(bluez_setup.time, "sleep", lambda s: None)
     assert bluez_setup.set_cod() is True
-    assert seen.get("input") == ""
+    assert started == [("iphonebridge-cod.service", "replace")]
 
 
 DEV = "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF"

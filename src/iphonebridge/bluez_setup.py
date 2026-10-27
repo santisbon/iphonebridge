@@ -11,15 +11,16 @@ the Linux side:
 
 This module owns those three concerns. Re-run safely on startup.
 
-CoD setting requires CAP_NET_ADMIN (essentially root), so we shell out to
-sudo btmgmt unless we detect we already have it. The BLE advert is
-user-bus DBus and needs no privileges.
+Setting the CoD requires CAP_NET_ADMIN (essentially root), so the daemon
+asks systemd on the system bus to start iphonebridge-cod.service, a root
+unit that runs `btmgmt class 4 8`. A polkit rule lets any local user start
+that one unit and nothing else, so the daemon never runs sudo. The BLE
+advert is user-bus DBus and needs no privileges.
 """
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
+import time
 from typing import Any
 
 import dbus
@@ -57,32 +58,31 @@ def desired_cod_matches(cod: int | None) -> bool:
     return major == config.COD_MAJOR and (minor << 2) == config.COD_MINOR
 
 
-def set_cod(*, dry_run: bool = False) -> bool:
-    """Apply A/V Hands-Free CoD via btmgmt. Returns True on success."""
-    cmd = ["btmgmt", "class", str(config.COD_MAJOR), str(config.COD_MINOR)]
-    if os.geteuid() != 0:
-        cmd = ["sudo", "-n"] + cmd  # non-interactive sudo; user pre-grants
-    log.info("setting adapter CoD via: %s", " ".join(cmd))
-    if dry_run:
-        return True
+COD_UNIT = "iphonebridge-cod.service"
+
+
+def set_cod(*, wait: float = 5.0) -> bool:
+    """Start the root unit that sets A/V Hands-Free CoD, then wait for the
+    adapter to report it. Returns True once the CoD matches."""
+    log.info("starting %s to set the adapter CoD", COD_UNIT)
     try:
-        # input="" forces stdin to be a pipe. btmgmt adds stdin to its
-        # event loop with epoll, and /dev/null (a service's stdin, and
-        # subprocess's default here) is not pollable — epoll_ctl returns
-        # EPERM and btmgmt sleeps forever without ever opening the
-        # management socket. Two days of "the adapter is wedged" was this.
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10,
-                           input="")
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-        log.error("btmgmt failed: %s", e)
+        manager = dbus.Interface(
+            system_bus.get_object("org.freedesktop.systemd1",
+                                  "/org/freedesktop/systemd1"),
+            "org.freedesktop.systemd1.Manager")
+        manager.StartUnit(COD_UNIT, "replace")
+    except dbus.exceptions.DBusException as e:
+        log.error("could not start %s: %s", COD_UNIT, e.get_dbus_message())
         return False
-    if r.returncode != 0:
-        log.error("btmgmt class %d %d failed (rc=%d): %s",
-                  config.COD_MAJOR, config.COD_MINOR, r.returncode,
-                  r.stderr.strip() or r.stdout.strip())
-        return False
-    log.info("CoD set ok: %s", r.stdout.strip())
-    return True
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        if desired_cod_matches(current_cod()):
+            log.info("CoD set to A/V Hands-Free")
+            return True
+        time.sleep(0.25)
+    log.error("%s ran, but the adapter CoD is still 0x%06x "
+              "(journalctl -u %s)", COD_UNIT, current_cod() or 0, COD_UNIT)
+    return False
 
 
 # ---- BLE advertisement (SolicitUUIDs = ANCS) ----------------------------
@@ -297,7 +297,7 @@ def _ancs_chars_present(dev_path: str) -> bool:
 
 # ---- one-shot startup ---------------------------------------------------
 
-def prepare(*, allow_sudo: bool = True) -> bool:
+def prepare() -> bool:
     """Run all the prerequisites. Returns False if anything critical failed.
 
     Idempotent. Safe to call on every daemon start.
@@ -305,13 +305,10 @@ def prepare(*, allow_sudo: bool = True) -> bool:
     ok = True
     cod = current_cod()
     log.info("current adapter Class = 0x%06x", cod or 0)
-    if not desired_cod_matches(cod):
-        if not allow_sudo and os.geteuid() != 0:
-            log.warning("CoD wrong but sudo disabled — skipping CoD set")
-        else:
-            ok &= set_cod()
-    else:
+    if desired_cod_matches(cod):
         log.info("CoD already matches A/V Hands-Free, leaving as-is")
+    else:
+        ok &= set_cod()
 
     # Dispatch only — the real outcome is logged from the callback, and it
     # must not gate `ok`, which the daemon uses to decide whether MAP/PBAP

@@ -21,19 +21,20 @@
 
 Any apt-based distro: Debian, Ubuntu and its flavours, Pop!_OS, Mint.
 
-1. Download the `.deb` package, install, reboot:
+1. Download the `.deb` package, install it, and start the daemon:
     ```bash
     curl -LO "$(curl -s https://api.github.com/repos/santisbon/iphonebridge/releases/latest \
       | grep -o 'https://[^"]*_all\.deb')"
 
     sudo apt install ./iphonebridge_*_all.deb
-    sudo adduser $USER iphonebridge
-    sudo reboot   # a re-login is not enough: user services keep old groups
+    systemctl --user start iphonebridge
     ```
 
-2. Pair the iPhone from your desktop's Bluetooth settings. Keep it on its
-**Settings → Bluetooth** screen while you do — iOS is only discoverable
-while that screen is open — and confirm the 6-digit code on both sides.
+2. Open your desktop's Bluetooth settings so the computer is discoverable.
+Then start the pairing from the iPhone: **Settings → Bluetooth**, tap the
+computer under *Other Devices*, and confirm the 6-digit code on both sides.
+A pairing the iPhone starts gives per-app notifications the Low Energy keys
+they need.
 
 3. Run
     ```bash
@@ -147,7 +148,7 @@ systemctl --user {start,stop,restart} iphonebridge
 <details>
 <summary><b>App notifications (ANCS) not working</b></summary>
 
-ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, forget the iPhone on both ends and re-pair. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
+ANCS needs a BLE bond and an LE connection. First allow BlueZ's experimental interfaces (`[General] Experimental = true` in `/etc/bluetooth/main.conf`, then `sudo systemctl restart bluetooth` and `systemctl --user restart iphonebridge`). If the pairing is old, or the computer started it, forget the iPhone on both ends and re-pair, starting the pairing from the iPhone. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
 
 If that toggle is on but the app's Status tab reads *Not detected* for it, the phone is connected over classic Bluetooth only. ANCS is carried over LE, and the phone reconnects over classic by default, so the grant is there with nothing to carry it; `iphonebridge doctor` reports it as "connected over classic Bluetooth only". Run `iphonebridge ancs-enable` again. BlueZ stores the bearer preference with the pairing, so a forget + re-pair drops it along with the bond.
 
