@@ -12,7 +12,7 @@ ApplicationWindow {
     // font with the daemon down, which is both the state that grows
     // the page and the state the button is for.
     width: 940; height: 840; visible: true
-    title: "iPhone Bridge"
+    title: "iPhone"
     color: appTheme.canvas
 
     // True while a new conversation is being addressed but not yet sent.

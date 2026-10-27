@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=iphonebridge
+Name=iPhone
 GenericName=iPhone Bridge
 Comment=Your iPhone's messages, notifications, and calls on the Linux desktop
 Exec=iphonebridge-ui

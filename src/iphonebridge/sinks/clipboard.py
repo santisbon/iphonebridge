@@ -17,7 +17,7 @@ from iphonebridge.events import SmsEvent
 
 log = logging.getLogger(__name__)
 
-_APP_NAME = "iphonebridge"
+_APP_NAME = "iPhone"
 
 
 class ClipboardSink:
