@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.20.0] — 2026-10-27
+
+### Changed
+- **The daemon runs confined by an AppArmor profile.** It now runs as
+  `/usr/libexec/iphonebridge/iphonebridge-daemon`, and the package
+  installs a profile in enforce mode, `/etc/apparmor.d/iphonebridge`,
+  that attaches to that path. The `iphonebridge` command stays
+  unconfined.
+- **No sudo, no group, no reboot.** The daemon no longer runs
+  `sudo btmgmt`. When the adapter's class is wrong, it starts the
+  system unit `iphonebridge-cod.service`, which a polkit rule lets a
+  local user start, and nothing else. The package no longer creates the
+  `iphonebridge` group or installs the two sudoers rules, and an
+  upgrade removes all three. Installing is now `apt install` followed
+  by `systemctl --user start iphonebridge`.
+- **The daemon restarts obexd over D-Bus** instead of running
+  `systemctl --user restart obex`.
+- **Pair from the iPhone.** The install steps now start the pairing on
+  the iPhone. On an Intel BE200 adapter, a pairing the computer started
+  stored classic Bluetooth keys only, which per-app notifications
+  cannot use.
+- `ancs-enable` names both reasons BlueZ can hide the PreferredBearer
+  control: experimental interfaces off, or a bond with no Low Energy
+  keys. It used to name only the first.
+
+### Fixed
+- **No cover art while BlueZ's `mpris-proxy` runs.** The iPhone opens
+  one image channel per computer, and `mpris-proxy`, a user service
+  the bluez package enables, usually opens it first. The daemon
+  now copies the cover `mpris-proxy` downloads when the iPhone refuses
+  it the channel.
+
 ## [0.19.0] — 2026-10-09
 
 ### Added

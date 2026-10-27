@@ -62,6 +62,16 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.0" date="2026-10-27">
+      <description>
+        <p>The daemon runs confined by an AppArmor profile and no
+        longer uses sudo: a polkit rule lets it start the one system
+        unit that sets the Bluetooth adapter's class, and the package no
+        longer creates a group or installs sudoers rules. Cover art
+        shows again while BlueZ's mpris-proxy holds the iPhone's image
+        channel.</p>
+      </description>
+    </release>
     <release version="0.19.0" date="2026-10-09">
       <description>
         <p>A Clear all button at the foot of the Notifications tab
