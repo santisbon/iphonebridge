@@ -1,3 +1,10 @@
+iphonebridge (0.20.2) unstable; urgency=medium
+
+  * The app is named iPhone in the app launcher, the window title, the
+    app name on desktop notifications and the software-centre listing.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Tue, 27 Oct 2026 12:06:10 -0500
+
 iphonebridge (0.20.1) unstable; urgency=medium
 
   * The daemon, doctor and ancs-enable find the iPhone's BlueZ object by

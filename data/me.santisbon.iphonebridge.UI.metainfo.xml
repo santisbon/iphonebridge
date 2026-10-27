@@ -4,12 +4,12 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-2.0-or-later</project_license>
 
-  <name>iphonebridge</name>
+  <name>iPhone</name>
   <summary>Your iPhone's messages, notifications, and calls on the Linux desktop</summary>
 
   <description>
     <p>
-      iphonebridge brings a paired iPhone to the Linux desktop over standard
+      The iPhone app, from the iphonebridge project, brings a paired iPhone to the Linux desktop over standard
       Bluetooth profiles — no Mac relay, no cloud service, no subscription.
     </p>
     <p>This app is the graphical front-end for the iphonebridge daemon:</p>
@@ -62,6 +62,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.20.2" date="2026-10-27">
+      <description>
+        <p>The app is named iPhone in the app launcher, the window title,
+        the app name on desktop notifications and the software-centre
+        listing.</p>
+      </description>
+    </release>
     <release version="0.20.1" date="2026-10-27">
       <description>
         <p>Per-app notifications, media controls and the battery level

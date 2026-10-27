@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.2] — 2026-10-27
+
+### Changed
+- **The app is named iPhone.** The app launcher, the window title, the
+  app name on desktop notifications and the software-centre listing all
+  say iPhone. They said iphonebridge, except the window title, which said
+  iPhone Bridge.
+
 ## [0.20.1] — 2026-10-27
 
 ### Fixed
