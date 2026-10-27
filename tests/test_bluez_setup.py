@@ -58,7 +58,7 @@ def _install_fake_bluez(monkeypatch, *, uuids, connected, managed,
         return Props()
 
     monkeypatch.setattr(bluez_setup, "bluez", fake_bluez)
-    monkeypatch.setattr(bluez_setup.config, "device_path", lambda: DEV)
+    monkeypatch.setattr(bluez_setup.config, "device_path", lambda bus=None: DEV)
 
 
 def test_ancs_state_cached_uuid_without_le_link_is_not_live(monkeypatch):

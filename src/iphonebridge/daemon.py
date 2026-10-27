@@ -29,7 +29,7 @@ from gi.repository import GLib
 from iphonebridge import bluez_setup, config
 from iphonebridge.ancs.client import AncsClient
 from iphonebridge.ancs.events import AncsEvent
-from iphonebridge.bus import main_loop, session_bus
+from iphonebridge.bus import main_loop, session_bus, system_bus
 from iphonebridge.contacts import ContactsResolver, pull_phonebook
 from iphonebridge.dbus_service import MessagesService, claim_bus_name
 from iphonebridge.events import (
@@ -216,7 +216,7 @@ class Daemon:
         # BLE link to the iPhone (we don't yet do the LastUsedBearer=le
         # dance). Either way, the client just waits patiently for the three
         # ANCS characteristics to appear and subscribes when they do.
-        device_path = config.device_path()
+        device_path = config.device_path(system_bus)
         self.ancs = AncsClient(
             device_path,
             on_event=self._fanout_ancs,

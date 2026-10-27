@@ -387,7 +387,7 @@ def ancs_enable(
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     sysbus = dbus.SystemBus()
 
-    dev_path = config.device_path()
+    dev_path = config.device_path(sysbus)
 
     def iface(name: str) -> dbus.Interface:
         return dbus.Interface(sysbus.get_object("org.bluez", dev_path), name)

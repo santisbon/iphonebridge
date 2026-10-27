@@ -55,14 +55,33 @@ LOW_BATTERY_PCT: int = int(os.environ.get("IPHONEBRIDGE_LOW_BATTERY", "20"))
 raised, once per dip. 0 disables it."""
 
 
-def device_path() -> str:
+def device_path(bus=None) -> str:
     """BlueZ D-Bus object path of the configured iPhone.
 
-    BlueZ paths always carry the address upper-cased, so this normalises —
-    a lower-case IPHONEBRIDGE_MAC otherwise builds a path that silently
-    matches nothing.
+    BlueZ names a device's object after the address it first saw the
+    device under, and never renames it. An iPhone first seen advertising
+    over LE, under a random address, keeps that path after pairing
+    resolves its public address. Given the system bus, this finds the
+    device by its Address property instead. Without a bus, or with no
+    such device yet, it returns the path of a device first seen under its
+    public address. BlueZ paths carry the address upper-cased, so this
+    normalises a lower-case IPHONEBRIDGE_MAC.
     """
-    return f"/org/bluez/{ADAPTER}/dev_{IPHONE_MAC.upper().replace(':', '_')}"
+    mac = IPHONE_MAC.upper()
+    if bus is not None:
+        import dbus.exceptions
+        try:
+            objects = bus.get_object("org.bluez", "/").GetManagedObjects(
+                dbus_interface="org.freedesktop.DBus.ObjectManager")
+        except dbus.exceptions.DBusException:
+            objects = {}
+        for path, ifaces in objects.items():
+            dev = ifaces.get("org.bluez.Device1")
+            if (dev is not None
+                    and str(dev.get("Address", "")).upper() == mac
+                    and str(path).startswith(f"/org/bluez/{ADAPTER}/")):
+                return str(path)
+    return f"/org/bluez/{ADAPTER}/dev_{mac.replace(':', '_')}"
 
 # ---- BlueZ identity dance (per spike/RESULTS.md §1) ---------------------
 

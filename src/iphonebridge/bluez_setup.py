@@ -263,7 +263,7 @@ def ancs_state() -> str:
     same thing the daemon's ANCS client waits for, which is why this
     agrees with the app's Status tab where the UUID check did not.
     """
-    dev_path = config.device_path()
+    dev_path = config.device_path(system_bus)
     try:
         props = bluez(dev_path, "org.freedesktop.DBus.Properties")
         uuids = props.Get("org.bluez.Device1", "UUIDs")
