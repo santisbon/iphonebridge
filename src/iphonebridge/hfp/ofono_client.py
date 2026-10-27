@@ -133,6 +133,12 @@ class HfpManager:
             self._on_modem_added(path, props)
         log.info("HFP manager started (oFono); modem=%s", self._modem_path)
 
+    @property
+    def ready(self) -> bool:
+        """True while oFono's voice-call manager for the iPhone is hooked,
+        so calls can be placed and answered."""
+        return self._modem_path is not None and self._vcm_hooked
+
     def stop(self) -> None:
         log.info("HFP manager stopping")
         for m in self._mgr_matches:

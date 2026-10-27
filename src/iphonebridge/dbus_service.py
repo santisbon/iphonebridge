@@ -11,6 +11,8 @@ Messages1:
       Send an SMS/iMessage from the iPhone via MAP PushMessage. iOS routes
       as iMessage automatically when the recipient is iMessage-capable.
   • ListRecent(string folder, uint32 limit) → string json
+  • GetStatus() → string json — per-feature liveness: map, pbap, ancs,
+      hfp (call control), avrcp (media control)
   • GetPhoneStatus() → string json — battery, cellular, model
   • IsHealthy() → bool
 
@@ -71,6 +73,24 @@ from iphonebridge.obex.sessions import SessionManager
 from iphonebridge.phone import build_phone_status
 
 log = logging.getLogger(__name__)
+
+
+def profile_status(sessions, ancs, hfp, media) -> dict:
+    """Per-feature liveness: {"map", "pbap", "ancs", "hfp", "avrcp"} -> bool.
+
+    These are inferences, not reads of the iPhone's toggles: a live
+    session means the corresponding toggle must be on; a dead one means
+    the toggle is off or the session is mid-recovery. hfp is call control
+    through oFono, avrcp the iPhone's media player. ancs, hfp and media are
+    None when the daemon runs without them.
+    """
+    return {
+        "map": bool(sessions.map_alive()),
+        "pbap": bool(sessions.pbap_alive()),
+        "ancs": bool(ancs is not None and ancs.active),
+        "hfp": bool(hfp is not None and hfp.ready),
+        "avrcp": bool(media is not None and media.connected),
+    }
 
 BUS_NAME = "me.santisbon.iphonebridge"
 OBJECT_PATH = "/me/santisbon/iphonebridge"
@@ -198,17 +218,9 @@ class MessagesService(dbus.service.Object):
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def GetStatus(self) -> str:
-        """Per-profile liveness as JSON: {"map": b, "pbap": b, "ancs": b}.
-
-        These are inferences, not reads of the iPhone's toggles — a live
-        session means the corresponding toggle must be on; a dead one means
-        the toggle is off or the session is mid-recovery.
-        """
-        return json.dumps({
-            "map": self.sessions.map_alive(),
-            "pbap": self.sessions.pbap_alive(),
-            "ancs": bool(self.ancs is not None and self.ancs.active),
-        })
+        """Per-feature liveness as JSON (see profile_status)."""
+        return json.dumps(profile_status(self.sessions, self.ancs,
+                                         self.hfp, self.media))
 
     @dbus.service.method(IFACE, in_signature="", out_signature="s")
     def GetPhoneStatus(self) -> str:

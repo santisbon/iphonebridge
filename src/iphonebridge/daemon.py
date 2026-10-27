@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import signal
+import time
 from datetime import datetime
 
 import dbus
@@ -64,10 +65,26 @@ log = logging.getLogger(__name__)
 CONTACTS_REFRESH_SEC = 24 * 60 * 60  # 24h
 
 # How often to retry MAP/PBAP session open when blocked by the iPhone
-# (toggles off, paired-but-not-connected, etc.)
+# (toggles off, paired-but-not-connected, etc.). Right after the reopen
+# loop starts the toggles are usually on their way: after a fresh pairing
+# on 2026-10-27, iOS accepted MAP and PBAP 3 min 10 s after the daemon
+# started (13:27:29 to 13:30:39 in its log), so the loop retries
+# every SESSION_RETRY_FAST_SEC for its first SESSION_RETRY_FAST_FOR_SEC,
+# then every SESSION_RETRY_SEC.
 SESSION_RETRY_SEC = 60
+SESSION_RETRY_FAST_SEC = 10
+SESSION_RETRY_FAST_FOR_SEC = 5 * 60
+
 # How often to confirm the OBEX sessions still exist once we're ready.
 SESSION_HEALTH_SEC = 60
+
+
+def session_retry_interval(elapsed: float) -> int:
+    """Seconds until the next MAP/PBAP retry, `elapsed` seconds after
+    the reopen loop started."""
+    if elapsed < SESSION_RETRY_FAST_FOR_SEC:
+        return SESSION_RETRY_FAST_SEC
+    return SESSION_RETRY_SEC
 
 
 def _seed_seen_messages():
@@ -183,6 +200,8 @@ class Daemon:
         self._keys_by_path: dict[str, str] = {}
         self._read_watch = None
         self._session_retry_id: int | None = None
+        self._session_retry_started = 0.0
+        self._session_retry_interval = SESSION_RETRY_SEC
         self._session_health_id: int | None = None
         self._bus_name = None
         self._dbus_service: MessagesService | None = None
@@ -280,8 +299,9 @@ class Daemon:
 
         if not self._post_sessions_done:
             log.warning("=== iphonebridge running in DEGRADED mode ===")
-            log.warning("    No MAP/PBAP session yet. Retrying every %ds.",
-                        SESSION_RETRY_SEC)
+            log.warning("    No MAP/PBAP session yet. Retrying every %ds "
+                        "for %ds, then every %ds.", SESSION_RETRY_FAST_SEC,
+                        SESSION_RETRY_FAST_FOR_SEC, SESSION_RETRY_SEC)
         # The "ready" line in the happy path is emitted by
         # _post_sessions_setup, so we don't duplicate it here.
 
@@ -313,9 +333,18 @@ class Daemon:
         try:
             self.sessions.open_all()
         except SessionError as e:
-            # Still blocked — keep timer alive
             log.info("still blocked: %s", str(e)[:120])
-            return True
+            # Still blocked: keep the timer, or move it to the slow
+            # interval once the fast window is over.
+            interval = session_retry_interval(
+                time.monotonic() - self._session_retry_started)
+            if interval == self._session_retry_interval:
+                return True
+            self._session_retry_interval = interval
+            self._session_retry_id = GLib.timeout_add_seconds(
+                interval, self._retry_sessions)
+            log.info("retrying every %ds from now on", interval)
+            return False
 
         log.info("sessions opened on retry — promoting to ready state")
         # Clear the id first: _post_sessions_setup arms the health check, and
@@ -325,14 +354,16 @@ class Daemon:
         return False
 
     def _arm_session_retry(self) -> None:
-        """Start the 60s reopen loop, unless it's already running."""
+        """Start the reopen loop, unless it's already running."""
         if self._session_retry_id is not None:
             return
+        self._session_retry_started = time.monotonic()
+        self._session_retry_interval = session_retry_interval(0)
         self._session_retry_id = GLib.timeout_add_seconds(
-            SESSION_RETRY_SEC, self._retry_sessions
+            self._session_retry_interval, self._retry_sessions
         )
         log.warning("  → Daemon stays running. Will retry every %ds.",
-                    SESSION_RETRY_SEC)
+                    self._session_retry_interval)
 
     def _check_session_health(self) -> bool:
         """GLib timer callback. Notice sessions that died under us.

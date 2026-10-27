@@ -85,6 +85,12 @@ class MediaManager:
         )
         self._sweep(om)
 
+    @property
+    def connected(self) -> bool:
+        """True while the iPhone's AVRCP player exists, so media controls
+        reach the iPhone."""
+        return self._player_path is not None
+
     def stop(self) -> None:
         log.info("media manager stopping")
         for m in self._om_matches:
