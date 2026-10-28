@@ -30,6 +30,7 @@ from gi.repository import GLib
 from iphonebridge import bluez_setup, config
 from iphonebridge.ancs.client import AncsClient
 from iphonebridge.ancs.events import AncsEvent
+from iphonebridge.ancs.le_link import LeLinkKeeper
 from iphonebridge.bus import main_loop, session_bus, system_bus
 from iphonebridge.contacts import ContactsResolver, pull_phonebook
 from iphonebridge.dbus_service import MessagesService, claim_bus_name
@@ -179,6 +180,7 @@ class Daemon:
         self.sinks: list[Sink] = []
         self.listener: MapEventListener | None = None
         self.ancs: AncsClient | None = None
+        self.le_link: LeLinkKeeper | None = None
         # ANCS uid -> the seen_at stamp the notification was logged under.
         # uids are per-connection, so the client resets this every time a
         # fresh subscription comes up.
@@ -231,10 +233,10 @@ class Daemon:
             )
 
         # ANCS — per-app notifications via BLE GATT. Independent of MAP/PBAP;
-        # may or may not work depending on whether BlueZ has established a
-        # BLE link to the iPhone (we don't yet do the LastUsedBearer=le
-        # dance). Either way, the client just waits patiently for the three
-        # ANCS characteristics to appear and subscribes when they do.
+        # works only while the iPhone has a BLE link. The client waits for
+        # the three ANCS characteristics to appear and subscribes when they
+        # do; the LE link keeper brings the link back when the phone
+        # reconnects over classic Bluetooth only, as it does after a reboot.
         device_path = config.device_path(system_bus)
         self.ancs = AncsClient(
             device_path,
@@ -243,6 +245,11 @@ class Daemon:
             on_session_reset=self._ancs_session_reset,
         )
         self.ancs.start()
+        self.le_link = LeLinkKeeper(
+            device_path,
+            call_active=lambda: bool(self.hfp and self.hfp.list_calls()),
+        )
+        self.le_link.start()
 
         # HFP — take/place calls via oFono. Also independent of MAP/PBAP; if
         # oFono isn't set up it logs a hint and stays dormant.
@@ -522,6 +529,8 @@ class Daemon:
                 setattr(self, tid_attr, None)
         if self.listener is not None:
             self.listener.stop()
+        if self.le_link is not None:
+            self.le_link.stop()
         if self.ancs is not None:
             self.ancs.stop()
         if self.hfp is not None:

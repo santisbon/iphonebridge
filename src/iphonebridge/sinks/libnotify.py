@@ -58,10 +58,16 @@ class LibnotifySink:
         # Optional HfpManager — when present, incoming-call popups carry
         # Answer / Decline action buttons wired straight to it.
         self._hfp = hfp
+        # Address the well-known name, not its owner at startup: at login
+        # the daemon can start before the notification server, and the
+        # server can restart under us (a desktop shell reload). Resolving
+        # the owner now fails in the first case and, in the second, sends
+        # every later Notify to an owner that is gone.
         self._notif = dbus.Interface(
             session_bus.get_object(
                 "org.freedesktop.Notifications",
                 "/org/freedesktop/Notifications",
+                follow_name_owner_changes=True,
             ),
             "org.freedesktop.Notifications",
         )

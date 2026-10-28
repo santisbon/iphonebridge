@@ -185,9 +185,15 @@ Notifications**, under Settings → Bluetooth → ⓘ (turn it on), or on some
 iOS versions an **allow-notifications prompt** (answer Allow).
 Notifications start flowing and the app's Status tab reads *Working* for
 it. You only do this once per pairing: BlueZ stores the bearer preference
-with the bond, and a forget + re-pair drops it with the bond. The phone is
-then back on classic-only, where the toggle stays on and the Status tab
-reads *Not detected* until you run it again.
+with the bond, and a forget + re-pair drops it with the bond. The stored
+preference does not keep the phone on LE: after a reboot or a Bluetooth
+restart the iPhone reconnects over classic Bluetooth only. The daemon's
+LE link keeper (`src/iphonebridge/ancs/le_link.py`) notices that within
+a minute and repeats `ancs-enable`'s disconnect and reconnect, unless a
+call is in progress, then reconnects the Hands-Free and AV Remote Control
+profiles. `Bearer.LE1.Connect` cannot add LE next to the classic link
+instead: iOS also serves GATT over classic Bluetooth, and while that ATT
+channel is up BlueZ's `device_connect_le()` refuses with `EALREADY`.
 
 If `ancs-enable` reports the ANCS service never appeared, or that BlueZ
 offers no PreferredBearer control while the drop-in is in place, the bond has no
