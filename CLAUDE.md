@@ -13,8 +13,10 @@ systemd **user** service.
 1. **Find out which copy runs.** `systemctl --user show iphonebridge -p
    ExecStart`, or `/proc/<pid>/cmdline`. A deb install runs
    `/usr/bin/iphonebridge`; editing `src/` does not affect it.
-2. **Rebuild.** `dpkg-buildpackage -us -uc -b`.
-3. **Run `lintian` on the result.** A clean build reports nothing at
+2. **Rebuild.** `make deb`. It runs `dpkg-buildpackage -us -uc -b`, moves
+   the `.deb`, `.buildinfo` and `.changes` from the parent directory into
+   `dist/`, and runs `lintian` on the `.deb`.
+3. **Read `lintian`'s output.** A clean build reports nothing at
    all. Any output is new and worth reading rather than waving through.
 4. **Prove the artifact carries the change.** `dpkg-deb -x` it to a temp
    directory and grep for the new symbol, then diff every installed `.py`
@@ -22,7 +24,7 @@ systemd **user** service.
    quick check that the QML shipped at all, since it rides on
    `package-data` rather than on `debian/install`.
 5. **Install.** `sudo apt install --reinstall
-   ../iphonebridge_<version>_all.deb`. `--reinstall` is required whenever
+   ./dist/iphonebridge_<version>_all.deb`. `--reinstall` is required whenever
    the version has not changed: apt compares versions, finds nothing to
    do, and exits 0 without saying so.
 6. **Restart the daemon** (`systemctl --user restart iphonebridge`) and

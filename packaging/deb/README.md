@@ -6,7 +6,10 @@ profile, and the root unit and polkit rule that set the adapter's class.
 The system-level pieces are what ruled sandboxed formats out.
 Target: Debian-family distros (Pop!_OS, Kubuntu, Debian).
 
-Anatomy, once: the user-facing build command is `dpkg-buildpackage`. It
+Anatomy, once: the user-facing build command is `make deb`. It runs
+`dpkg-buildpackage`, which writes its output to the checkout's parent
+directory; `make deb` then moves the `.deb`, `.buildinfo` and `.changes`
+into `dist/` and runs `lintian` on the `.deb`. `dpkg-buildpackage`
 runs `debian/rules`, which delegates to the `debhelper` sequencer (`dh`),
 which builds the Python package through `pybuild` using the existing
 `pyproject.toml`. You write the small files in `debian/`; the tooling
@@ -178,8 +181,7 @@ sudo apt install debhelper dh-python dh-apparmor pybuild-plugin-pyproject python
 ```
 
 ```bash
-dpkg-buildpackage -us -uc -b     # unsigned, binary-only
-lintian ../iphonebridge_*_all.deb   # a clean build prints nothing
+make deb     # unsigned, binary-only, into dist/; lintian prints nothing for a clean build
 ```
 
 ## Cutting a release
@@ -211,11 +213,10 @@ git commit -m "Release X.Y.Z"
 git tag -a vX.Y.Z -m "vX.Y.Z — one-line summary"
 git push && git push origin vX.Y.Z
 
-dpkg-buildpackage -us -uc -b                          # builds ../iphonebridge_X.Y.Z_all.deb
-lintian ../iphonebridge_X.Y.Z_all.deb                 # a clean build prints nothing
+make deb             # builds dist/iphonebridge_X.Y.Z_all.deb; lintian prints nothing for a clean build
 
 gh release create vX.Y.Z -R santisbon/iphonebridge \
-  --title "vX.Y.Z" --notes "..." ../iphonebridge_X.Y.Z_all.deb
+  --title "vX.Y.Z" --notes "..." dist/iphonebridge_X.Y.Z_all.deb
 ```
 
 Notes on that last command:
@@ -408,13 +409,13 @@ them.
 
 If you need to reintall
 ```sh
-sudo apt reinstall ../iphonebridge_*_all.deb
+sudo apt reinstall ./dist/iphonebridge_<version>_all.deb
 systemctl --user restart iphonebridge
 ```
 
 To deploy a new icon
 ```sh
-sudo apt reinstall ../iphonebridge_*_all.deb
+sudo apt reinstall ./dist/iphonebridge_<version>_all.deb
 kbuildsycoca6 --noincremental   # nudge Plasma's icon cache; a re-login also does it
 ```
 
