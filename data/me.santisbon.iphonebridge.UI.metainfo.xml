@@ -62,6 +62,14 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.21.0" date="2026-10-28">
+      <description>
+        <p>Notifications from iPhone apps come back by themselves after a
+        reboot. Desktop popups work even when the notification server
+        starts after the iPhone app, and the Status tab no longer reports
+        notifications as working when they are not.</p>
+      </description>
+    </release>
     <release version="0.20.5" date="2026-10-27">
       <description>
         <p>Calls come back by themselves after the oFono telephony service

@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.21.0] — 2026-10-28
+
+### Changed
+- **Per-app notifications come back by themselves after a reboot.**
+  After a reboot or a Bluetooth restart the iPhone reconnects over
+  classic Bluetooth only, and notifications need an LE link, so they
+  stopped until `iphonebridge ancs-enable` was run again. The daemon now
+  notices within a minute and does what `ancs-enable` does: it
+  disconnects the iPhone, reconnects it over LE, then reconnects calls
+  and media controls. It never does this during a call, and tries again
+  every 10 minutes if the phone refuses LE.
+
+### Fixed
+- **Desktop popups never appeared when the daemon started before the
+  desktop's notification server**, as it can at login, and stopped for
+  good when the notification server restarted. The daemon now finds the
+  notification server whenever it shows a popup.
+- **The app's Status tab and `iphonebridge doctor` said per-app
+  notifications were working while the iPhone was connected over classic
+  Bluetooth only.** Both now check the LE link itself.
+- The `ancs-enable` entry in `iphonebridge(1)` said it needs
+  `Experimental = true` in `/etc/bluetooth/main.conf`; it needs
+  bluetoothd running with `-E --noplugin=hfp`, as the README says.
+
+### Known
+- **Messages, calls and media pause while the daemon reconnects the
+  iPhone over LE.** The pause happens once after each reboot or Bluetooth
+  restart. BlueZ cannot add the LE link while the classic link is up,
+  so the daemon has to disconnect the phone first.
+- The automatic reconnect needs bluetoothd running with `-E`, the same
+  systemd drop-in `ancs-enable` needs.
+
 ## [0.20.5] — 2026-10-27
 
 ### Fixed

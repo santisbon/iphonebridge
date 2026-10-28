@@ -1,3 +1,18 @@
+iphonebridge (0.21.0) unstable; urgency=medium
+
+  * After a reboot or a Bluetooth restart, the daemon reconnects the
+    iPhone over LE by itself, so per-app notifications come back without
+    running ancs-enable. Messages, calls and media pause meanwhile; it
+    never runs during a call.
+  * Desktop popups work when the daemon starts before the notification
+    server, and after the notification server restarts.
+  * GetStatus and doctor report per-app notifications as working only
+    while the iPhone's LE link is up.
+  * iphonebridge(1): ancs-enable needs bluetoothd -E --noplugin=hfp, not
+    Experimental = true in /etc/bluetooth/main.conf.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Wed, 28 Oct 2026 11:45:55 -0500
+
 iphonebridge (0.20.5) unstable; urgency=medium
 
   * The daemon follows oFono's D-Bus name, so calls come back after oFono
