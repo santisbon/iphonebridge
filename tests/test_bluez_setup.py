@@ -37,7 +37,9 @@ def _chars_under(dev_path):
 
 
 def _install_fake_bluez(monkeypatch, *, uuids, connected, managed,
-                        missing=False):
+                        missing=False, le=None):
+    """`le` is Bearer.LE1's Connected; None means BlueZ has no such
+    interface (bluetoothd without -E)."""
     import dbus.exceptions
 
     from iphonebridge import bluez_setup
@@ -46,6 +48,10 @@ def _install_fake_bluez(monkeypatch, *, uuids, connected, managed,
         def Get(self, iface, prop):
             if missing:
                 raise dbus.exceptions.DBusException("UnknownObject")
+            if iface == "org.bluez.Bearer.LE1":
+                if le is None:
+                    raise dbus.exceptions.DBusException("UnknownInterface")
+                return le
             return {"UUIDs": uuids, "Connected": connected}[prop]
 
     class ObjectManager:
@@ -89,6 +95,21 @@ def test_ancs_state_live_needs_all_three_chars_under_this_device(monkeypatch):
     _install_fake_bluez(monkeypatch, uuids=[ANCS_SVC], connected=True,
                         managed=partial)
     assert bluez_setup.ancs_state() == bluez_setup.ANCS_NO_LE
+
+
+def test_ancs_state_kept_chars_with_le_down_is_not_live(monkeypatch):
+    """BlueZ keeps the ANCS characteristic objects too after the LE link
+    drops while BR/EDR stays up. Where BlueZ reports the LE link itself,
+    that decides."""
+    from iphonebridge import bluez_setup
+
+    _install_fake_bluez(monkeypatch, uuids=[ANCS_SVC], connected=True,
+                        managed=_chars_under(DEV), le=False)
+    assert bluez_setup.ancs_state() == bluez_setup.ANCS_NO_LE
+
+    _install_fake_bluez(monkeypatch, uuids=[ANCS_SVC], connected=True,
+                        managed=_chars_under(DEV), le=True)
+    assert bluez_setup.ancs_state() == bluez_setup.ANCS_LIVE
 
 
 def test_ancs_state_earlier_failures_take_precedence(monkeypatch):

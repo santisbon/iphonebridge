@@ -171,3 +171,41 @@ def test_busy_profile_is_asked_again_then_reported(monkeypatch, caplog):
     k._on_profile_error(le_link.AVRCP_UUID, 1, busy)
     assert len(timers) == le_link.PROFILE_TRIES - 1
     assert "br-connection-busy" in caplog.text
+
+
+class BearerProps:
+    """Device1.Connected and, unless None, Bearer.LE1.Connected."""
+
+    def __init__(self, connected, le):
+        self.connected, self.le = connected, le
+
+    def Get(self, iface, prop):
+        import dbus.exceptions
+        if iface == le_link.BEARER_LE:
+            if self.le is None:
+                raise dbus.exceptions.DBusException("UnknownInterface")
+            return self.le
+        return self.connected
+
+
+def test_le_connected_reads_the_le_bearer():
+    assert le_link.le_connected(BearerProps(True, True)) is True
+    assert le_link.le_connected(BearerProps(True, False)) is False
+    assert le_link.le_connected(BearerProps(True, None)) is None
+
+
+def test_ancs_active_needs_the_le_link(monkeypatch):
+    from iphonebridge.ancs import client
+
+    k = client.AncsClient("/org/bluez/hci0/dev_X", on_event=lambda e: None)
+    k._notify_started = True
+    for connected, le, want in ((True, True, True),
+                                (True, False, False),  # BR/EDR only
+                                (False, False, False),
+                                (True, None, True)):   # no bearer state
+        props = BearerProps(connected, le)
+        monkeypatch.setattr(client.dbus, "Interface",
+                            lambda obj, iface, props=props: props)
+        monkeypatch.setattr(client.system_bus, "get_object",
+                            lambda *a, **kw: object())
+        assert k.active is want, (connected, le)

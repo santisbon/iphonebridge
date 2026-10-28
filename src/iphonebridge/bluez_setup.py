@@ -29,6 +29,7 @@ import dbus.service
 
 from iphonebridge import config
 from iphonebridge.ancs.constants import ANCS_CHAR_UUIDS
+from iphonebridge.ancs.le_link import le_connected
 from iphonebridge.bus import bluez, system_bus
 
 log = logging.getLogger(__name__)
@@ -261,7 +262,9 @@ def ancs_state() -> str:
     BR/EDR only. ANCS is a GATT service, so what matters is whether its
     three characteristic objects exist under the device right now — the
     same thing the daemon's ANCS client waits for, which is why this
-    agrees with the app's Status tab where the UUID check did not.
+    agrees with the app's Status tab where the UUID check did not. BlueZ
+    keeps those objects too once the LE link drops, so where it reports
+    the LE link's own state (Bearer.LE1, with bluetoothd -E) that decides.
     """
     dev_path = config.device_path(system_bus)
     try:
@@ -275,6 +278,8 @@ def ancs_state() -> str:
         return ANCS_NO_BOND
     if not connected:
         return ANCS_DISCONNECTED
+    if le_connected(props) is False:
+        return ANCS_NO_LE
     return ANCS_LIVE if _ancs_chars_present(dev_path) else ANCS_NO_LE
 
 

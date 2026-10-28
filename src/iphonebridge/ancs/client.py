@@ -38,6 +38,7 @@ from iphonebridge.ancs.constants import (
     EventID,
 )
 from iphonebridge.ancs.events import AncsEvent
+from iphonebridge.ancs.le_link import le_connected
 from iphonebridge.ancs.parsers import (
     AppAttributes,
     DataSourceEvent,
@@ -107,8 +108,9 @@ class AncsClient:
 
         The subscription alone is not enough: BlueZ keeps a bonded
         device's characteristic objects, and accepts StartNotify on
-        them, while the device is disconnected. Probe the connection
-        too, or this reads "working" with the phone gone.
+        them, while the device is disconnected. Probe the LE link too,
+        or this reads "working" with the phone gone, or with the phone
+        still connected over classic Bluetooth alone.
         """
         if not self._notify_started:
             return False
@@ -117,9 +119,12 @@ class AncsClient:
                 system_bus.get_object("org.bluez", self.device_path),
                 "org.freedesktop.DBus.Properties",
             )
-            return bool(props.Get("org.bluez.Device1", "Connected"))
+            if not bool(props.Get("org.bluez.Device1", "Connected")):
+                return False
         except dbus.exceptions.DBusException:
             return False
+        le = le_connected(props)
+        return True if le is None else le
 
     # ---- lifecycle ------------------------------------------------------
 

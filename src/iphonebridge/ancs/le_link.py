@@ -74,6 +74,17 @@ LINK_LE = "le"                # the LE link is up
 LINK_BREDR_ONLY = "bredr-only"
 
 
+def le_connected(props: dbus.Interface) -> bool | None:
+    """Whether the device's LE link is up, read from Bearer.LE1 through
+    the device's Properties interface. None when BlueZ offers no
+    per-bearer state (bluetoothd without -E): Device1.Connected is then
+    all there is, and it reads true over either bearer."""
+    try:
+        return bool(props.Get(BEARER_LE, "Connected"))
+    except dbus.exceptions.DBusException:
+        return None
+
+
 def should_reconnect(*, bredr_only_checks: int,
                      since_attempt: float | None,
                      call_active: bool) -> bool:
@@ -136,9 +147,8 @@ class LeLinkKeeper:
         # PreferredBearer and Bearer.LE1 exist only with bluetoothd -E.
         if "PreferredBearer" not in dev:
             return LINK_UNSUPPORTED
-        try:
-            le = bool(props.Get(BEARER_LE, "Connected"))
-        except dbus.exceptions.DBusException:
+        le = le_connected(props)
+        if le is None:
             return LINK_UNSUPPORTED
         return LINK_LE if le else LINK_BREDR_ONLY
 
