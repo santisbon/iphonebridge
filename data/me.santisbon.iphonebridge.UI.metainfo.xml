@@ -62,6 +62,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.21.1" date="2026-10-28">
+      <description>
+        <p>When the iPhone will not reconnect for app notifications, the
+        app waits longer between tries instead of disconnecting the
+        iPhone every 10 minutes.</p>
+      </description>
+    </release>
     <release version="0.21.0" date="2026-10-28">
       <description>
         <p>Notifications from iPhone apps come back by themselves after a

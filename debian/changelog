@@ -1,3 +1,12 @@
+iphonebridge (0.21.1) unstable; urgency=medium
+
+  * The LE reconnect for per-app notifications backs off when iOS
+    refuses it: the wait doubles after each try that brings no ANCS
+    subscription, from 10 minutes up to 4 hours, so the iPhone is no
+    longer disconnected every 10 minutes all night.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Wed, 28 Oct 2026 23:47:54 -0500
+
 iphonebridge (0.21.0) unstable; urgency=medium
 
   * After a reboot or a Bluetooth restart, the daemon reconnects the

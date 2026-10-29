@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.1] — 2026-10-28
+
+### Fixed
+- **The iPhone disconnected and reconnected every 10 minutes when it
+  would not take the LE link back.** To bring per-app notifications back,
+  the daemon disconnects the iPhone and reconnects it over LE. When iOS
+  refused LE, or connected it without per-app notifications, the daemon
+  tried again every 10 minutes all night, and each try interrupted
+  messages, calls and media. The wait now doubles after each try that
+  brings no per-app notifications, from 10 minutes up to 4 hours, and
+  starts over once they work.
+
 ## [0.21.0] — 2026-10-28
 
 ### Changed
