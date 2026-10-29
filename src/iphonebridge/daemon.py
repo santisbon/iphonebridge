@@ -248,6 +248,7 @@ class Daemon:
         self.le_link = LeLinkKeeper(
             device_path,
             call_active=lambda: bool(self.hfp and self.hfp.list_calls()),
+            ancs_active=lambda: self.ancs.active,
         )
         self.le_link.start()
 

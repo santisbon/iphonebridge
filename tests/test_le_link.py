@@ -4,35 +4,55 @@ from iphonebridge.ancs.le_link import (
     BREDR_POLL_SEC,
     BREDR_WAIT_SEC,
     LE_GRACE_CHECKS,
+    LE_RETRY_MAX_SEC,
     LE_RETRY_SEC,
     LINK_BREDR_ONLY,
     LINK_GONE,
     LINK_LE,
     LeLinkKeeper,
+    retry_delay,
     should_reconnect,
 )
 
 
 def test_waits_out_the_grace_period():
     assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS - 1,
-                                since_attempt=None, call_active=False)
+                                since_attempt=None, attempts=0,
+                                call_active=False)
     assert should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                            since_attempt=None, call_active=False)
+                            since_attempt=None, attempts=0,
+                                call_active=False)
 
 
 def test_never_while_on_le_or_during_a_call():
     assert not should_reconnect(bredr_only_checks=0,
-                                since_attempt=None, call_active=False)
+                                since_attempt=None, attempts=0,
+                                call_active=False)
     assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS * 10,
-                                since_attempt=None, call_active=True)
+                                since_attempt=None, attempts=0,
+                                call_active=True)
 
 
 def test_spaces_attempts():
     assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
                                 since_attempt=LE_RETRY_SEC - 1,
-                                call_active=False)
+                                attempts=1, call_active=False)
     assert should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                            since_attempt=LE_RETRY_SEC, call_active=False)
+                            since_attempt=LE_RETRY_SEC, attempts=1,
+                            call_active=False)
+
+
+def test_wait_doubles_up_to_the_cap():
+    assert retry_delay(1) == LE_RETRY_SEC
+    assert retry_delay(2) == 2 * LE_RETRY_SEC
+    assert retry_delay(3) == 4 * LE_RETRY_SEC
+    assert retry_delay(50) == LE_RETRY_MAX_SEC
+    assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
+                                since_attempt=2 * LE_RETRY_SEC - 1,
+                                attempts=2, call_active=False)
+    assert should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
+                            since_attempt=2 * LE_RETRY_SEC, attempts=2,
+                            call_active=False)
 
 
 class Clock:
@@ -43,9 +63,10 @@ class Clock:
         return self.now
 
 
-def keeper(states, clock, calls=False):
+def keeper(states, clock, calls=False, ancs=None):
+    ancs = ancs if ancs is not None else [False]
     k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: calls,
-                     clock=clock)
+                     ancs_active=lambda: ancs[0], clock=clock)
     k.attempts = 0
     k._link_state = lambda: states[0]
 
@@ -74,6 +95,28 @@ def test_tick_reconnects_after_grace_then_spaces_retries():
     assert k.attempts == 1
     ticks(k, 1, clock)
     assert k.attempts == 2
+
+
+def test_tick_backs_off_until_ancs_is_subscribed():
+    clock, states, ancs = Clock(), [LINK_BREDR_ONLY], [False]
+    k = keeper(states, clock, ancs=ancs)
+    ticks(k, LE_GRACE_CHECKS, clock)
+    ticks(k, int(LE_RETRY_SEC // 29.9) + 1, clock)
+    assert k.attempts == 2
+    # The second attempt brought no ANCS either: the next waits twice
+    # as long.
+    ticks(k, int(2 * LE_RETRY_SEC // 29.9), clock)
+    assert k.attempts == 2
+    ticks(k, 1, clock)
+    assert k.attempts == 3
+    # ANCS subscribed and then lost: the wait starts over.
+    ancs[0] = True
+    ticks(k, 1, clock)
+    ancs[0] = False
+    ticks(k, int(LE_RETRY_SEC // 29.9) - 1, clock)
+    assert k.attempts == 3
+    ticks(k, 1, clock)
+    assert k.attempts == 4
 
 
 def test_tick_restarts_the_grace_period_when_le_comes_back():
@@ -112,7 +155,8 @@ class Props:
 
 
 def test_profiles_wait_for_bredr_to_come_back():
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False)
+    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
+                     ancs_active=lambda: False)
     restored = []
     k._restore_profiles = lambda: restored.append(k._bredr_waited)
     props = Props([False, False, True])
@@ -125,7 +169,8 @@ def test_profiles_wait_for_bredr_to_come_back():
 
 
 def test_profiles_reconnect_anyway_after_the_wait():
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False)
+    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
+                     ancs_active=lambda: False)
     restored = []
     k._restore_profiles = lambda: restored.append(True)
     polls = BREDR_WAIT_SEC // BREDR_POLL_SEC
@@ -149,7 +194,8 @@ class E:
 
 
 def test_profile_already_connected_is_quiet(caplog):
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False)
+    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
+                     ancs_active=lambda: False)
     k._on_profile_error(le_link.HFP_AG_UUID, le_link.PROFILE_TRIES,
                         E("org.bluez.Error.AlreadyConnected"))
     assert not caplog.records
@@ -159,7 +205,8 @@ def test_busy_profile_is_asked_again_then_reported(monkeypatch, caplog):
     timers = []
     monkeypatch.setattr(le_link.GLib, "timeout_add_seconds",
                         lambda sec, fn, *args: timers.append(args))
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False)
+    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
+                     ancs_active=lambda: False)
     busy = E("org.bluez.Error.Failed", "br-connection-busy")
     tries = le_link.PROFILE_TRIES
     while tries > 1:

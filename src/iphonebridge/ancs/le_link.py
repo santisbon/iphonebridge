@@ -16,8 +16,14 @@ with Device1.PreferredBearer = "le". The phone brings BR/EDR back by
 itself, sometimes without the Hands-Free or AV Remote Control profile,
 so those are reconnected once BR/EDR is back. The disconnect interrupts
 messages, calls and media, which is why should_reconnect() waits out a
-grace period, never runs during a call, and spaces attempts LE_RETRY_SEC
-apart.
+grace period, never runs during a call, and spaces attempts apart.
+
+iOS does not always take the LE link back: on 2026-10-28, from 22:45 on,
+every attempt either failed with le-connection-abort-by-local or brought
+LE up without ANCS, and the phone was on BR/EDR only again by the next
+attempt. Each such attempt is still a disconnect, so the wait doubles
+after every attempt that no ANCS subscription follows, from LE_RETRY_SEC
+up to LE_RETRY_MAX_SEC, and starts over once ANCS is subscribed.
 """
 from __future__ import annotations
 
@@ -42,9 +48,11 @@ LE_CHECK_SEC = 30
 # timers can fire a little early and a 30 s check would then measure
 # 29.9 s and wait a whole extra interval.
 LE_GRACE_CHECKS = 2
-# Minimum time between two reconnects, so a phone that keeps refusing LE
-# is not knocked off BR/EDR over and over.
+# Time between the first reconnect and the second; it doubles after each
+# attempt without ANCS, up to LE_RETRY_MAX_SEC, so a phone that keeps
+# refusing LE is not knocked off BR/EDR over and over.
 LE_RETRY_SEC = 10 * 60
+LE_RETRY_MAX_SEC = 4 * 60 * 60
 # After the LE connect, poll this often, at most this long, for iOS to
 # bring BR/EDR back. Connecting a profile before then races iOS's own
 # reconnect and fails with br-connection-busy.
@@ -85,20 +93,29 @@ def le_connected(props: dbus.Interface) -> bool | None:
         return None
 
 
+def retry_delay(attempts: int) -> float:
+    """The wait after `attempts` reconnects in a row that no ANCS
+    subscription followed: LE_RETRY_SEC after the first, doubling after
+    each one, at most LE_RETRY_MAX_SEC."""
+    return min(LE_RETRY_SEC * 2 ** max(attempts - 1, 0), LE_RETRY_MAX_SEC)
+
+
 def should_reconnect(*, bredr_only_checks: int,
                      since_attempt: float | None,
+                     attempts: int,
                      call_active: bool) -> bool:
     """Whether to reconnect the iPhone over LE now.
 
     `bredr_only_checks` is how many checks in a row found the phone on
     BR/EDR only, `since_attempt` how long ago the last reconnect began
-    (None if never).
+    (None if never), `attempts` how many reconnects no ANCS subscription
+    has followed.
     """
     if bredr_only_checks < LE_GRACE_CHECKS:
         return False
     if call_active:
         return False
-    return since_attempt is None or since_attempt >= LE_RETRY_SEC
+    return since_attempt is None or since_attempt >= retry_delay(attempts)
 
 
 class LeLinkKeeper:
@@ -106,13 +123,17 @@ class LeLinkKeeper:
 
     def __init__(self, device_path: str, *,
                  call_active: Callable[[], bool],
+                 ancs_active: Callable[[], bool],
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.device_path = device_path
         self._call_active = call_active
+        self._ancs_active = ancs_active
         self._clock = clock
         self._timer_id: int | None = None
         self._bredr_only_checks = 0
         self._last_attempt: float | None = None
+        # Reconnects since ANCS was last subscribed.
+        self._attempts = 0
         self._bredr_waited = 0
         self._busy = False
         self._said_unsupported = False
@@ -156,6 +177,8 @@ class LeLinkKeeper:
         """GLib timer callback. Return True to keep the timer running."""
         if self._busy:
             return True
+        if self._attempts and self._ancs_active():
+            self._attempts = 0
         state = self._link_state()
         if state == LINK_UNSUPPORTED and not self._said_unsupported:
             self._said_unsupported = True
@@ -171,8 +194,10 @@ class LeLinkKeeper:
                          else now - self._last_attempt)
         if should_reconnect(bredr_only_checks=self._bredr_only_checks,
                             since_attempt=since_attempt,
+                            attempts=self._attempts,
                             call_active=self._call_active()):
             self._last_attempt = now
+            self._attempts += 1
             self._reconnect()
         return True
 
@@ -205,9 +230,10 @@ class LeLinkKeeper:
 
     def _on_le_failed(self, e: dbus.exceptions.DBusException) -> None:
         self._busy = False
-        log.warning("LE reconnect failed: %s — next try in %d min",
+        log.warning("LE reconnect failed: %s — next try in %d min at "
+                    "the earliest",
                     e.get_dbus_message() or e.get_dbus_name(),
-                    LE_RETRY_SEC // 60)
+                    retry_delay(self._attempts) // 60)
 
     def _on_le_connected(self) -> None:
         log.info("iPhone reconnected over LE")
