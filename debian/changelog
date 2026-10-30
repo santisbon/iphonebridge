@@ -1,3 +1,16 @@
+iphonebridge (0.22.0) unstable; urgency=medium
+
+  * Per-app notifications come back without disconnecting the iPhone:
+    the daemon and ancs-enable put the iPhone back on the computer's
+    list of LE devices to connect automatically, and the computer
+    connects it over LE at its next LE advertisement. This also fixes
+    LE reconnects that failed every time once BlueZ had dropped the
+    iPhone from that list.
+  * ancs-enable reports success only when the LE link is up and the
+    iPhone's ANCS service is present.
+
+ -- santisbon <santisbon@users.noreply.github.com>  Fri, 30 Oct 2026 00:36:26 -0500
+
 iphonebridge (0.21.1) unstable; urgency=medium
 
   * The LE reconnect for per-app notifications backs off when iOS

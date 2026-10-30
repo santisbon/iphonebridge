@@ -62,6 +62,13 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.22.0" date="2026-10-30">
+      <description>
+        <p>Notifications from iPhone apps come back without disconnecting
+        the iPhone, so messages, calls and media carry on, and they no
+        longer stay off when the iPhone's LE reconnect kept failing.</p>
+      </description>
+    </release>
     <release version="0.21.1" date="2026-10-28">
       <description>
         <p>When the iPhone will not reconnect for app notifications, the

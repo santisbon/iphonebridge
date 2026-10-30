@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.22.0] — 2026-10-30
+
+### Changed
+- **Per-app notifications come back without disconnecting the iPhone.**
+  When the iPhone is connected over classic Bluetooth only, the daemon
+  no longer disconnects it and reconnects it over LE. It has the
+  computer connect the iPhone over LE as well, the next time the iPhone
+  advertises over LE, so messages, calls and media carry on. While the
+  iPhone stays on classic Bluetooth only, the daemon repeats this every
+  10 minutes. `iphonebridge ancs-enable` does the same at once, without
+  a disconnect, and waits up to a minute for the LE link.
+
+### Fixed
+- **Per-app notifications could stay off for good.** Once BlueZ had
+  dropped the iPhone from the computer's list of LE devices to connect
+  automatically, the computer could not recognise the iPhone's rotating
+  LE address, so every LE reconnect by the daemon and by `ancs-enable`
+  failed with `le-connection-abort-by-local`. Both now put the iPhone
+  back on that list.
+- **`iphonebridge ancs-enable` reported "ANCS service visible" while the
+  iPhone was connected over classic Bluetooth only.** It now reports
+  success only when the LE link is up and the iPhone's ANCS service is
+  present, and otherwise says which of the two is missing.
+
+### Known
+- **After a reboot, per-app notifications can take until the iPhone is
+  next unlocked to come back.** The computer can only connect the
+  iPhone over LE while the iPhone advertises over LE, which it does
+  while awake.
+
 ## [0.21.1] — 2026-10-28
 
 ### Fixed
