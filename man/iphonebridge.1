@@ -83,16 +83,16 @@ running the pull reuses its sessions; the iPhone allows only one OBEX
 session at a time.
 .TP
 .B ancs-enable
-Enable per\-app notifications. Steers the next connection to the iPhone
-over BLE by setting BlueZ's experimental PreferredBearer control, then
-reconnects; turn on the "Share System Notifications" toggle the phone
-then offers for this computer, or answer Allow if it asks with a prompt
-instead. Requires bluetoothd running with \-E \-\-noplugin=hfp (a systemd
+Enable per\-app notifications. Has the computer connect the iPhone over
+BLE as well as classic Bluetooth, through BlueZ's experimental
+PreferredBearer control, without disconnecting it, and waits up to a
+minute for the BLE link; turn on the "Share System Notifications" toggle
+the phone then offers for this computer, or answer Allow if it asks with
+a prompt instead. Requires bluetoothd running with \-E \-\-noplugin=hfp (a systemd
 drop-in for bluetooth.service; see the README) and an adapter capable of
 a BLE bond with the iPhone (Intel chipsets are; Realtek and USB dongles
-are not). Needed once per pairing: after that the daemon reconnects the
-iPhone over BLE by itself when it comes back over classic Bluetooth
-only.
+are not). Needed once per pairing: after that the daemon brings the BLE link
+back by itself when the iPhone comes back over classic Bluetooth only.
 .TP
 .B hfp-enable
 Set up call support: writes the WirePlumber configuration that routes

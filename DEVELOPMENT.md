@@ -178,22 +178,30 @@ iphonebridge ancs-enable
 
 `-E` turns on BlueZ's experimental interfaces, which `ancs-enable`'s bearer control needs. On BlueZ 5.86 and later it also turns on BlueZ's own Hands-Free client (the plugin `hfp`), which connects to the iPhone by itself and takes the Hands-Free link oFono needs for calls; `--noplugin=hfp` keeps it off. The drop-in leaves the bluez package's `/etc/bluetooth/main.conf` as shipped. `/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`. A `[General] Experimental = true` line in `/etc/bluetooth/main.conf` can stay: the drop-in still keeps the `hfp` plugin off.
 
-`ancs-enable` disconnects, sets BlueZ's `Device1.PreferredBearer` to
-`le`, reconnects, and waits for the phone's ANCS service to appear. The
-iPhone then offers the grant: a third toggle, **Share System
-Notifications**, under Settings → Bluetooth → ⓘ (turn it on), or on some
-iOS versions an **allow-notifications prompt** (answer Allow).
+`ancs-enable` sets BlueZ's `Device1.PreferredBearer` to `bredr` and then
+`le`, and waits up to a minute for the LE link and the phone's ANCS
+service. Changing the property is what makes bluetoothd add the iPhone to
+the kernel's LE auto-connect list, flagged for address resolution;
+writing the value the property already holds does nothing. The kernel
+then connects LE next to the classic link when the iPhone next
+advertises, and recognises the iPhone's rotating LE address only through
+that address-resolution entry. The iPhone then offers the grant: a
+third toggle, **Share System Notifications**, under Settings → Bluetooth
+→ ⓘ (turn it on), or on some iOS versions an **allow-notifications
+prompt** (answer Allow).
 Notifications start flowing and the app's Status tab reads *Working* for
 it. You only do this once per pairing: BlueZ stores the bearer preference
 with the bond, and a forget + re-pair drops it with the bond. The stored
 preference does not keep the phone on LE: after a reboot or a Bluetooth
 restart the iPhone reconnects over classic Bluetooth only. The daemon's
 LE link keeper (`src/iphonebridge/ancs/le_link.py`) notices that within
-a minute and repeats `ancs-enable`'s disconnect and reconnect, unless a
-call is in progress, then reconnects the Hands-Free and AV Remote Control
-profiles. `Bearer.LE1.Connect` cannot add LE next to the classic link
-instead: iOS also serves GATT over classic Bluetooth, and while that ATT
-channel is up BlueZ's `device_connect_le()` refuses with `EALREADY`.
+a minute and does what `ancs-enable` does, then repeats it every 10
+minutes while the phone stays on classic Bluetooth only: bluetoothd takes
+a device off the auto-connect list again after three LE authentication
+failures. Nothing is disconnected. `Bearer.LE1.Connect` cannot add LE next
+to the classic link instead: iOS also serves GATT over classic Bluetooth,
+and while that ATT channel is up BlueZ's `device_connect_le()` refuses
+with `EALREADY`.
 
 If `ancs-enable` reports the ANCS service never appeared, or that BlueZ
 offers no PreferredBearer control while the drop-in is in place, the bond has no

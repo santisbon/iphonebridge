@@ -1,58 +1,64 @@
-"""LeLinkKeeper reconnects an iPhone stuck on BR/EDR only, with guards."""
+"""LeLinkKeeper re-arms LE auto-connect for an iPhone stuck on BR/EDR."""
+import dbus.exceptions
+
 from iphonebridge.ancs import le_link
 from iphonebridge.ancs.le_link import (
-    BREDR_POLL_SEC,
-    BREDR_WAIT_SEC,
     LE_GRACE_CHECKS,
-    LE_RETRY_MAX_SEC,
-    LE_RETRY_SEC,
+    LE_REARM_SEC,
     LINK_BREDR_ONLY,
     LINK_GONE,
     LINK_LE,
     LeLinkKeeper,
-    retry_delay,
-    should_reconnect,
+    rearm_le,
+    should_rearm,
 )
 
 
 def test_waits_out_the_grace_period():
-    assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS - 1,
-                                since_attempt=None, attempts=0,
-                                call_active=False)
-    assert should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                            since_attempt=None, attempts=0,
-                                call_active=False)
+    assert not should_rearm(bredr_only_checks=LE_GRACE_CHECKS - 1,
+                            since_rearm=None)
+    assert should_rearm(bredr_only_checks=LE_GRACE_CHECKS, since_rearm=None)
 
 
-def test_never_while_on_le_or_during_a_call():
-    assert not should_reconnect(bredr_only_checks=0,
-                                since_attempt=None, attempts=0,
-                                call_active=False)
-    assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS * 10,
-                                since_attempt=None, attempts=0,
-                                call_active=True)
+def test_never_while_on_le():
+    assert not should_rearm(bredr_only_checks=0, since_rearm=None)
 
 
-def test_spaces_attempts():
-    assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                                since_attempt=LE_RETRY_SEC - 1,
-                                attempts=1, call_active=False)
-    assert should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                            since_attempt=LE_RETRY_SEC, attempts=1,
-                            call_active=False)
+def test_spaces_rearms():
+    assert not should_rearm(bredr_only_checks=LE_GRACE_CHECKS,
+                            since_rearm=LE_REARM_SEC - 1)
+    assert should_rearm(bredr_only_checks=LE_GRACE_CHECKS,
+                        since_rearm=LE_REARM_SEC)
 
 
-def test_wait_doubles_up_to_the_cap():
-    assert retry_delay(1) == LE_RETRY_SEC
-    assert retry_delay(2) == 2 * LE_RETRY_SEC
-    assert retry_delay(3) == 4 * LE_RETRY_SEC
-    assert retry_delay(50) == LE_RETRY_MAX_SEC
-    assert not should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                                since_attempt=2 * LE_RETRY_SEC - 1,
-                                attempts=2, call_active=False)
-    assert should_reconnect(bredr_only_checks=LE_GRACE_CHECKS,
-                            since_attempt=2 * LE_RETRY_SEC, attempts=2,
-                            call_active=False)
+class SetProps:
+    """Records PreferredBearer writes; fails the writes listed in fail."""
+
+    def __init__(self, fail=()):
+        self.writes, self.fail = [], set(fail)
+
+    def Set(self, iface, prop, value):
+        assert (iface, prop) == (le_link.DEVICE, "PreferredBearer")
+        self.writes.append(value)
+        if value in self.fail:
+            raise dbus.exceptions.DBusException("org.bluez.Error.Failed")
+
+
+def test_rearm_changes_the_bearer_so_bluez_acts():
+    # bluetoothd ignores a write of the value it already holds, so the
+    # property has to change: away from "le", then back.
+    props = SetProps()
+    rearm_le(props)
+    assert props.writes == ["bredr", "le"]
+
+
+def test_rearm_never_leaves_the_bearer_on_bredr():
+    props = SetProps(fail={"bredr"})
+    try:
+        rearm_le(props)
+    except dbus.exceptions.DBusException:
+        pass
+    assert props.writes[-1] == "le"
 
 
 class Clock:
@@ -63,16 +69,15 @@ class Clock:
         return self.now
 
 
-def keeper(states, clock, calls=False, ancs=None):
-    ancs = ancs if ancs is not None else [False]
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: calls,
-                     ancs_active=lambda: ancs[0], clock=clock)
-    k.attempts = 0
+def keeper(states, clock):
+    k = LeLinkKeeper("/org/bluez/hci0/dev_X", clock=clock)
+    k.rearms = 0
     k._link_state = lambda: states[0]
 
-    def reconnect():
-        k.attempts += 1
-    k._reconnect = reconnect
+    def rearm():
+        k.rearms += 1
+        k._rearmed = True
+    k._rearm = rearm
     return k
 
 
@@ -84,39 +89,33 @@ def ticks(k, n, clock, step=29.9):
         assert k._tick() is True
 
 
-def test_tick_reconnects_after_grace_then_spaces_retries():
+def test_tick_rearms_after_grace_then_spaces_rearms():
     clock, states = Clock(), [LINK_BREDR_ONLY]
     k = keeper(states, clock)
     ticks(k, LE_GRACE_CHECKS - 1, clock)
-    assert k.attempts == 0
+    assert k.rearms == 0
     ticks(k, 1, clock)
-    assert k.attempts == 1
-    ticks(k, int(LE_RETRY_SEC // 29.9), clock)
-    assert k.attempts == 1
+    assert k.rearms == 1
+    ticks(k, int(LE_REARM_SEC // 29.9), clock)
+    assert k.rearms == 1
     ticks(k, 1, clock)
-    assert k.attempts == 2
+    assert k.rearms == 2
 
 
-def test_tick_backs_off_until_ancs_is_subscribed():
-    clock, states, ancs = Clock(), [LINK_BREDR_ONLY], [False]
-    k = keeper(states, clock, ancs=ancs)
+def test_tick_rearms_after_grace_when_le_drops_again(caplog):
+    caplog.set_level("INFO")
+    clock, states = Clock(), [LINK_BREDR_ONLY]
+    k = keeper(states, clock)
     ticks(k, LE_GRACE_CHECKS, clock)
-    ticks(k, int(LE_RETRY_SEC // 29.9) + 1, clock)
-    assert k.attempts == 2
-    # The second attempt brought no ANCS either: the next waits twice
-    # as long.
-    ticks(k, int(2 * LE_RETRY_SEC // 29.9), clock)
-    assert k.attempts == 2
+    assert k.rearms == 1
+    states[0] = LINK_LE
     ticks(k, 1, clock)
-    assert k.attempts == 3
-    # ANCS subscribed and then lost: the wait starts over.
-    ancs[0] = True
-    ticks(k, 1, clock)
-    ancs[0] = False
-    ticks(k, int(LE_RETRY_SEC // 29.9) - 1, clock)
-    assert k.attempts == 3
-    ticks(k, 1, clock)
-    assert k.attempts == 4
+    assert "LE link is up" in caplog.text
+    # LE dropped well inside LE_REARM_SEC of the last re-arm: the next
+    # re-arm waits only for the grace period.
+    states[0] = LINK_BREDR_ONLY
+    ticks(k, LE_GRACE_CHECKS, clock)
+    assert k.rearms == 2
 
 
 def test_tick_restarts_the_grace_period_when_le_comes_back():
@@ -129,95 +128,20 @@ def test_tick_restarts_the_grace_period_when_le_comes_back():
     ticks(k, LE_GRACE_CHECKS - 1, clock)
     states[0] = LINK_GONE
     ticks(k, 1, clock)
-    assert k.attempts == 0
+    assert k.rearms == 0
 
 
-def test_tick_holds_off_during_a_call_and_while_busy():
+def test_failed_rearm_is_reported_and_retried(caplog):
     clock, states = Clock(), [LINK_BREDR_ONLY]
-    k = keeper(states, clock, calls=True)
+    k = LeLinkKeeper("/org/bluez/hci0/dev_X", clock=clock)
+    k._link_state = lambda: states[0]
+    props = SetProps(fail={"le"})
+    k._props = lambda: props
     ticks(k, LE_GRACE_CHECKS, clock)
-    assert k.attempts == 0
-    k._call_active = lambda: False
-    k._busy = True
-    ticks(k, 1, clock)
-    assert k.attempts == 0
-    k._busy = False
-    ticks(k, 1, clock)
-    assert k.attempts == 1
-
-
-class Props:
-    def __init__(self, answers):
-        self.answers = answers
-
-    def Get(self, iface, prop):
-        return self.answers.pop(0)
-
-
-def test_profiles_wait_for_bredr_to_come_back():
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
-                     ancs_active=lambda: False)
-    restored = []
-    k._restore_profiles = lambda: restored.append(k._bredr_waited)
-    props = Props([False, False, True])
-    k._props = lambda: props
-    k._bredr_waited = 0
-    assert k._await_bredr() is True
-    assert k._await_bredr() is True
-    assert k._await_bredr() is False
-    assert restored == [3 * BREDR_POLL_SEC]
-
-
-def test_profiles_reconnect_anyway_after_the_wait():
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
-                     ancs_active=lambda: False)
-    restored = []
-    k._restore_profiles = lambda: restored.append(True)
-    polls = BREDR_WAIT_SEC // BREDR_POLL_SEC
-    props = Props([False] * polls)
-    k._props = lambda: props
-    k._bredr_waited = 0
-    results = [k._await_bredr() for _ in range(polls)]
-    assert results == [True] * (polls - 1) + [False]
-    assert restored == [True]
-
-
-class E:
-    def __init__(self, name, message=""):
-        self.name, self.message = name, message
-
-    def get_dbus_name(self):
-        return self.name
-
-    def get_dbus_message(self):
-        return self.message
-
-
-def test_profile_already_connected_is_quiet(caplog):
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
-                     ancs_active=lambda: False)
-    k._on_profile_error(le_link.HFP_AG_UUID, le_link.PROFILE_TRIES,
-                        E("org.bluez.Error.AlreadyConnected"))
-    assert not caplog.records
-
-
-def test_busy_profile_is_asked_again_then_reported(monkeypatch, caplog):
-    timers = []
-    monkeypatch.setattr(le_link.GLib, "timeout_add_seconds",
-                        lambda sec, fn, *args: timers.append(args))
-    k = LeLinkKeeper("/org/bluez/hci0/dev_X", call_active=lambda: False,
-                     ancs_active=lambda: False)
-    busy = E("org.bluez.Error.Failed", "br-connection-busy")
-    tries = le_link.PROFILE_TRIES
-    while tries > 1:
-        k._on_profile_error(le_link.AVRCP_UUID, tries, busy)
-        tries -= 1
-    assert timers == [(le_link.AVRCP_UUID, n)
-                      for n in range(le_link.PROFILE_TRIES - 1, 0, -1)]
-    assert not caplog.records
-    k._on_profile_error(le_link.AVRCP_UUID, 1, busy)
-    assert len(timers) == le_link.PROFILE_TRIES - 1
-    assert "br-connection-busy" in caplog.text
+    assert "re-arming LE auto-connect failed" in caplog.text
+    assert not k._rearmed
+    ticks(k, int(LE_REARM_SEC // 29.9) + 1, clock)
+    assert props.writes == ["bredr", "le", "bredr", "le"]
 
 
 class BearerProps:
@@ -227,7 +151,6 @@ class BearerProps:
         self.connected, self.le = connected, le
 
     def Get(self, iface, prop):
-        import dbus.exceptions
         if iface == le_link.BEARER_LE:
             if self.le is None:
                 raise dbus.exceptions.DBusException("UnknownInterface")

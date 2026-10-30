@@ -161,11 +161,9 @@ systemctl --user restart iphonebridge
 
 `-E` turns on BlueZ's experimental interfaces, which `ancs-enable`'s bearer control needs. On BlueZ 5.86 and later it also turns on BlueZ's own Hands-Free client (the plugin `hfp`), which connects to the iPhone by itself and takes the Hands-Free link oFono needs for calls; `--noplugin=hfp` keeps it off. The drop-in leaves the bluez package's `/etc/bluetooth/main.conf` as shipped. `/usr/libexec/bluetooth/bluetoothd` is the path in Debian's and Ubuntu's bluez package; elsewhere, use the path in the `ExecStart=` line of `systemctl cat bluetooth`. A `[General] Experimental = true` line in `/etc/bluetooth/main.conf` can stay: the drop-in still keeps the `hfp` plugin off.
 
-If the pairing is old, or the computer started it, forget the iPhone on both ends and re-pair, starting the pairing from the iPhone. Then run `iphonebridge ancs-enable`: it steers the next connection over BLE, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
+If the pairing is old, or the computer started it, forget the iPhone on both ends and re-pair, starting the pairing from the iPhone. Then run `iphonebridge ancs-enable`: it has the computer connect the iPhone over BLE as well as classic Bluetooth, and the iPhone offers the grant: a third toggle, **Share System Notifications**, next to the other two under Settings → Bluetooth → ⓘ (turn it on), or on some iOS versions an **allow-notifications prompt** (answer Allow).
 
-If that toggle is on but the app's Status tab reads *Not detected* for it, the phone is connected over classic Bluetooth only. ANCS is carried over LE, and after a reboot or a Bluetooth restart the phone reconnects over classic Bluetooth alone, so the grant is there with nothing to carry it; `iphonebridge doctor` reports it as "connected over classic Bluetooth only". The daemon fixes this by itself: within a minute of the phone coming back on classic Bluetooth only, unless a call is in progress, it disconnects the phone and reconnects it over LE, then reconnects calls and media controls. Messages, calls and media pause during the reconnect. If the phone refuses LE, the daemon tries again every 10 minutes. `iphonebridge ancs-enable` does the same reconnect at once.
-
-Side effect to know about: the connection cycling this involves can crash bystander BlueZ user daemons — `mpris-proxy` (media keys for Bluetooth audio) has segfaulted on it, and `ofonod` has aborted on modem power-up. Neither affects messages or contacts; `systemctl --user restart mpris-proxy` / `sudo systemctl restart ofono` bring them back.
+If that toggle is on but the app's Status tab reads *Not detected* for it, the phone is connected over classic Bluetooth only. ANCS is carried over LE, and after a reboot or a Bluetooth restart the phone reconnects over classic Bluetooth alone, so the grant is there with nothing to carry it; `iphonebridge doctor` reports it as "connected over classic Bluetooth only". The daemon fixes this by itself: within a minute of the phone coming back on classic Bluetooth only, it has the computer connect the phone over LE as well, the next time the phone advertises over LE, which it does while awake. Nothing is disconnected, so messages, calls and media carry on. While the phone stays on classic Bluetooth only, the daemon repeats this every 10 minutes. `iphonebridge ancs-enable` does the same at once and waits up to a minute for the LE link.
 
 `iphonebridge doctor` runs both checks below for you. Manually: if ANCS is
 granted and an LE connection has happened, the iPhone's device object
@@ -291,7 +289,7 @@ sudo systemctl restart bluetooth
 systemctl --user restart iphonebridge
 ```
 
-`iphonebridge ancs-enable` moves the iPhone to Bluetooth LE, and the iPhone can come back over classic Bluetooth without the Hands-Free link (calls) or AV Remote Control (media controls). Connect both profiles, with your iPhone's address in place of `<MAC>`, then restart the daemon:
+If the iPhone comes back over classic Bluetooth without the Hands-Free link (calls) or AV Remote Control (media controls), connect both profiles, with your iPhone's address in place of `<MAC>`, then restart the daemon:
 
 ```bash
 bluetoothctl connect <MAC> 0000111f-0000-1000-8000-00805f9b34fb

@@ -135,7 +135,7 @@ then:
 iphonebridge ancs-enable
 ```
 
-which reconnects the iPhone over BLE — turn on the **Share System
+which has the computer connect the iPhone over BLE as well — turn on the **Share System
 Notifications** toggle the phone then offers for this computer (some iOS
 versions ask with an allow-notifications prompt instead). Seeing ANCS
 still down immediately after the rebuild is expected, not a sign the fix

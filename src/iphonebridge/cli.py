@@ -126,9 +126,10 @@ def doctor(verbose: bool = typer.Option(False, "-v", "--verbose")):
                         "connected over classic Bluetooth only, so per-app "
                         "notifications are not flowing. Messages and "
                         "contacts are unaffected.")
-            log.warning("    → iphonebridge ancs-enable  (reconnects over "
-                        "LE; 'Share System Notifications' must be on for "
-                        "this computer in the phone's Bluetooth settings)")
+            log.warning("    → iphonebridge ancs-enable  (brings LE back "
+                        "without a disconnect; 'Share System Notifications' "
+                        "must be on for this computer in the phone's "
+                        "Bluetooth settings)")
 
     if ok:
         typer.echo(typer.style("All checks passed.", fg=typer.colors.GREEN))
@@ -366,15 +367,17 @@ def ancs_enable(
 ):
     """Enable ANCS (per-app notifications) for the paired iPhone.
 
-    Steers the next connection to the iPhone over BLE by setting BlueZ's
-    Device1.PreferredBearer to "le", then reconnects. Over that LE link
-    iOS meets the daemon's ANCS solicitation and offers the grant on the
-    phone: a "Share System Notifications" toggle for this computer in
-    its Bluetooth settings, or on some iOS versions an allow-notifications
-    prompt. The property is experimental in BlueZ, so bluetoothd must
-    run with -E; a systemd drop-in adds it with --noplugin=hfp, which
-    keeps BlueZ's own Hands-Free client off so oFono gets the iPhone's
-    Hands-Free link.
+    Puts the iPhone back on the kernel's LE auto-connect list by setting
+    BlueZ's Device1.PreferredBearer to "bredr" and then "le" (see
+    ancs/le_link.py for why both), so the kernel connects LE next to the
+    classic link at the iPhone's next advertisement, without a
+    disconnect. Over that LE link iOS meets the daemon's ANCS
+    solicitation and offers the grant on the phone: a "Share System
+    Notifications" toggle for this computer in its Bluetooth settings,
+    or on some iOS versions an allow-notifications prompt. The property
+    is experimental in BlueZ, so bluetoothd must run with -E; a systemd
+    drop-in adds it with --noplugin=hfp, which keeps BlueZ's own
+    Hands-Free client off so oFono gets the iPhone's Hands-Free link.
 
     Editing the stored bond's LastUsedBearer (this command's previous
     approach) does not survive contact with a live iPhone: the phone
@@ -425,50 +428,52 @@ def ancs_enable(
                    "both ends, start the pairing from the iPhone, and re-run.")
         raise typer.Exit(code=3) from None
 
-    device = iface("org.bluez.Device1")
+    from iphonebridge.ancs.le_link import le_connected, rearm_le
 
-    # The property only takes effect while disconnected.
     try:
-        device.Disconnect(timeout=20)
-    except dbus.exceptions.DBusException:
-        pass
-    for _ in range(10):
-        if not props.Get("org.bluez.Device1", "Connected"):
-            break
-        time.sleep(1)
-
-    props.Set("org.bluez.Device1", "PreferredBearer", "le")
-    typer.echo(f"PreferredBearer: {was} → le")
-
-    typer.echo("reconnecting over BLE ...")
-    try:
-        device.Connect(timeout=60)
+        rearm_le(props)
     except dbus.exceptions.DBusException as e:
         typer.echo(typer.style(
-            f"reconnect failed: {e.get_dbus_message()}", fg=typer.colors.RED))
-        typer.echo("Bring the iPhone close and awake, then re-run.")
+            f"setting PreferredBearer failed: "
+            f"{e.get_dbus_message() or e.get_dbus_name()}",
+            fg=typer.colors.RED))
         raise typer.Exit(code=4) from None
+    typer.echo(f"PreferredBearer: {was} → le; LE auto-connect re-armed")
 
-    # The proof is the phone's ANCS GATT service appearing on the device.
-    wanted = config.ANCS_SOLICIT_UUID.lower()
-    for _ in range(30):
-        uuids = props.Get("org.bluez.Device1", "UUIDs")
-        if any(str(u).lower() == wanted for u in uuids):
+    # The proof is the LE link up and the phone's three ANCS
+    # characteristics present, as ancs_state() reports; Connect()
+    # returning or the UUID kept with the bond proves neither.
+    typer.echo("waiting for the iPhone's LE link ...")
+    for _ in range(60):
+        if bluez_setup.ancs_state() == bluez_setup.ANCS_LIVE:
             typer.echo(typer.style(
-                "ANCS service visible — on the iPhone, turn on 'Share "
-                "System Notifications' for this computer (Settings → "
-                "Bluetooth → ⓘ), or answer Allow if it asks with a "
-                "prompt instead.",
+                "LE link up and ANCS service visible. If 'Share System "
+                "Notifications' is off for this computer on the iPhone "
+                "(Settings → Bluetooth → ⓘ), turn it on, or answer Allow "
+                "if it asks with a prompt instead.",
                 fg=typer.colors.GREEN))
             break
         time.sleep(1)
     else:
-        typer.echo(typer.style(
-            "Connected, but the ANCS service has not appeared yet.",
-            fg=typer.colors.YELLOW))
-        typer.echo("If the bond has no Low Energy keys, forget the device on "
-                   "both ends, start the pairing from the iPhone, and re-run "
-                   "this command.")
+        if le_connected(props):
+            typer.echo(typer.style(
+                "LE link up, but the iPhone shows no ANCS service yet.",
+                fg=typer.colors.YELLOW))
+            typer.echo("On the iPhone, turn on 'Share System Notifications' "
+                       "for this computer (Settings → Bluetooth → ⓘ), or "
+                       "answer Allow if it asks with a prompt instead.")
+            typer.echo("If the iPhone offers neither, the bond has no Low "
+                       "Energy keys: forget the device on both ends, start "
+                       "the pairing from the iPhone, and re-run this "
+                       "command.")
+        else:
+            typer.echo(typer.style(
+                "The iPhone has not connected over LE yet.",
+                fg=typer.colors.YELLOW))
+            typer.echo("The computer connects it when the iPhone next "
+                       "advertises, which it does while awake: unlock it "
+                       "and keep it close. No need to re-run this command.")
+            raise typer.Exit(code=4)
 
     typer.echo("\nWatch the daemon pick it up:")
     typer.echo("  journalctl --user -u iphonebridge -f | grep -i ancs")

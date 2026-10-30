@@ -2,28 +2,35 @@
 
 ANCS is a GATT service iOS serves over LE. After a reboot or a Bluetooth
 restart the iPhone reconnects over BR/EDR alone and stays there, so
-per-app notifications stop until something reconnects it over LE. On
-2026-10-28, with BlueZ 5.87, the phone held BR/EDR without LE
-for the whole minute after BlueZ dropped only its LE link, and for the
-whole boot after a reboot.
+per-app notifications stop until the LE link comes back.
 
-Bearer.LE1.Connect cannot add the LE link next to the BR/EDR one: iOS
-also serves GATT over BR/EDR, and while that ATT channel is up BlueZ's
-device_connect_le() refuses with EALREADY ("There is one connection
-attempt going on", src/device.c in 5.87). So this does what
-`iphonebridge ancs-enable` does: disconnect the device, then connect it
-with Device1.PreferredBearer = "le". The phone brings BR/EDR back by
-itself, sometimes without the Hands-Free or AV Remote Control profile,
-so those are reconnected once BR/EDR is back. The disconnect interrupts
-messages, calls and media, which is why should_reconnect() waits out a
-grace period, never runs during a call, and spaces attempts apart.
+Linux does not dial an LE device on demand. The kernel puts the device's
+identity address on the controller's accept list and connects when it
+hears that device advertise; an iPhone advertises from a rotating
+resolvable private address, which the controller matches to the identity
+address only if the iPhone's IRK is on the controller's resolving list.
+The kernel programs the resolving list only for a device that bluetoothd
+has added to the kernel's LE auto-connect list and flagged for address
+resolution (adapter_set_device_flags, src/adapter.c in BlueZ 5.87).
+bluetoothd does that when Device1.PreferredBearer changes to "le"
+(dev_property_set_prefer_bearer, src/device.c); setting the property to
+the value it already holds does nothing.
 
-iOS does not always take the LE link back: on 2026-10-28, from 22:45 on,
-every attempt either failed with le-connection-abort-by-local or brought
-LE up without ANCS, and the phone was on BR/EDR only again by the next
-attempt. Each such attempt is still a disconnect, so the wait doubles
-after every attempt that no ANCS subscription follows, from LE_RETRY_SEC
-up to LE_RETRY_MAX_SEC, and starts over once ANCS is subscribed.
+On 2026-10-29 the iPhone had fallen off the auto-connect list while its
+PreferredBearer stayed "le". Every LE connect then waited on the accept
+list for the iPhone's identity address, which an iPhone never advertises
+from, and timed out with le-connection-abort-by-local; Device1.Connect()
+fell back to BR/EDR and returned success. Setting PreferredBearer to
+"bredr" and back to "le" put the iPhone back on both lists, and the
+kernel brought LE up next to BR/EDR at the iPhone's next advertisement,
+with no disconnect: ANCS was subscribed 5 seconds later.
+
+So this re-arms the iPhone that way when it is on BR/EDR only. Re-arming
+changes no link, so it runs during calls too. It repeats every
+LE_REARM_SEC while the phone stays on BR/EDR only, because bluetoothd
+takes a device off the auto-connect list again after three LE
+authentication failures (device_remove_connection, src/device.c), and
+because the iPhone advertises little while its screen is off.
 """
 from __future__ import annotations
 
@@ -48,30 +55,11 @@ LE_CHECK_SEC = 30
 # timers can fire a little early and a 30 s check would then measure
 # 29.9 s and wait a whole extra interval.
 LE_GRACE_CHECKS = 2
-# Time between the first reconnect and the second; it doubles after each
-# attempt without ANCS, up to LE_RETRY_MAX_SEC, so a phone that keeps
-# refusing LE is not knocked off BR/EDR over and over.
-LE_RETRY_SEC = 10 * 60
-LE_RETRY_MAX_SEC = 4 * 60 * 60
-# After the LE connect, poll this often, at most this long, for iOS to
-# bring BR/EDR back. Connecting a profile before then races iOS's own
-# reconnect and fails with br-connection-busy.
-BREDR_POLL_SEC = 5
-BREDR_WAIT_SEC = 60
-# A profile that BlueZ reports busy is asked for again this many times,
-# this far apart.
-PROFILE_TRIES = 3
-PROFILE_RETRY_SEC = 10
-
-# BR/EDR profiles iOS can leave out when it comes back after the
-# disconnect: Hands-Free Audio Gateway (calls) and AV Remote Control
-# (media controls).
-HFP_AG_UUID = "0000111f-0000-1000-8000-00805f9b34fb"
-AVRCP_UUID = "0000110e-0000-1000-8000-00805f9b34fb"
+# Time between re-arms while the phone stays on BR/EDR only.
+LE_REARM_SEC = 10 * 60
 
 DEVICE = "org.bluez.Device1"
 BEARER_LE = "org.bluez.Bearer.LE1"
-BEARER_BREDR = "org.bluez.Bearer.BREDR1"
 PROPS = "org.freedesktop.DBus.Properties"
 
 # _link_state() values
@@ -93,49 +81,46 @@ def le_connected(props: dbus.Interface) -> bool | None:
         return None
 
 
-def retry_delay(attempts: int) -> float:
-    """The wait after `attempts` reconnects in a row that no ANCS
-    subscription followed: LE_RETRY_SEC after the first, doubling after
-    each one, at most LE_RETRY_MAX_SEC."""
-    return min(LE_RETRY_SEC * 2 ** max(attempts - 1, 0), LE_RETRY_MAX_SEC)
+def rearm_le(props: dbus.Interface) -> None:
+    """Put the device back on the kernel's LE auto-connect list, with
+    address resolution, through the device's Properties interface.
+
+    bluetoothd acts only on a change of PreferredBearer: "bredr" takes
+    the device off the list and "le" adds it back. The second write runs
+    even if the first fails, so the property never stays "bredr". Raises
+    DBusException when BlueZ refuses either write.
+    """
+    try:
+        props.Set(DEVICE, "PreferredBearer", "bredr")
+    finally:
+        props.Set(DEVICE, "PreferredBearer", "le")
 
 
-def should_reconnect(*, bredr_only_checks: int,
-                     since_attempt: float | None,
-                     attempts: int,
-                     call_active: bool) -> bool:
-    """Whether to reconnect the iPhone over LE now.
+def should_rearm(*, bredr_only_checks: int,
+                 since_rearm: float | None) -> bool:
+    """Whether to re-arm the iPhone's LE auto-connect now.
 
     `bredr_only_checks` is how many checks in a row found the phone on
-    BR/EDR only, `since_attempt` how long ago the last reconnect began
-    (None if never), `attempts` how many reconnects no ANCS subscription
-    has followed.
+    BR/EDR only, `since_rearm` how long ago the last re-arm in this
+    stretch on BR/EDR only ran (None if none has).
     """
     if bredr_only_checks < LE_GRACE_CHECKS:
         return False
-    if call_active:
-        return False
-    return since_attempt is None or since_attempt >= retry_delay(attempts)
+    return since_rearm is None or since_rearm >= LE_REARM_SEC
 
 
 class LeLinkKeeper:
-    """Polls the iPhone's links and reconnects it over LE when needed."""
+    """Polls the iPhone's links and re-arms LE auto-connect when needed."""
 
     def __init__(self, device_path: str, *,
-                 call_active: Callable[[], bool],
-                 ancs_active: Callable[[], bool],
                  clock: Callable[[], float] = time.monotonic) -> None:
         self.device_path = device_path
-        self._call_active = call_active
-        self._ancs_active = ancs_active
         self._clock = clock
         self._timer_id: int | None = None
         self._bredr_only_checks = 0
-        self._last_attempt: float | None = None
-        # Reconnects since ANCS was last subscribed.
-        self._attempts = 0
-        self._bredr_waited = 0
-        self._busy = False
+        self._last_rearm: float | None = None
+        # A re-arm ran and LE has not been seen up since.
+        self._rearmed = False
         self._said_unsupported = False
 
     def start(self) -> None:
@@ -175,110 +160,38 @@ class LeLinkKeeper:
 
     def _tick(self) -> bool:
         """GLib timer callback. Return True to keep the timer running."""
-        if self._busy:
-            return True
-        if self._attempts and self._ancs_active():
-            self._attempts = 0
         state = self._link_state()
         if state == LINK_UNSUPPORTED and not self._said_unsupported:
             self._said_unsupported = True
             log.info("BlueZ offers no bearer control (bluetoothd runs "
                      "without -E), so the iPhone's LE link is not "
                      "restored automatically")
+        if state == LINK_LE:
+            if self._rearmed:
+                log.info("iPhone's LE link is up")
+                self._rearmed = False
+            self._last_rearm = None
         if state != LINK_BREDR_ONLY:
             self._bredr_only_checks = 0
             return True
         self._bredr_only_checks += 1
         now = self._clock()
-        since_attempt = (None if self._last_attempt is None
-                         else now - self._last_attempt)
-        if should_reconnect(bredr_only_checks=self._bredr_only_checks,
-                            since_attempt=since_attempt,
-                            attempts=self._attempts,
-                            call_active=self._call_active()):
-            self._last_attempt = now
-            self._attempts += 1
-            self._reconnect()
+        since_rearm = (None if self._last_rearm is None
+                       else now - self._last_rearm)
+        if should_rearm(bredr_only_checks=self._bredr_only_checks,
+                        since_rearm=since_rearm):
+            self._last_rearm = now
+            self._rearm()
         return True
 
-    # ---- the reconnect ----------------------------------------------------
-
-    def _device(self) -> dbus.Interface:
-        return dbus.Interface(
-            system_bus.get_object("org.bluez", self.device_path), DEVICE)
-
-    def _reconnect(self) -> None:
+    def _rearm(self) -> None:
         log.info("iPhone is connected over classic Bluetooth only; "
-                 "reconnecting it over LE for per-app notifications")
-        self._busy = True
-        # PreferredBearer only takes effect while disconnected. A
-        # NotConnected error means the phone already went: carry on.
-        self._device().Disconnect(
-            reply_handler=self._connect_le,
-            error_handler=lambda _e: self._connect_le(),
-            timeout=20)
-
-    def _connect_le(self) -> None:
+                 "re-arming LE auto-connect so LE comes up at its next "
+                 "advertisement")
         try:
-            self._props().Set(DEVICE, "PreferredBearer", "le")
-            self._device().Connect(
-                reply_handler=self._on_le_connected,
-                error_handler=self._on_le_failed,
-                timeout=60)
+            rearm_le(self._props())
         except dbus.exceptions.DBusException as e:
-            self._on_le_failed(e)
-
-    def _on_le_failed(self, e: dbus.exceptions.DBusException) -> None:
-        self._busy = False
-        log.warning("LE reconnect failed: %s — next try in %d min at "
-                    "the earliest",
-                    e.get_dbus_message() or e.get_dbus_name(),
-                    retry_delay(self._attempts) // 60)
-
-    def _on_le_connected(self) -> None:
-        log.info("iPhone reconnected over LE")
-        self._bredr_waited = 0
-        GLib.timeout_add_seconds(BREDR_POLL_SEC, self._await_bredr)
-
-    def _await_bredr(self) -> bool:
-        """GLib timer callback: wait for iOS to bring BR/EDR back, then
-        restore the profiles. Past BREDR_WAIT_SEC, connecting the
-        profiles brings BR/EDR up from this side instead."""
-        self._bredr_waited += BREDR_POLL_SEC
-        try:
-            back = bool(self._props().Get(BEARER_BREDR, "Connected"))
-        except dbus.exceptions.DBusException:
-            back = False
-        if not back and self._bredr_waited < BREDR_WAIT_SEC:
-            return True
-        self._restore_profiles()
-        return False
-
-    def _restore_profiles(self) -> None:
-        """Reconnect calls and media controls if iOS came back without
-        them."""
-        self._busy = False
-        for uuid in (HFP_AG_UUID, AVRCP_UUID):
-            self._connect_profile(uuid, PROFILE_TRIES)
-
-    def _connect_profile(self, uuid: str, tries: int) -> bool:
-        self._device().ConnectProfile(
-            uuid,
-            reply_handler=lambda: None,
-            error_handler=lambda e: self._on_profile_error(uuid, tries, e),
-            timeout=30)
-        return False  # one-shot when run as a GLib timer callback
-
-    def _on_profile_error(self, uuid: str, tries: int,
-                          e: dbus.exceptions.DBusException) -> None:
-        if e.get_dbus_name() == "org.bluez.Error.AlreadyConnected":
+            log.warning("re-arming LE auto-connect failed: %s",
+                        e.get_dbus_message() or e.get_dbus_name())
             return
-        message = e.get_dbus_message() or e.get_dbus_name()
-        # iOS is still connecting its own profiles on the fresh BR/EDR
-        # link, often the very one asked for: ask again shortly.
-        if message == "br-connection-busy" and tries > 1:
-            GLib.timeout_add_seconds(PROFILE_RETRY_SEC,
-                                     self._connect_profile, uuid, tries - 1)
-            return
-        log.warning("reconnecting profile %s after the LE reconnect "
-                    "failed: %s", uuid, message)
+        self._rearmed = True

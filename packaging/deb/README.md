@@ -390,15 +390,11 @@ Then:
 iphonebridge ancs-enable
 ```
 
-reconnects the iPhone over BLE; the phone then offers a third toggle,
+has the computer connect the iPhone over BLE as well as classic
+Bluetooth; the phone then offers a third toggle,
 **Share System Notifications** (some iOS versions ask with an
 allow-notifications prompt instead) — turn it on, and `iphonebridge
 doctor` should report the bond exposing ANCS with the LE link up.
-
-The connection cycling in this step can crash bystander BlueZ user
-daemons; `mpris-proxy` (media keys for Bluetooth audio) has segfaulted
-on it. Messages and contacts are unaffected; restore it with
-`systemctl --user restart mpris-proxy`.
 
 Compared to the from-source install, the venv, the `~/.local/bin`
 symlinks, the unit path substitution, the desktop-entry rewrite, and the

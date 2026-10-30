@@ -245,11 +245,7 @@ class Daemon:
             on_session_reset=self._ancs_session_reset,
         )
         self.ancs.start()
-        self.le_link = LeLinkKeeper(
-            device_path,
-            call_active=lambda: bool(self.hfp and self.hfp.list_calls()),
-            ancs_active=lambda: self.ancs.active,
-        )
+        self.le_link = LeLinkKeeper(device_path)
         self.le_link.start()
 
         # HFP — take/place calls via oFono. Also independent of MAP/PBAP; if
